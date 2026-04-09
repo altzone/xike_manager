@@ -9,7 +9,7 @@
       <table class="w-full text-sm">
         <thead class="bg-gray-50/80">
           <tr>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-2"><span class="w-2.5"></span>Port</span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Description <Tip>Custom label stored in SwitchPilot (not on switch hardware). Helps identify what is connected to each port.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Status <Tip>Click to enable or disable a port. Disabled ports will not forward any traffic.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Speed <Tip title="Speed / Duplex">Auto: negotiates best speed with the connected device. You can force a specific speed if auto-negotiation fails. RJ45 ports support up to 2.5G, SFP+ up to 10G.</Tip></span></th>
