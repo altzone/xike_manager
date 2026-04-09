@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-bold text-gray-900">Link Aggregation</h1>
+        <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">Link Aggregation</h1><Tip title="LAG / LACP">Bond multiple physical ports into a single logical link. Increases bandwidth (e.g. 2x 2.5G = 5G) and provides redundancy. Both ends must be configured. Up to 16 groups supported.</Tip></div>
         <p class="text-sm text-gray-400 mt-1">Bond multiple ports together for increased bandwidth and redundancy</p>
       </div>
       <button @click="showCreate = true"
@@ -106,12 +106,12 @@
               <button @click="newGroup.mode = 1" class="px-4 py-3 rounded-lg border-2 text-sm font-medium transition text-left"
                 :class="newGroup.mode === 1 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
                 <div class="font-bold">Static Trunk</div>
-                <div class="text-xs opacity-70 mt-0.5">Manual bonding, no negotiation</div>
+                <div class="text-xs opacity-70 mt-0.5">Manual bonding. Both ends must match. No automatic detection.</div>
               </button>
               <button @click="newGroup.mode = 2" class="px-4 py-3 rounded-lg border-2 text-sm font-medium transition text-left"
                 :class="newGroup.mode === 2 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
                 <div class="font-bold">LACP</div>
-                <div class="text-xs opacity-70 mt-0.5">802.3ad dynamic negotiation</div>
+                <div class="text-xs opacity-70 mt-0.5">802.3ad. Auto-negotiates with the other switch. Recommended.</div>
               </button>
             </div>
           </div>
@@ -153,6 +153,7 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()

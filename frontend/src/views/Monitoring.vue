@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl font-bold text-gray-900">Monitoring</h1>
+    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">Monitoring</h1><Tip title="MAC Address Table">The switch learns which devices are connected to which ports by inspecting source MAC addresses. This table shows all learned entries with their port, age timer, and VLAN group.</Tip></div>
 
     <!-- MAC Table -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -55,6 +55,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const macs = ref([])

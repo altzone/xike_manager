@@ -1,23 +1,23 @@
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl font-bold text-gray-900">Port Configuration</h1>
+    <div class="flex items-center gap-2">
+      <h1 class="text-xl font-bold text-gray-900">Port Configuration</h1>
+      <Tip title="Port Settings">Configure physical port parameters. Changes apply immediately when you modify a setting. Descriptions are stored locally (not on the switch).</Tip>
+    </div>
 
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <p class="text-xs text-gray-400">Click a setting to change it. Changes apply immediately.</p>
-      </div>
       <table class="w-full text-sm">
         <thead class="bg-gray-50/80">
           <tr>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Description</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Speed Config</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Description <Tip>Custom label stored in SwitchPilot (not on switch hardware). Helps identify what is connected to each port.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Status <Tip>Click to enable or disable a port. Disabled ports will not forward any traffic.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Speed <Tip title="Speed / Duplex">Auto: negotiates best speed with the connected device. You can force a specific speed if auto-negotiation fails. RJ45 ports support up to 2.5G, SFP+ up to 10G.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Actual</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Flow Ctrl</th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">TX</th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">RX</th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">Errors</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Flow <Tip title="Flow Control (802.3x)">When enabled, the port sends PAUSE frames to slow down the sender when buffers are full. Helps prevent packet loss but can cause latency. Usually best left On.</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">TX <Tip>Total packets transmitted from this port since last reset.</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">RX <Tip>Total packets received on this port since last reset.</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Errors <Tip>Sum of TX and RX bad packets. Non-zero values may indicate cable issues, duplex mismatch, or CRC errors.</Tip></span></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
@@ -95,6 +95,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()

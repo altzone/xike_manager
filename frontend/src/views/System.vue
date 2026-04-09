@@ -1,6 +1,6 @@
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl font-bold text-gray-900">System & Features</h1>
+    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">System & Features</h1><Tip title="System Settings">Configure switch features, time synchronization, port mirroring, loop protection, and more. Toggle switches apply changes immediately to the switch.</Tip></div>
     <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">Failed to load: {{ loadError }}</div>
 
     <template v-if="loaded">
@@ -100,7 +100,7 @@
         <!-- STP -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-700">STP</h3>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">STP</h3><Tip title="Spanning Tree Protocol">Prevents broadcast storms caused by network loops. Enable if you have redundant links between switches. RSTP converges faster than classic STP.</Tip></span>
             <button @click="stp.enabled = !stp.enabled; applyStp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="stp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="stp.enabled ? 'translate-x-5' : ''"></span>
             </button>
@@ -113,7 +113,7 @@
         <!-- Storm -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-700">Storm Control</h3>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">Storm Control</h3><Tip title="Broadcast Storm Control">Limits the rate of broadcast, multicast, and unknown unicast traffic. Protects the network from traffic floods caused by loops or misbehaving devices. Rate is in packets per second (1-1000).</Tip></span>
             <button @click="storm.enabled = !storm.enabled; applyStorm()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="storm.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="storm.enabled ? 'translate-x-5' : ''"></span>
             </button>
@@ -127,7 +127,7 @@
         <!-- IGMP -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-700">IGMP Snooping</h3>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">IGMP Snooping</h3><Tip title="IGMP Snooping">Optimizes multicast traffic by sending it only to ports that have joined the multicast group. Useful for IPTV, video streaming. Fast Leave removes ports immediately when a device leaves. Querier sends membership queries if no router does.</Tip></span>
             <button @click="igmp.enabled = !igmp.enabled; applyIgmp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="igmp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="igmp.enabled ? 'translate-x-5' : ''"></span>
             </button>
@@ -145,7 +145,7 @@
         <!-- EEE -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-700">Energy Efficient Ethernet</h3>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">Energy Efficient Ethernet</h3><Tip title="EEE (802.3az)">Reduces power consumption when link utilization is low. The port enters a low-power idle state between bursts of traffic. May add a few microseconds of latency. Safe to enable for most use cases.</Tip></span>
             <button @click="eee.enabled = !eee.enabled; applyEee()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="eee.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="eee.enabled ? 'translate-x-5' : ''"></span>
             </button>
@@ -156,7 +156,7 @@
 
       <!-- Port Mirror - redesigned -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Port Mirroring</h3>
+        <div class="flex items-center gap-2 mb-1"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Port Mirroring</h3><Tip title="Port Mirroring (SPAN)">Copies all traffic from selected source ports to a monitoring (destination) port. Connect a packet analyzer (e.g. Wireshark) to the monitoring port to capture and inspect traffic without disrupting the network.</Tip></div>
         <p class="text-xs text-gray-400 mb-4">Copy traffic from source ports to a monitoring port for analysis</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Step 1: Destination -->
@@ -335,6 +335,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()

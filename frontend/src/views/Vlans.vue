@@ -1,10 +1,13 @@
 <template>
   <div class="space-y-6" @input.capture="markDirty" @change.capture="markDirty">
     <div class="flex items-center justify-between">
-      <h1 class="text-xl font-bold text-gray-900">VLAN Configuration</h1>
+      <div class="flex items-center gap-2">
+        <h1 class="text-xl font-bold text-gray-900">VLAN Configuration</h1>
+        <Tip title="VLANs (Virtual LANs)">VLANs allow you to segment your network into isolated broadcast domains. Devices on different VLANs cannot communicate unless routed. Create VLANs first, then assign them to ports below.</Tip>
+      </div>
       <div class="flex items-center gap-2 text-xs text-gray-400">
-        <span class="bg-gray-100 px-2 py-1 rounded">Tag entries: {{ limits.used }}/{{ limits.max }}</span>
-        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded">Native VLAN max: 63</span>
+        <span class="bg-gray-100 px-2 py-1 rounded flex items-center gap-1">Tag entries: {{ limits.used }}/{{ limits.max }} <Tip>The switch has a maximum of 111 tagged VLAN entries across all ports. Each trunk port + VLAN combination uses one entry.</Tip></span>
+        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded flex items-center gap-1">Native VLAN max: 63 <Tip>Due to hardware limitations, the native (untagged) VLAN ID on this switch cannot exceed 63. Tagged VLANs can use any ID up to 4095.</Tip></span>
       </div>
     </div>
 
@@ -56,9 +59,9 @@
         <thead class="bg-gray-50/80">
           <tr>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Mode</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Access / Native VLAN</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Allowed VLANs (trunk)</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Mode <Tip title="Port Mode">Flat: no VLAN tagging, all traffic passes through. Access: port belongs to a single VLAN (untagged). Trunk: port carries multiple VLANs with 802.1Q tags.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Access / Native VLAN <Tip title="PVID">For Access mode: the VLAN this port belongs to. For Trunk mode: the native VLAN (untagged traffic). Limited to ID 0-63 due to hardware.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Allowed VLANs <Tip title="Trunk VLANs">Select which VLANs are allowed to pass through this trunk port as tagged (802.1Q) traffic. Only selected VLANs will be forwarded.</Tip></span></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
@@ -164,6 +167,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()
