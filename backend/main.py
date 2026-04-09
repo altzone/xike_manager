@@ -544,10 +544,12 @@ async def get_time(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/time")
 async def set_time(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    # Read current time first so we don't reset fields
+    current = await client.get_time()
     await client._post("systemtime_settings.json", {
-        "input_time": data.get("time", ""),
-        "input_date": data.get("date", ""),
-        "timezone_offset": data.get("timezone", "+00:00"),
+        "input_time": data.get("time") or current.get("timeVal", ""),
+        "input_date": data.get("date") or current.get("dateVal", ""),
+        "timezone_offset": data.get("timezone", current.get("timezoneOffsetVal", "+00:00")),
         "input_daylight": data.get("daylight", "0"),
     })
     return {"ok": True}

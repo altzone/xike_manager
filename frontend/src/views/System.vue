@@ -52,6 +52,13 @@
             <label class="text-xs font-medium text-gray-500 mb-1 block">Poll Interval (seconds)</label>
             <input v-model.number="sntp.poll" type="number" min="30" max="99999" class="inp w-full" placeholder="64"/>
           </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Timezone</label>
+            <select v-model="setTime.timezone" @change="applyTimezone" class="inp w-full">
+              <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
+              <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
+            </select>
+          </div>
           <div class="flex items-end gap-2">
             <button @click="sntp.enabled = true; applySntp()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Enable SNTP</button>
             <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">Check</button>
@@ -240,9 +247,9 @@
             </select>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">FID (0-63)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">VLAN Group (0-63)</label>
             <input v-model.number="staticMac.fid" type="number" min="0" max="63" class="inp w-full" placeholder="0"/>
-            <p class="text-[10px] text-gray-400 mt-0.5">Filtering ID / VLAN group</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">Must match the port VLAN group (PVID)</p>
           </div>
           <div class="flex items-end">
             <button @click="addStaticMac" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Add Entry</button>
@@ -253,7 +260,7 @@
             <thead class="bg-gray-50"><tr>
               <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">MAC</th>
               <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Port</th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">FID</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">VLAN Group</th>
             </tr></thead>
             <tbody class="divide-y divide-gray-50">
               <tr v-for="(m, i) in staticMacs" :key="i" class="hover:bg-gray-50">
@@ -366,6 +373,7 @@ async function load() {
     const t = await api(`/api/switches/${props.switchId}/time`)
     timeData.value = t; sntp.enabled = t.sntp_state === '1'; sntp.server = t.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(t.sntp_poll) || 64
     timeMode.value = sntp.enabled ? 'sntp' : 'manual'
+    setTime.timezone = t.timezoneOffsetVal || '+01:00'
     const st = await api(`/api/switches/${props.switchId}/stp`); stp.enabled = st.enabled; stp.mode = st.mode
     const sc = await api(`/api/switches/${props.switchId}/storm`); storm.enabled = sc.sctrl_state === '1'; storm.rate = parseInt(sc.sctrl_rate)
     const ig = await api(`/api/switches/${props.switchId}/igmp`); igmp.enabled = ig.config.igmp === 'on'; igmp.fast_leave = ig.config.fast_leave === 'on'; igmp.querier = ig.config.snoop_querier === 'on'
@@ -379,6 +387,7 @@ async function load() {
 }
 
 async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash('Time set'); await load() } catch(e) { flash(e.message, false) } }
+async function applyTimezone() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify({ timezone: setTime.timezone }) }); flash('Timezone set'); await load() } catch(e) { flash(e.message, false) } }
 async function applySntp() {
   try {
     const res = await api(`/api/switches/${props.switchId}/sntp`, { method: 'POST', body: JSON.stringify(sntp) })

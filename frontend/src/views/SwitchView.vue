@@ -1,7 +1,7 @@
 <template>
   <div class="flex min-h-[calc(100vh-57px)]">
     <!-- Sidebar -->
-    <aside class="w-60 bg-white border-r border-gray-200 p-5 flex flex-col">
+    <aside class="w-60 bg-white border-r border-gray-200 p-5 flex flex-col sticky top-[57px] h-[calc(100vh-57px)]">
       <!-- Switch info + status -->
       <div class="mb-6">
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Managing</h2>
