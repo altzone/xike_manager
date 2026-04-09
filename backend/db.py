@@ -58,6 +58,14 @@ async def init_db():
                 UNIQUE(switch_id, vlan_id),
                 FOREIGN KEY (switch_id) REFERENCES switches(id)
             );
+            CREATE TABLE IF NOT EXISTS lag_names (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                switch_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                UNIQUE(switch_id, group_id),
+                FOREIGN KEY (switch_id) REFERENCES switches(id)
+            );
             CREATE TABLE IF NOT EXISTS config_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 switch_id INTEGER NOT NULL,

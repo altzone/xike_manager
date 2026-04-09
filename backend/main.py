@@ -503,7 +503,12 @@ async def get_lag(switch_id: int, user=Depends(get_current_user)):
             "state": int(p[f"Port_{i}_state"]),
         })
     ports.sort(key=lambda x: x["port"])
-    return {"system_priority": raw["system_priority"], "ports": ports}
+    # Enrich with local names
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT group_id, name FROM lag_names WHERE switch_id=?", (switch_id,))
+        names = {r["group_id"]: r["name"] for r in await cursor.fetchall()}
+    return {"system_priority": raw["system_priority"], "ports": ports, "group_names": names}
 
 
 # ── System Time ──
@@ -554,6 +559,14 @@ async def set_lag(switch_id: int, data: dict, user=Depends(require_admin)):
         post[f"lacpTimeoutId_{internal}"] = str(p["timeout"])
         post[f"Port_{internal}_grpInd"] = str(p["group"])
     await client._post("port_trunk_cfg.json", post)
+    # Save group names if provided
+    group_names = data.get("group_names", {})
+    if group_names:
+        async with aiosqlite.connect(DB_PATH) as db:
+            for gid, name in group_names.items():
+                await db.execute("INSERT OR REPLACE INTO lag_names (switch_id, group_id, name) VALUES (?,?,?)",
+                                 (switch_id, int(gid), name))
+            await db.commit()
     return {"ok": True}
 
 # ── Static MAC ──

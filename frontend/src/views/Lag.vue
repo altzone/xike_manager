@@ -23,7 +23,11 @@
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h3 class="font-semibold text-gray-900">LAG Group {{ g.id }}</h3>
+                <h3 class="font-semibold text-gray-900">
+                <input v-model="groupNames[g.id]" @blur="renameGroup(g.id)"
+                  class="bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-indigo-500 outline-none font-semibold text-gray-900 px-0 py-0 w-48"
+                  :placeholder="`LAG Group ${g.id}`"/>
+              </h3>
                 <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
                   :class="g.mode === 2 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'">
                   {{ g.mode === 2 ? 'LACP (802.3ad)' : 'Static Trunk' }}
@@ -86,6 +90,11 @@
         <h2 class="text-lg font-bold text-gray-900 mb-4">Create LAG Group</h2>
         <div class="space-y-4">
           <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input v-model="newGroup.name" placeholder="e.g. Uplink-Switch, Server-Bond..."
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Group Number</label>
             <select v-model.number="newGroup.id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
               <option v-for="n in availableGroupIds" :key="n" :value="n">Group {{ n }}</option>
@@ -146,19 +155,20 @@ import { api } from '../composables/useApi.js'
 
 const props = defineProps({ switchId: Number })
 const allPorts = ref([])
+const groupNames = ref({})
 const systemPriority = ref(32768)
 const showCreate = ref(false)
 const applying = ref(false)
 const msg = ref('')
 const msgOk = ref(true)
-const newGroup = reactive({ id: 1, mode: 2, timeout: 0, ports: [] })
+const newGroup = reactive({ id: 1, name: '', mode: 2, timeout: 0, ports: [] })
 
 function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 3000) }
 
 const groups = computed(() => {
   const map = {}
   allPorts.value.filter(p => p.group > 0 && p.type > 0).forEach(p => {
-    if (!map[p.group]) map[p.group] = { id: p.group, mode: p.type, ports: [], allUp: true }
+    if (!map[p.group]) map[p.group] = { id: p.group, name: groupNames.value[p.group] || '', mode: p.type, ports: [], allUp: true }
     map[p.group].ports.push(p)
     if (p.state !== 1) map[p.group].allUp = false
   })
@@ -184,6 +194,7 @@ async function load() {
   const data = await api(`/api/switches/${props.switchId}/lag`)
   systemPriority.value = data.system_priority
   allPorts.value = data.ports
+  groupNames.value = data.group_names || {}
 }
 
 async function createGroup() {
@@ -195,11 +206,12 @@ async function createGroup() {
       }
       return p
     })
+    const names = { ...groupNames.value, [newGroup.id]: newGroup.name || `Group ${newGroup.id}` }
     await api(`/api/switches/${props.switchId}/lag`, {
-      method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports })
+      method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names: names })
     })
     showCreate.value = false
-    newGroup.ports = []; newGroup.id = availableGroupIds.value[0] || 1
+    newGroup.ports = []; newGroup.name = ''; newGroup.id = availableGroupIds.value[0] || 1
     flash('LAG group created')
     await load()
   } catch (e) { flash(e.message, false) }
@@ -217,6 +229,13 @@ async function removeGroup(groupId) {
   })
   flash('LAG group removed')
   await load()
+}
+
+async function renameGroup(groupId) {
+  await api(`/api/switches/${props.switchId}/lag`, {
+    method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: allPorts.value, group_names: groupNames.value })
+  })
+  flash('Group renamed')
 }
 
 async function applyPriority() {
