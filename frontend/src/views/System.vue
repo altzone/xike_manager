@@ -13,9 +13,24 @@
           </div>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Network</h3>
-          <div v-for="(v, k) in netInfo" :key="k" class="flex justify-between items-center text-sm py-1">
-            <span class="text-gray-500">{{ k }}</span><span class="font-medium text-gray-900">{{ v }}</span>
+          <span class="flex items-center gap-2 mb-3"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Management Interface</h3><Tip title="Management IP">Configure the switch's management IP address. Use DHCP to get an IP automatically from your router, or set a static IP. This is the IP you use to access SwitchPilot and the switch web interface. Warning: changing this may disconnect you!</Tip></span>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-500">DHCP</span>
+              <button @click="net.dhcp = !net.dhcp" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="net.dhcp ? 'bg-emerald-500' : 'bg-gray-300'">
+                <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="net.dhcp ? 'translate-x-5' : ''"></span>
+              </button>
+            </div>
+            <template v-if="!net.dhcp">
+              <div><label class="text-xs text-gray-500">IP Address</label><input v-model="net.ip" class="inp w-full"/></div>
+              <div><label class="text-xs text-gray-500">Netmask</label><input v-model="net.netmask" class="inp w-full"/></div>
+              <div><label class="text-xs text-gray-500">Gateway</label><input v-model="net.gateway" class="inp w-full"/></div>
+            </template>
+            <p v-else class="text-xs text-gray-400">IP will be assigned automatically by DHCP server</p>
+            <button @click="applyNetwork" class="w-full px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition">
+              {{ net.dhcp ? 'Switch to DHCP' : 'Apply Static IP' }}
+            </button>
+            <p class="text-[10px] text-red-400">Warning: changing IP settings may disconnect you from this switch</p>
           </div>
         </div>
       </div>
@@ -23,7 +38,7 @@
       <!-- Time -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Clock</h3>
+          <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Clock</h3><Tip title="System Clock">The switch uses its internal clock for MAC age timers and SNTP sync. Choose SNTP to auto-sync from an NTP server, or Manual to set the time yourself. The timezone affects how the time is displayed.</Tip></span>
           <div class="flex items-center gap-3 text-sm">
             <span class="text-gray-500">Current:</span>
             <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.timeVal || '--:--:--' }}</span>
@@ -220,7 +235,7 @@
 
       <!-- Loop Detection -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 class="text-sm font-semibold text-gray-700 mb-2">Loop Detection</h3>
+        <div class="flex items-center gap-2 mb-2"><h3 class="text-sm font-semibold text-gray-700">Loop Detection</h3><Tip title="Loop Detection">Monitors each port for network loops (e.g. a cable plugged into two ports on the same switch). When a loop is detected, the port is blocked to prevent a broadcast storm. Unlike STP, this works at the port level and is simpler to configure.</Tip></div>
         <p class="text-xs text-gray-400 mb-3">Enable per port to detect and block network loops</p>
         <div class="flex flex-wrap gap-2">
           <button v-for="lp in loop" :key="lp.port" @click="toggleLoop(lp.port)"
@@ -278,7 +293,7 @@
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Configuration Snapshots</h3>
+            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Configuration Snapshots</h3><Tip title="Config Backup">Save a complete snapshot of all switch settings (ports, VLANs, STP, LAG, etc.) to the SwitchPilot database. You can download snapshots as JSON files, import them back, or compare configurations over time. Useful before making changes.</Tip></span>
             <p class="text-xs text-gray-400">Save and restore full switch configurations</p>
           </div>
           <div class="flex gap-2">
@@ -359,6 +374,7 @@ const snapshots = ref([])
 const showSaveSnapshot = ref(false)
 const snapshotName = ref('')
 const viewing = ref(null)
+const net = reactive({ dhcp: true, ip: '', netmask: '', gateway: '' })
 const sntpStatus = ref(null)
 const sntpResolved = ref('')
 const msg = ref('')
@@ -373,6 +389,7 @@ async function load() {
     const s = await api(`/api/switches/${props.switchId}/status`)
     sysInfo.value = { Model: s.modle, Firmware: s.fw_ver, Hardware: s.hw_ver, MAC: s.sys_macaddr, Temperature: `${s.temperature}C` }
     netInfo.value = { IPv4: s.ipAddress, Netmask: s.netmask, Gateway: s.gateway, DHCP: s.dhcpEnabled === '1' ? 'On' : 'Off' }
+    net.dhcp = s.dhcpEnabled === '1'; net.ip = s.ipAddress; net.netmask = s.netmask; net.gateway = s.gateway
     const t = await api(`/api/switches/${props.switchId}/time`)
     timeData.value = t; sntp.enabled = t.sntp_state === '1'; sntp.server = t.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(t.sntp_poll) || 64
     timeMode.value = sntp.enabled ? 'sntp' : 'manual'
@@ -389,6 +406,14 @@ async function load() {
   } catch (e) { loadError.value = e.message }
 }
 
+async function applyNetwork() {
+  if (!net.dhcp && !confirm('Changing IP settings may disconnect you. Continue?')) return
+  try {
+    await api(`/api/switches/${props.switchId}/network`, { method: 'POST', body: JSON.stringify(net) })
+    flash('Network settings applied')
+    await load()
+  } catch(e) { flash(e.message, false) }
+}
 async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash('Time set'); await load() } catch(e) { flash(e.message, false) } }
 async function applyTimezone() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify({ timezone: setTime.timezone }) }); flash('Timezone set'); await load() } catch(e) { flash(e.message, false) } }
 async function applySntp() {

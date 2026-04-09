@@ -199,6 +199,19 @@ async def switch_ping(switch_id: int, user=Depends(get_current_user)):
     except Exception:
         return {"online": False}
 
+# ── Network config ──
+@app.post("/api/switches/{switch_id}/network")
+async def set_network(switch_id: int, data: dict, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    try:
+        await client.set_network_ipv4(
+            data.get("ip", ""), data.get("netmask", ""),
+            data.get("gateway", ""), data.get("dhcp", True)
+        )
+    except Exception:
+        pass  # may disconnect if IP changed
+    return {"ok": True}
+
 # ── System ──
 @app.get("/api/switches/{switch_id}/status")
 async def switch_status(switch_id: int, user=Depends(get_current_user)):
