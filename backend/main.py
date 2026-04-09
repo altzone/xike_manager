@@ -489,7 +489,21 @@ async def clear_macs(switch_id: int, user=Depends(require_admin)):
 @app.get("/api/switches/{switch_id}/lag")
 async def get_lag(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    return await client.get_lag()
+    raw = await client.get_lag()
+    rev = {v: k for k, v in PORT_MAP.items()}
+    ports = []
+    for i in range(1, raw["PortNum"] + 1):
+        p = raw[f"Port_{i}"]
+        user_port = rev.get(i, i)
+        ports.append({
+            "port": user_port,
+            "type": int(p[f"portTypeId_{i}"]),
+            "timeout": int(p[f"lacpTimeoutId_{i}"]),
+            "group": int(p[f"Port_{i}_grpInd"]),
+            "state": int(p[f"Port_{i}_state"]),
+        })
+    ports.sort(key=lambda x: x["port"])
+    return {"system_priority": raw["system_priority"], "ports": ports}
 
 
 # ── System Time ──
@@ -530,11 +544,16 @@ async def set_mirror(switch_id: int, data: dict, user=Depends(require_admin)):
     await client._post("port_mirror.json", post_data)
     return {"ok": True}
 
-# ── LAG ──
 @app.post("/api/switches/{switch_id}/lag")
 async def set_lag(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    await client._post("port_trunk_cfg.json", data)
+    post = {"system_priority": str(data.get("system_priority", 32768))}
+    for p in data.get("ports", []):
+        internal = PORT_MAP.get(p["port"], p["port"])
+        post[f"portTypeId_{internal}"] = str(p["type"])
+        post[f"lacpTimeoutId_{internal}"] = str(p["timeout"])
+        post[f"Port_{internal}_grpInd"] = str(p["group"])
+    await client._post("port_trunk_cfg.json", post)
     return {"ok": True}
 
 # ── Static MAC ──

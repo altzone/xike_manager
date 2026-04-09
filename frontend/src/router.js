@@ -14,6 +14,7 @@ const routes = [
           { path: '', name: 'switch-dashboard', component: () => import('./views/SwitchDashboard.vue') },
           { path: 'ports', name: 'switch-ports', component: () => import('./views/Ports.vue') },
           { path: 'vlans', name: 'switch-vlans', component: () => import('./views/Vlans.vue') },
+          { path: 'lag', name: 'switch-lag', component: () => import('./views/Lag.vue') },
           { path: 'monitoring', name: 'switch-monitoring', component: () => import('./views/Monitoring.vue') },
           { path: 'system', name: 'switch-system', component: () => import('./views/System.vue') },
         ]
