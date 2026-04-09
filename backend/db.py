@@ -50,5 +50,21 @@ async def init_db():
                 FOREIGN KEY (switch_id) REFERENCES switches(id),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+            CREATE TABLE IF NOT EXISTS vlans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                switch_id INTEGER NOT NULL,
+                vlan_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                UNIQUE(switch_id, vlan_id),
+                FOREIGN KEY (switch_id) REFERENCES switches(id)
+            );
+            CREATE TABLE IF NOT EXISTS port_descriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                switch_id INTEGER NOT NULL,
+                port INTEGER NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                UNIQUE(switch_id, port),
+                FOREIGN KEY (switch_id) REFERENCES switches(id)
+            );
         """)
         await db.commit()

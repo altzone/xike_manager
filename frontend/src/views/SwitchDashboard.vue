@@ -56,13 +56,17 @@ const sse = useSSE(props.switchId)
 const status = ref({})
 const model = ref('')
 
+const initialStats = ref([])
+
 const temp = computed(() => sse.data.value?.temperature || status.value?.temperature || '?')
-const ports = computed(() => sse.data.value?.ports || [])
-const portsUp = computed(() => ports.value.filter(p => p.link !== 'Link Down').length)
+const ports = computed(() => sse.data.value?.ports || initialStats.value)
+const portsUp = computed(() => ports.value.filter(p => p.link && p.link !== 'Link Down').length)
 
 onMounted(async () => {
   status.value = await api(`/api/switches/${props.switchId}/status`)
   model.value = status.value?.modle || status.value?.des || ''
+  // Load initial stats without SSE
+  try { initialStats.value = await api(`/api/switches/${props.switchId}/ports/stats`) } catch(e) {}
   sse.connect()
 })
 </script>

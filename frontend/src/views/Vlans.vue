@@ -1,171 +1,218 @@
 <template>
-  <div>
-    <h1 class="text-xl font-bold text-gray-900 mb-6">VLAN Configuration</h1>
-
-    <!-- Limits warning -->
-    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6 text-sm text-amber-800 flex items-start gap-2">
-      <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-      </svg>
-      <div>
-        <strong>Hardware limits:</strong> Native VLAN (PVID) max <strong>63</strong> &mdash;
-        Tag VLAN entries: <strong>{{ tagEntries.length }}/111</strong> used &mdash;
-        Port 1 is management (flat mode)
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold text-gray-900">VLAN Configuration</h1>
+      <div class="flex items-center gap-2 text-xs text-gray-400">
+        <span class="bg-gray-100 px-2 py-1 rounded">Tag entries: {{ limits.used }}/{{ limits.max }}</span>
+        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded">Native VLAN max: 63</span>
       </div>
     </div>
 
-    <!-- Port VLAN assignment -->
-    <div class="bg-white rounded-xl border overflow-hidden mb-6">
-      <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h2 class="font-semibold text-gray-700">Port Assignment</h2>
-        <button @click="savePortVlans" :disabled="saving"
-          class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-          {{ saving ? 'Saving...' : 'Apply & Save' }}
+    <!-- Step 1: VLANs -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold text-gray-900">Networks</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Define your VLANs, then assign them to ports below</p>
+        </div>
+        <button @click="showAddVlan = true"
+          class="px-3.5 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Add VLAN
+        </button>
+      </div>
+      <div v-if="vlans.length" class="divide-y divide-gray-50">
+        <div v-for="v in vlans" :key="v.vlan_id" class="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-sm font-bold text-indigo-600">{{ v.vlan_id }}</span>
+            <div>
+              <p class="font-medium text-gray-900">{{ v.name }}</p>
+              <p class="text-xs text-gray-400">VLAN {{ v.vlan_id }}</p>
+            </div>
+          </div>
+          <button @click="deleteVlan(v.vlan_id)" class="text-gray-300 hover:text-red-500 transition p-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      </div>
+      <div v-else class="px-5 py-8 text-center text-gray-400 text-sm">No VLANs defined. Add one to get started.</div>
+    </div>
+
+    <!-- Step 2: Port Assignment -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold text-gray-900">Port Assignment</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Configure each port mode and VLAN membership</p>
+        </div>
+        <button @click="applyAll" :disabled="applying"
+          class="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5">
+          <svg v-if="!applying" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <svg v-else class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          {{ applying ? 'Applying...' : 'Apply & Save' }}
         </button>
       </div>
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 border-b">
+        <thead class="bg-gray-50/80">
           <tr>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">Port</th>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">Type</th>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">Mode</th>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">PVID / Native</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Mode</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Access / Native VLAN</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Allowed VLANs (trunk)</th>
           </tr>
         </thead>
-        <tbody class="divide-y">
-          <tr v-for="pv in portVlans" :key="pv.port" class="hover:bg-gray-50"
-            :class="pv.port === 1 ? 'bg-yellow-50' : ''">
-            <td class="px-4 py-2 font-medium">
-              {{ pv.port }}
-              <span v-if="pv.port === 1" class="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded ml-1">MGMT</span>
+        <tbody class="divide-y divide-gray-50">
+          <tr v-for="pa in portAssignments" :key="pa.port" class="hover:bg-gray-50/50 transition"
+            :class="pa.port === 1 ? 'bg-amber-50/30' : ''">
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-gray-900">{{ pa.port }}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                  :class="pa.port >= 9 ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'">
+                  {{ pa.port >= 9 ? 'SFP+ 10G' : 'RJ45 2.5G' }}
+                </span>
+                <span v-if="pa.port === 1" class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">MGMT</span>
+              </div>
             </td>
-            <td class="px-4 py-2 text-gray-500">{{ pv.port >= 9 ? 'SFP+ 10G' : 'RJ45 2.5G' }}</td>
-            <td class="px-4 py-2">
-              <select v-model="pv.mode" :disabled="pv.port === 1"
-                class="px-2 py-1 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-100">
-                <option value="flat">Flat (no VLAN)</option>
+            <td class="px-5 py-3">
+              <select v-model="pa.mode" :disabled="pa.port === 1"
+                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 transition">
+                <option value="flat">Flat</option>
                 <option value="access">Access</option>
                 <option value="trunk">Trunk</option>
               </select>
             </td>
-            <td class="px-4 py-2">
-              <div class="flex items-center gap-2">
-                <input v-if="pv.mode !== 'flat'" v-model.number="pv.pvid" type="number" min="0" :max="63"
-                  class="w-20 px-2 py-1 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  :class="pv.pvid > 63 ? 'border-red-500 bg-red-50' : ''"/>
-                <span v-if="pv.pvid > 63 && pv.mode !== 'flat'" class="text-red-500 text-xs">Max 63!</span>
-                <span v-if="pv.mode === 'flat'" class="text-gray-400 text-xs">N/A</span>
+            <td class="px-5 py-3">
+              <select v-if="pa.mode === 'access'" v-model.number="pa.access_vlan"
+                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                <option v-for="v in vlans" :key="v.vlan_id" :value="v.vlan_id"
+                  :disabled="v.vlan_id > 63">
+                  {{ v.name }} ({{ v.vlan_id }}){{ v.vlan_id > 63 ? ' - exceeds PVID limit!' : '' }}
+                </option>
+              </select>
+              <select v-else-if="pa.mode === 'trunk'" v-model.number="pa.native_vlan"
+                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                <option v-for="v in vlans.filter(x => x.vlan_id <= 63)" :key="v.vlan_id" :value="v.vlan_id">
+                  {{ v.name }} ({{ v.vlan_id }})
+                </option>
+              </select>
+              <span v-else class="text-gray-300 text-xs">-</span>
+            </td>
+            <td class="px-5 py-3">
+              <div v-if="pa.mode === 'trunk'" class="flex flex-wrap gap-1.5">
+                <label v-for="v in vlans" :key="v.vlan_id"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium cursor-pointer transition-all select-none"
+                  :class="pa.trunk_vlans.includes(v.vlan_id) ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'">
+                  <input type="checkbox" :value="v.vlan_id" v-model="pa.trunk_vlans" class="hidden">
+                  {{ v.name }} <span class="opacity-60">{{ v.vlan_id }}</span>
+                </label>
               </div>
+              <span v-else class="text-gray-300 text-xs">-</span>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Tag VLANs -->
-    <div class="bg-white rounded-xl border overflow-hidden">
-      <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h2 class="font-semibold text-gray-700">Tagged VLANs (802.1Q)</h2>
-        <div class="flex gap-2">
-          <button @click="showAddTag = true"
-            class="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700">Add Entry</button>
-          <button @click="saveTagVlans" :disabled="saving"
-            class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50">Apply & Save</button>
-        </div>
-      </div>
-      <table v-if="tagEntries.length" class="w-full text-sm">
-        <thead class="bg-gray-50 border-b">
-          <tr>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">#</th>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">Port</th>
-            <th class="px-4 py-2 text-left font-medium text-gray-500">VLAN ID</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y">
-          <tr v-for="te in tagEntries" :key="te.entry" class="hover:bg-gray-50">
-            <td class="px-4 py-2 text-gray-400">{{ te.entry }}</td>
-            <td class="px-4 py-2 font-medium">Port {{ te.port }}</td>
-            <td class="px-4 py-2">
-              <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">VLAN {{ te.vlan_id }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="text-center text-gray-400 py-6">No tagged VLAN entries</p>
+    <!-- Status message -->
+    <div v-if="msg" class="rounded-lg px-4 py-3 text-sm flex items-center gap-2 transition-all"
+      :class="msgOk ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'">
+      <svg v-if="msgOk" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
+      {{ msg }}
     </div>
 
-    <!-- Add tag modal -->
-    <div v-if="showAddTag" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAddTag = false">
+    <!-- Add VLAN modal -->
+    <div v-if="showAddVlan" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showAddVlan = false">
       <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">Add Tagged VLAN</h2>
-        <form @submit.prevent="addTag" class="space-y-3">
+        <h2 class="text-lg font-bold text-gray-900 mb-4">Create VLAN</h2>
+        <form @submit.prevent="addVlan" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
-            <select v-model.number="newTag.port" class="w-full px-3 py-2 border rounded-lg">
-              <option v-for="p in 10" :key="p" :value="p">Port {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
-            </select>
+            <label class="block text-sm font-medium text-gray-700 mb-1">VLAN ID</label>
+            <input v-model.number="newVlan.id" type="number" min="1" max="4095" required placeholder="10"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">VLAN ID (1-4095)</label>
-            <input v-model.number="newTag.vlan_id" type="number" min="1" max="4095" required
-              class="w-full px-3 py-2 border rounded-lg"/>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input v-model="newVlan.name" required placeholder="e.g. LAN, VoIP, Guest..."
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
           </div>
-          <div class="flex gap-3 pt-2">
-            <button type="button" @click="showAddTag = false" class="flex-1 py-2 border rounded-lg">Cancel</button>
-            <button type="submit" class="flex-1 py-2 bg-emerald-600 text-white rounded-lg">Add</button>
+          <p v-if="newVlan.id > 63" class="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+            VLAN {{ newVlan.id }} can only be used as tagged (trunk). It cannot be set as native/access VLAN (hardware limit: max 63).
+          </p>
+          <div class="flex gap-3 pt-1">
+            <button type="button" @click="showAddVlan = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">Cancel</button>
+            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">Create</button>
           </div>
         </form>
       </div>
     </div>
-
-    <p v-if="msg" class="mt-4 text-sm" :class="msgOk ? 'text-emerald-600' : 'text-red-500'">{{ msg }}</p>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 
 const props = defineProps({ switchId: Number })
-const portVlans = ref([])
-const tagEntries = ref([])
-const saving = ref(false)
+const vlans = ref([])
+const portAssignments = ref([])
+const limits = reactive({ used: 0, max: 111 })
+const showAddVlan = ref(false)
+const newVlan = ref({ id: '', name: '' })
+const applying = ref(false)
 const msg = ref('')
 const msgOk = ref(true)
-const showAddTag = ref(false)
-const newTag = ref({ port: 7, vlan_id: 10 })
 
 async function load() {
-  portVlans.value = await api(`/api/switches/${props.switchId}/vlans/port`)
-  tagEntries.value = await api(`/api/switches/${props.switchId}/vlans/tag`)
+  vlans.value = await api(`/api/switches/${props.switchId}/vlans`)
+  const assignments = await api(`/api/switches/${props.switchId}/vlans/assignments`)
+  portAssignments.value = assignments.map(a => ({
+    ...a,
+    access_vlan: a.mode === 'access' ? a.pvid : (vlans.value[0]?.vlan_id || 1),
+    native_vlan: a.mode === 'trunk' ? a.pvid : (vlans.value.find(v => v.vlan_id <= 63)?.vlan_id || 1),
+    trunk_vlans: a.trunk_vlans || [],
+  }))
+  const lim = await api(`/api/switches/${props.switchId}/vlans/limits`)
+  limits.used = lim.used_tag_entries
+  limits.max = lim.max_tag_entries
 }
 
-async function savePortVlans() {
-  saving.value = true; msg.value = ''
+async function addVlan() {
   try {
-    const configs = portVlans.value.filter(p => p.port !== 1)
-    await api(`/api/switches/${props.switchId}/vlans/port`, { method: 'POST', body: JSON.stringify(configs) })
-    msg.value = 'Port VLANs saved'; msgOk.value = true
+    await api(`/api/switches/${props.switchId}/vlans`, {
+      method: 'POST', body: JSON.stringify({ vlan_id: newVlan.value.id, name: newVlan.value.name })
+    })
+    showAddVlan.value = false
+    newVlan.value = { id: '', name: '' }
     await load()
   } catch (e) { msg.value = e.message; msgOk.value = false }
-  finally { saving.value = false }
 }
 
-async function saveTagVlans() {
-  saving.value = true; msg.value = ''
+async function deleteVlan(vid) {
+  if (!confirm(`Delete VLAN ${vid}?`)) return
+  await api(`/api/switches/${props.switchId}/vlans/${vid}`, { method: 'DELETE' })
+  await load()
+}
+
+async function applyAll() {
+  applying.value = true; msg.value = ''
   try {
-    await api(`/api/switches/${props.switchId}/vlans/tag`, { method: 'POST', body: JSON.stringify(tagEntries.value) })
-    msg.value = 'Tag VLANs saved'; msgOk.value = true
+    const assignments = portAssignments.value.filter(p => p.port !== 1).map(p => ({
+      port: p.port,
+      mode: p.mode,
+      access_vlan: p.mode === 'access' ? p.access_vlan : null,
+      native_vlan: p.mode === 'trunk' ? p.native_vlan : null,
+      trunk_vlans: p.mode === 'trunk' ? p.trunk_vlans : null,
+    }))
+    const res = await api(`/api/switches/${props.switchId}/vlans/apply`, {
+      method: 'POST', body: JSON.stringify(assignments)
+    })
+    msg.value = `Applied: ${res.port_vlans} port configs, ${res.tag_entries} tag entries`
+    msgOk.value = true
     await load()
   } catch (e) { msg.value = e.message; msgOk.value = false }
-  finally { saving.value = false }
-}
-
-function addTag() {
-  const nextEntry = tagEntries.value.length ? Math.max(...tagEntries.value.map(e => e.entry)) + 1 : 0
-  tagEntries.value.push({ entry: nextEntry, port: newTag.value.port, vlan_id: newTag.value.vlan_id })
-  showAddTag.value = false
-  newTag.value = { port: 7, vlan_id: 10 }
+  finally { applying.value = false }
 }
 
 onMounted(load)

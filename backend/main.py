@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import aiosqlite
+import json
 
-from db import init_db, get_db, DB_PATH
-from auth import hash_password, verify_password, create_token, get_current_user, require_admin
-from switch_client import SwitchClient, MAX_FID, MAX_TAG_ENTRIES
+from db import init_db, DB_PATH
+from auth import hash_password, verify_password, create_token, decode_token, get_current_user, require_admin
+from switch_client import SwitchClient, MAX_FID, MAX_TAG_ENTRIES, PORT_MAP
 from sse import get_switch_client, sse_endpoint
 
 
@@ -15,7 +17,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="SwitchPilot", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="SwitchPilot", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -35,18 +37,53 @@ class SwitchAdd(BaseModel):
     username: str = "admin"
     password: str = "admin"
 
-class PortVlanConfig(BaseModel):
+class VlanCreate(BaseModel):
+    vlan_id: int
+    name: str
+
+class PortAssignment(BaseModel):
     port: int
     mode: str  # "access", "trunk", "flat"
-    pvid: int = 0
+    access_vlan: Optional[int] = None
+    native_vlan: Optional[int] = None
+    trunk_vlans: Optional[list[int]] = None
 
-class TagVlanEntry(BaseModel):
-    entry: int
+class StpConfig(BaseModel):
+    enabled: bool
+    mode: str = "stp"  # "stp" or "rstp"
+    edge_ports: Optional[list[int]] = None
+
+class LoopConfig(BaseModel):
+    ports: dict[int, bool]  # port -> enabled
+
+class StormConfig(BaseModel):
+    enabled: bool
+    rate: int = 100
+
+class IgmpConfig(BaseModel):
+    enabled: bool
+    fast_leave: bool = True
+    querier: bool = False
+
+class MirrorConfig(BaseModel):
+    monitoring_port: int
+    ports: dict[int, dict]  # port -> {"ingress": bool, "egress": bool}
+
+class EeeConfig(BaseModel):
+    enabled: bool
+
+class PortConfig(BaseModel):
     port: int
-    vlan_id: int
+    enabled: bool = True
+    speed: str = "Auto"
+    flow_ctrl: str = "On"
+
+class PortDescription(BaseModel):
+    port: int
+    description: str
 
 
-# ── Setup (first run) ──
+# ── Setup ──
 @app.get("/api/setup/status")
 async def setup_status():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -92,12 +129,10 @@ async def list_switches(user=Depends(get_current_user)):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT id, name, ip, username, model, firmware, mac_address, created_at FROM switches")
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+        return [dict(r) for r in await cursor.fetchall()]
 
 @app.post("/api/switches")
 async def add_switch(req: SwitchAdd, user=Depends(require_admin)):
-    # Test connection
     client = SwitchClient(req.ip, req.username, req.password)
     try:
         if not await client.login():
@@ -107,13 +142,11 @@ async def add_switch(req: SwitchAdd, user=Depends(require_admin)):
         raise HTTPException(400, f"Switch connection failed: {e}")
     finally:
         await client.close()
-
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "INSERT INTO switches (name, ip, username, password, model, firmware, mac_address) VALUES (?,?,?,?,?,?,?)",
             (req.name, req.ip, req.username, req.password,
-             status.get("modle", ""), status.get("fw_ver", ""), status.get("sys_macaddr", ""))
-        )
+             status.get("modle", ""), status.get("fw_ver", ""), status.get("sys_macaddr", "")))
         await db.commit()
         return {"id": cursor.lastrowid, "model": status.get("modle"), "firmware": status.get("fw_ver")}
 
@@ -125,7 +158,7 @@ async def delete_switch(switch_id: int, user=Depends(require_admin)):
         return {"ok": True}
 
 
-# ── Helper to get switch client ──
+# ── Helper ──
 async def _get_client(switch_id: int) -> SwitchClient:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -138,12 +171,13 @@ async def _get_client(switch_id: int) -> SwitchClient:
 
 # ── SSE ──
 @app.get("/api/switches/{switch_id}/sse")
-async def switch_sse(switch_id: int, user=Depends(get_current_user)):
+async def switch_sse(switch_id: int, token: str = Query(...)):
+    decode_token(token)
     client = await _get_client(switch_id)
     return await sse_endpoint(client)
 
 
-# ── Switch System ──
+# ── System ──
 @app.get("/api/switches/{switch_id}/status")
 async def switch_status(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
@@ -151,52 +185,151 @@ async def switch_status(switch_id: int, user=Depends(get_current_user)):
     network = await client.get_network()
     return {**status, **network}
 
-@app.get("/api/switches/{switch_id}/time")
-async def switch_time(switch_id: int, user=Depends(get_current_user)):
-    client = await _get_client(switch_id)
-    return await client.get_time()
-
 
 # ── Ports ──
 @app.get("/api/switches/{switch_id}/ports")
-async def switch_ports(switch_id: int, user=Depends(get_current_user)):
+async def get_ports(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    return await client.get_ports()
+    ports = await client.get_ports()
+    # Enrich with local descriptions
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT port, description FROM port_descriptions WHERE switch_id=?", (switch_id,))
+        descs = {r["port"]: r["description"] for r in await cursor.fetchall()}
+    for p in ports:
+        p["description"] = descs.get(p["port"], "")
+    return ports
+
+@app.post("/api/switches/{switch_id}/ports/config")
+async def set_port_config(switch_id: int, configs: list[PortConfig], user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    for cfg in configs:
+        await client.set_port(cfg.port, cfg.enabled, cfg.speed, cfg.flow_ctrl)
+    await client.save_ports()
+    return {"ok": True}
+
+@app.post("/api/switches/{switch_id}/ports/description")
+async def set_port_description(switch_id: int, req: PortDescription, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO port_descriptions (switch_id, port, description) VALUES (?,?,?)",
+                         (switch_id, req.port, req.description))
+        await db.commit()
+    return {"ok": True}
 
 @app.get("/api/switches/{switch_id}/ports/stats")
-async def switch_port_stats(switch_id: int, user=Depends(get_current_user)):
+async def get_port_stats(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
     return await client.get_port_stats()
 
 
-# ── VLANs ──
-@app.get("/api/switches/{switch_id}/vlans/port")
-async def get_port_vlans(switch_id: int, user=Depends(get_current_user)):
-    client = await _get_client(switch_id)
-    return await client.get_port_vlans()
+# ── VLANs (abstraction layer) ──
+@app.get("/api/switches/{switch_id}/vlans")
+async def get_vlans(switch_id: int, user=Depends(get_current_user)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT vlan_id, name FROM vlans WHERE switch_id=? ORDER BY vlan_id", (switch_id,))
+        return [dict(r) for r in await cursor.fetchall()]
 
-@app.post("/api/switches/{switch_id}/vlans/port")
-async def set_port_vlans(switch_id: int, configs: list[PortVlanConfig], user=Depends(require_admin)):
-    client = await _get_client(switch_id)
-    result = await client.set_port_vlans([c.model_dump() for c in configs])
-    await client.save_port_vlans()
-    return {"result": result}
+@app.post("/api/switches/{switch_id}/vlans")
+async def create_vlan(switch_id: int, req: VlanCreate, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("INSERT INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
+                             (switch_id, req.vlan_id, req.name))
+            await db.commit()
+        except Exception:
+            raise HTTPException(400, f"VLAN {req.vlan_id} already exists")
+    return {"ok": True}
 
-@app.get("/api/switches/{switch_id}/vlans/tag")
-async def get_tag_vlans(switch_id: int, user=Depends(get_current_user)):
-    client = await _get_client(switch_id)
-    return await client.get_tag_vlans()
-
-@app.post("/api/switches/{switch_id}/vlans/tag")
-async def set_tag_vlans(switch_id: int, entries: list[TagVlanEntry], user=Depends(require_admin)):
-    client = await _get_client(switch_id)
-    result = await client.set_tag_vlans([e.model_dump() for e in entries])
-    await client.save_tag_vlans()
-    return {"result": result}
+@app.delete("/api/switches/{switch_id}/vlans/{vlan_id}")
+async def delete_vlan(switch_id: int, vlan_id: int, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM vlans WHERE switch_id=? AND vlan_id=?", (switch_id, vlan_id))
+        await db.commit()
+    return {"ok": True}
 
 @app.get("/api/switches/{switch_id}/vlans/limits")
 async def vlan_limits(switch_id: int, user=Depends(get_current_user)):
-    return {"max_fid": MAX_FID, "max_tag_entries": MAX_TAG_ENTRIES, "max_vlan_id": 4095}
+    client = await _get_client(switch_id)
+    tag_entries = await client.get_tag_vlans()
+    return {"max_fid": MAX_FID, "max_tag_entries": MAX_TAG_ENTRIES, "used_tag_entries": len(tag_entries)}
+
+@app.get("/api/switches/{switch_id}/vlans/assignments")
+async def get_vlan_assignments(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    port_vlans = await client.get_port_vlans()
+    tag_vlans = await client.get_tag_vlans()
+    # Build per-port view
+    trunk_map = {}
+    for tv in tag_vlans:
+        trunk_map.setdefault(tv["port"], []).append(tv["vlan_id"])
+    for pv in port_vlans:
+        pv["trunk_vlans"] = sorted(trunk_map.get(pv["port"], []))
+
+    # Auto-discover VLANs from switch config and sync to DB
+    all_vids = set()
+    for pv in port_vlans:
+        if pv["pvid"] > 0:
+            all_vids.add(pv["pvid"])
+    for tv in tag_vlans:
+        all_vids.add(tv["vlan_id"])
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT vlan_id FROM vlans WHERE switch_id=?", (switch_id,))
+        known = {r[0] for r in await cursor.fetchall()}
+        for vid in all_vids:
+            if vid not in known and vid > 0:
+                await db.execute("INSERT OR IGNORE INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
+                                 (switch_id, vid, f"VLAN {vid}"))
+        await db.commit()
+
+    return port_vlans
+
+@app.post("/api/switches/{switch_id}/vlans/apply")
+async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignment], user=Depends(require_admin)):
+    """Apply VLAN config like a real switch: access VLAN, trunk allowed VLANs, native VLAN"""
+    client = await _get_client(switch_id)
+
+    # 1. Build port VLAN config
+    port_configs = []
+    for a in assignments:
+        if a.mode == "flat":
+            port_configs.append({"port": a.port, "mode": "flat", "pvid": 0})
+        elif a.mode == "access":
+            pvid = a.access_vlan or 1
+            if pvid > MAX_FID:
+                raise HTTPException(400, f"Access VLAN {pvid} exceeds max PVID ({MAX_FID}) on port {a.port}")
+            port_configs.append({"port": a.port, "mode": "access", "pvid": pvid})
+        elif a.mode == "trunk":
+            native = a.native_vlan or 1
+            if native > MAX_FID:
+                raise HTTPException(400, f"Native VLAN {native} exceeds max PVID ({MAX_FID}) on port {a.port}. Use a VLAN ID <= {MAX_FID}.")
+            port_configs.append({"port": a.port, "mode": "trunk", "pvid": native})
+
+    # 2. Build tag VLAN entries from trunk assignments
+    tag_entries = []
+    entry_idx = 0
+    for a in assignments:
+        if a.mode == "trunk" and a.trunk_vlans:
+            for vid in a.trunk_vlans:
+                tag_entries.append({"entry": entry_idx, "port": a.port, "vlan_id": vid})
+                entry_idx += 1
+                if entry_idx >= MAX_TAG_ENTRIES:
+                    raise HTTPException(400, f"Too many tag VLAN entries (max {MAX_TAG_ENTRIES})")
+
+    # 3. Apply port VLANs
+    if port_configs:
+        await client.set_port_vlans(port_configs)
+
+    # 4. Reset and re-apply tag VLANs
+    await client.reset_vlans()
+    if tag_entries:
+        await client.set_tag_vlans(tag_entries)
+
+    # 5. Save both
+    await client.save_port_vlans()
+    await client.save_tag_vlans()
+
+    return {"ok": True, "port_vlans": len(port_configs), "tag_entries": len(tag_entries)}
 
 
 # ── STP ──
@@ -204,6 +337,152 @@ async def vlan_limits(switch_id: int, user=Depends(get_current_user)):
 async def get_stp(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
     return await client.get_stp()
+
+@app.post("/api/switches/{switch_id}/stp")
+async def set_stp(switch_id: int, cfg: StpConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    data = {"stp_enable": "1" if cfg.enabled else "0", "stp_mode": "1" if cfg.mode == "rstp" else "0"}
+    if cfg.edge_ports:
+        for port in range(1, 11):
+            internal = PORT_MAP.get(port, port)
+            data[f"Stp_Edge_{internal}"] = "1" if port in cfg.edge_ports else "0"
+    await client.set_stp(data)
+    return {"ok": True}
+
+
+# ── Loop Detection ──
+@app.get("/api/switches/{switch_id}/loop")
+async def get_loop(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    config = await client.get_loop_config()
+    status = await client.get_loop_status()
+    ports = []
+    for i in range(1, 11):
+        user_port = {v: k for k, v in PORT_MAP.items()}.get(i, i)
+        ports.append({
+            "port": user_port,
+            "enabled": config[f"Port_{i}"][f"Locken_{i}"] == "1",
+            "violation": status.get(f"Violdetd_{i}", "0") == "1",
+        })
+    ports.sort(key=lambda x: x["port"])
+    return ports
+
+@app.post("/api/switches/{switch_id}/loop")
+async def set_loop(switch_id: int, cfg: LoopConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    data = {}
+    for port, enabled in cfg.ports.items():
+        internal = PORT_MAP.get(port, port)
+        if enabled:
+            data[f"checkbox_{internal}"] = "on"
+    await client._post("port_lock_cfg.json", data)
+    return {"ok": True}
+
+
+# ── Storm Control ──
+@app.get("/api/switches/{switch_id}/storm")
+async def get_storm(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    return await client.get_storm_control()
+
+@app.post("/api/switches/{switch_id}/storm")
+async def set_storm(switch_id: int, cfg: StormConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.set_storm_control(cfg.rate, cfg.enabled)
+    return {"ok": True}
+
+
+# ── IGMP ──
+@app.get("/api/switches/{switch_id}/igmp")
+async def get_igmp(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    config = await client.get_igmp_config()
+    entries = await client.get_igmp_entries()
+    return {"config": config, "entries": entries}
+
+@app.post("/api/switches/{switch_id}/igmp")
+async def set_igmp(switch_id: int, cfg: IgmpConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.set_igmp_config({
+        "igmp": "on" if cfg.enabled else "off",
+        "fast_leave": "on" if cfg.fast_leave else "off",
+        "snoop_querier": "on" if cfg.querier else "off",
+    })
+    return {"ok": True}
+
+
+# ── Port Mirror ──
+@app.get("/api/switches/{switch_id}/mirror")
+async def get_mirror(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    raw = await client.get_mirror()
+    rev = {v: k for k, v in PORT_MAP.items()}
+    monitoring = int(raw.get("MonitoringPortId", 0))
+    ports = []
+    for i in range(1, 11):
+        p = raw[f"Port_{i}"]
+        user_port = rev.get(i, i)
+        ports.append({
+            "port": user_port,
+            "ingress": p[f"Ingress_Status"] == "Enabled",
+            "egress": p[f"Egress_Status"] == "Enabled",
+        })
+    ports.sort(key=lambda x: x["port"])
+    return {"monitoring_port": rev.get(monitoring, monitoring), "ports": ports}
+
+@app.post("/api/switches/{switch_id}/mirror")
+async def set_mirror(switch_id: int, cfg: MirrorConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    data = {"MonitoringPortId": str(PORT_MAP.get(cfg.monitoring_port, cfg.monitoring_port))}
+    for port, settings in cfg.ports.items():
+        internal = PORT_MAP.get(int(port), int(port))
+        data[f"Ingress_Status_{internal}"] = "Enabled" if settings.get("ingress") else "Disabled"
+        data[f"Egress_Status_{internal}"] = "Enabled" if settings.get("egress") else "Disabled"
+    await client.set_mirror(data)
+    return {"ok": True}
+
+
+# ── EEE ──
+@app.get("/api/switches/{switch_id}/eee")
+async def get_eee(switch_id: int, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    return await client.get_eee()
+
+@app.post("/api/switches/{switch_id}/eee")
+async def set_eee(switch_id: int, cfg: EeeConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.set_eee(cfg.enabled)
+    return {"ok": True}
+
+
+# ── MAC Table ──
+@app.get("/api/switches/{switch_id}/mac/dynamic")
+async def get_dynamic_macs(switch_id: int, search: Optional[str] = None, user=Depends(get_current_user)):
+    client = await _get_client(switch_id)
+    if search:
+        raw = await client._get(f"mac_search_dynamic_mac_entries.json?mac_search_txt={search}")
+    else:
+        raw = await client.get_dynamic_macs()
+    rev = {v: k for k, v in PORT_MAP.items()}
+    macs = []
+    for k, v in raw.items():
+        if not k.startswith("Idx_"):
+            continue
+        internal_port = int(v["Dynamic_portid"])
+        macs.append({
+            "idx": v["Dynamic_idx"],
+            "mac": v["Dynamic_mac_addr"],
+            "port": rev.get(internal_port, internal_port),
+            "fid": v["Dynamic_fid"],
+            "age": v["Dynamic_age_timer"],
+        })
+    return {"entries": macs, "total": raw.get("total_entries", len(macs))}
+
+@app.post("/api/switches/{switch_id}/mac/clear")
+async def clear_macs(switch_id: int, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.clear_dynamic_macs()
+    return {"ok": True}
 
 
 # ── LAG ──
@@ -213,37 +492,79 @@ async def get_lag(switch_id: int, user=Depends(get_current_user)):
     return await client.get_lag()
 
 
-# ── Monitoring ──
-@app.get("/api/switches/{switch_id}/mac/dynamic")
-async def get_dynamic_macs(switch_id: int, user=Depends(get_current_user)):
+# ── System Time ──
+@app.get("/api/switches/{switch_id}/time")
+async def get_time(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    return await client.get_dynamic_macs()
+    time_data = await client.get_time()
+    sntp_data = await client.get_sntp()
+    return {**time_data, **sntp_data}
 
-@app.get("/api/switches/{switch_id}/loop")
-async def get_loop(switch_id: int, user=Depends(get_current_user)):
+@app.post("/api/switches/{switch_id}/time")
+async def set_time(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    status = await client.get_loop_status()
-    config = await client.get_loop_config()
-    return {"status": status, "config": config}
+    await client._post("systemtime_settings.json", {
+        "input_time": data.get("time", ""),
+        "input_date": data.get("date", ""),
+        "timezone_offset": data.get("timezone", "+00:00"),
+        "input_daylight": data.get("daylight", "0"),
+    })
+    return {"ok": True}
 
-@app.get("/api/switches/{switch_id}/igmp")
-async def get_igmp(switch_id: int, user=Depends(get_current_user)):
+@app.post("/api/switches/{switch_id}/sntp")
+async def set_sntp(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    config = await client.get_igmp_config()
-    entries = await client.get_igmp_entries()
-    return {"config": config, "entries": entries}
+    await client.set_sntp(data.get("enabled", False), data.get("server", "pool.ntp.org"), data.get("poll", 64))
+    return {"ok": True}
 
-@app.get("/api/switches/{switch_id}/storm")
-async def get_storm(switch_id: int, user=Depends(get_current_user)):
+# ── Port Mirror ──
+@app.post("/api/switches/{switch_id}/mirror")
+async def set_mirror(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    return await client.get_storm_control()
+    post_data = {
+        "mirroring_port_selection": str(PORT_MAP.get(data.get("monitoring_port", 1), 1)),
+        "Ingress_Status": "1" if data.get("ingress") else "0",
+        "Egress_Status": "1" if data.get("egress") else "0",
+        "mirrored_port_selection": [str(PORT_MAP.get(p, p)) for p in data.get("mirrored_ports", [])],
+    }
+    await client._post("port_mirror.json", post_data)
+    return {"ok": True}
 
-@app.get("/api/switches/{switch_id}/mirror")
-async def get_mirror(switch_id: int, user=Depends(get_current_user)):
+# ── LAG ──
+@app.post("/api/switches/{switch_id}/lag")
+async def set_lag(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    return await client.get_mirror()
+    await client._post("port_trunk_cfg.json", data)
+    return {"ok": True}
 
-@app.get("/api/switches/{switch_id}/eee")
-async def get_eee(switch_id: int, user=Depends(get_current_user)):
+# ── Static MAC ──
+@app.get("/api/switches/{switch_id}/mac/static")
+async def get_static_macs(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    return await client.get_eee()
+    return await client.get_static_macs()
+
+@app.post("/api/switches/{switch_id}/mac/static/add")
+async def add_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    internal_port = PORT_MAP.get(data.get("port", 1), 1)
+    await client._post("mac_add_static_mac_entries.json", {
+        "mac-input": data["mac"],
+        "port-input": str(internal_port),
+        "fid-input": str(data.get("fid", 0)),
+    })
+    await client._post("mac_save_static_mac_entries.json", {})
+    return {"ok": True}
+
+@app.post("/api/switches/{switch_id}/mac/static/delete")
+async def delete_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client._post("mac_delete_static_mac_entries.json", data)
+    await client._post("mac_save_static_mac_entries.json", {})
+    return {"ok": True}
+
+# ── Reboot ──
+@app.post("/api/switches/{switch_id}/reboot")
+async def reboot_switch(switch_id: int, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.reboot()
+    return {"ok": True}

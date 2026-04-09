@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 
@@ -42,6 +42,16 @@ const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/setup/status')
+    const data = await res.json()
+    if (!data.setup_complete) {
+      router.replace('/setup')
+    }
+  } catch (e) {}
+})
 
 async function doLogin() {
   loading.value = true
