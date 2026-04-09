@@ -6,6 +6,7 @@ from typing import Optional
 import aiosqlite
 import json
 
+import socket
 from db import init_db, DB_PATH
 from auth import hash_password, verify_password, create_token, decode_token, get_current_user, require_admin
 from switch_client import SwitchClient, MAX_FID, MAX_TAG_ENTRIES, PORT_MAP
@@ -554,8 +555,28 @@ async def set_time(switch_id: int, data: dict, user=Depends(require_admin)):
 @app.post("/api/switches/{switch_id}/sntp")
 async def set_sntp(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    await client.set_sntp(data.get("enabled", False), data.get("server", "pool.ntp.org"), data.get("poll", 64))
-    return {"ok": True}
+    server = data.get("server", "pool.ntp.org")
+    # Resolve hostname to IP (switch only accepts IPs)
+    resolved_ip = server
+    try:
+        socket.inet_aton(server)  # already an IP
+    except socket.error:
+        try:
+            resolved_ip = socket.gethostbyname(server)
+        except socket.gaierror:
+            raise HTTPException(400, f"Cannot resolve hostname '{server}'")
+    await client.set_sntp(data.get("enabled", False), resolved_ip, data.get("poll", 64))
+    return {"ok": True, "resolved_ip": resolved_ip, "hostname": server}
+
+@app.get("/api/switches/{switch_id}/sntp/check")
+async def check_sntp(switch_id: int, user=Depends(get_current_user)):
+    """Check if SNTP is working by reading time and comparing"""
+    client = await _get_client(switch_id)
+    sntp_cfg = await client.get_sntp()
+    time_data = await client.get_time()
+    # If date is still 01/01/1970, SNTP is not synced
+    synced = time_data.get("dateVal", "01/01/1970") != "01/01/1970"
+    return {"synced": synced, "server_ip": sntp_cfg.get("sntp_server_ip"), "time": time_data.get("timeVal"), "date": time_data.get("dateVal")}
 
 # ── Port Mirror ──
 @app.post("/api/switches/{switch_id}/mirror")

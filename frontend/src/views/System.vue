@@ -52,11 +52,17 @@
             <label class="text-xs font-medium text-gray-500 mb-1 block">Poll Interval (seconds)</label>
             <input v-model.number="sntp.poll" type="number" min="30" max="99999" class="inp w-full" placeholder="64"/>
           </div>
-          <div class="flex items-end">
-            <button @click="sntp.enabled = true; applySntp()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Enable SNTP</button>
+          <div class="flex items-end gap-2">
+            <button @click="sntp.enabled = true; applySntp()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Enable SNTP</button>
+            <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">Check</button>
           </div>
-          <p v-if="sntp.enabled" class="col-span-3 text-xs text-emerald-600 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> SNTP is active &mdash; server: {{ sntp.server }}
+          <div v-if="sntpStatus" class="col-span-3 text-xs flex items-center gap-2 p-2 rounded-lg" :class="sntpStatus.synced ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
+            <span class="w-2 h-2 rounded-full" :class="sntpStatus.synced ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+            <span v-if="sntpStatus.synced">Synced &mdash; Server: {{ sntpStatus.server_ip }} &mdash; Time: {{ sntpStatus.time }} {{ sntpStatus.date }}</span>
+            <span v-else>Not synced (date still 01/01/1970) &mdash; Check server IP: {{ sntpStatus.server_ip }}</span>
+          </div>
+          <p v-if="sntpResolved" class="col-span-3 text-xs text-gray-500">
+            Hostname resolved to: <span class="font-mono font-medium">{{ sntpResolved }}</span>
           </p>
         </div>
         <!-- Manual mode -->
@@ -343,6 +349,8 @@ const snapshots = ref([])
 const showSaveSnapshot = ref(false)
 const snapshotName = ref('')
 const viewing = ref(null)
+const sntpStatus = ref(null)
+const sntpResolved = ref('')
 const msg = ref('')
 const msgOk = ref(true)
 
@@ -371,7 +379,18 @@ async function load() {
 }
 
 async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash('Time set'); await load() } catch(e) { flash(e.message, false) } }
-async function applySntp() { await api(`/api/switches/${props.switchId}/sntp`, { method: 'POST', body: JSON.stringify(sntp) }); flash('SNTP updated') }
+async function applySntp() {
+  try {
+    const res = await api(`/api/switches/${props.switchId}/sntp`, { method: 'POST', body: JSON.stringify(sntp) })
+    sntpResolved.value = res.resolved_ip !== sntp.server ? res.resolved_ip : ''
+    flash('SNTP updated' + (sntpResolved.value ? ` (resolved to ${sntpResolved.value})` : ''))
+  } catch(e) { flash(e.message, false) }
+}
+async function checkSntp() {
+  try {
+    sntpStatus.value = await api(`/api/switches/${props.switchId}/sntp/check`)
+  } catch(e) { flash(e.message, false) }
+}
 async function applyStp() { await api(`/api/switches/${props.switchId}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); flash('STP updated') }
 async function applyStorm() { await api(`/api/switches/${props.switchId}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate }) }); flash('Storm updated') }
 async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); flash('IGMP updated') }
