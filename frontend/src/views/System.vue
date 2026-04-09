@@ -60,7 +60,7 @@
             </select>
           </div>
           <div class="flex items-end gap-2">
-            <button @click="sntp.enabled = true; applySntp()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Enable SNTP</button>
+            <button @click="sntp.enabled = true; applySntp(); applyTimezone()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ sntp.enabled ? 'Update SNTP' : 'Enable SNTP' }}</button>
             <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">Check</button>
           </div>
           <div v-if="sntpStatus" class="col-span-3 text-xs flex items-center gap-2 p-2 rounded-lg" :class="sntpStatus.synced ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
