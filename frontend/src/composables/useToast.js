@@ -9,7 +9,10 @@ export function useToast() {
   function add(msg, ok) {
     const id = nextId++
     state.toasts.push({ id, msg, ok })
-    setTimeout(() => { state.toasts = state.toasts.filter(t => t.id !== id) }, 3500)
+    setTimeout(() => {
+      const idx = state.toasts.findIndex(t => t.id === id)
+      if (idx !== -1) state.toasts.splice(idx, 1)
+    }, 3500)
   }
   return { toasts: state.toasts, success, error }
 }
