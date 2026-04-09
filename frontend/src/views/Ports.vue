@@ -71,8 +71,8 @@
               </button>
             </td>
             <td class="px-5 py-3">
-              <span class="text-xs font-medium" :class="stats[port.port]?.link !== 'Link Down' ? 'text-emerald-600' : 'text-gray-400'">
-                {{ stats[port.port]?.link || port.speed_actual }}
+              <span class="text-xs font-medium" :class="portLink(port.port) !== 'Down' ? 'text-emerald-600' : 'text-gray-400'">
+                {{ portLink(port.port) }}
               </span>
             </td>
             <td class="px-5 py-3 text-right font-mono tabular-nums text-xs">
@@ -117,6 +117,12 @@ let pollTimer = null
 const stats = computed(() => {
   const m = {}; statsRaw.value.forEach(s => m[s.port] = s); return m
 })
+
+function portLink(port) {
+  const link = stats.value[port]?.link || ''
+  if (!link || link === 'Link Down') return 'Down'
+  return link
+}
 
 function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
 
