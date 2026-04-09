@@ -142,42 +142,6 @@
       </div>
     </div>
 
-    <!-- Port Detail Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      <div v-for="p in ports" :key="p.port"
-        class="bg-white rounded-xl border shadow-sm overflow-hidden transition-all duration-300"
-        :class="isUp(p) ? 'border-gray-200' : 'border-gray-100 opacity-60'">
-        <div class="h-1" :class="isUp(p) ? (p.port >= 9 ? 'bg-violet-500' : 'bg-emerald-500') : 'bg-gray-200'"></div>
-        <div class="p-3">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full" :class="isUp(p) ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></span>
-              <span class="text-sm font-bold text-gray-900">P{{ p.port }}</span>
-            </div>
-            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-              :class="p.port >= 9 ? 'bg-violet-50 text-violet-600' : 'bg-sky-50 text-sky-600'">
-              {{ p.port >= 9 ? '10G' : '2.5G' }}
-            </span>
-          </div>
-          <div class="text-xs text-gray-500 mb-1.5">
-            {{ isUp(p) ? shortSpeed(p.link) : t('ports.down') }}
-          </div>
-          <div v-if="isUp(p)" class="grid grid-cols-2 gap-1 text-[10px]">
-            <div class="bg-emerald-50 rounded px-1.5 py-1 text-center">
-              <span class="text-gray-400">TX</span>
-              <span class="font-mono font-medium text-emerald-700 ml-1">{{ formatPkts(p.tx_good) }}</span>
-            </div>
-            <div class="bg-indigo-50 rounded px-1.5 py-1 text-center">
-              <span class="text-gray-400">RX</span>
-              <span class="font-mono font-medium text-indigo-700 ml-1">{{ formatPkts(p.rx_good) }}</span>
-            </div>
-          </div>
-          <div v-if="p.rx_pps > 0 || p.tx_pps > 0" class="mt-1.5 text-[9px] text-center text-indigo-500 font-mono bg-indigo-50/50 rounded py-0.5">
-            +{{ p.tx_pps }} tx/s · +{{ p.rx_pps }} rx/s
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
