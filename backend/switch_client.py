@@ -18,7 +18,7 @@ class SwitchClient:
         self.base = f"http://{ip}:80"
         self.username = username
         self.password = password
-        self.client = httpx.AsyncClient(timeout=10)
+        self.client = httpx.AsyncClient(timeout=30)
         self._logged_in = False
 
     async def login(self) -> bool:
@@ -107,9 +107,11 @@ class SwitchClient:
     async def set_port(self, port: int, enabled: bool = True, speed: str = "Auto", flow_ctrl: str = "On"):
         internal = PORT_MAP[port]
         return await self._post("apply_user_port_setting.json", {
-            f"Port_Status_{internal}": "Enabled" if enabled else "Disabled",
-            f"Spd_Duplex_Cfg_{internal}": speed,
-            f"Flow_Ctrl_Cfg_{internal}": flow_ctrl,
+            "port_sts": "Enable" if enabled else "Disable",
+            "port_spd_duplex": speed,
+            "flow_ctrl": flow_ctrl,
+            "port_num": 1,
+            "port_list": [str(internal)],
         })
 
     async def save_ports(self):

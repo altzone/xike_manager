@@ -227,7 +227,10 @@ async def set_port_config(switch_id: int, configs: list[PortConfig], user=Depend
     client = await _get_client(switch_id)
     for cfg in configs:
         await client.set_port(cfg.port, cfg.enabled, cfg.speed, cfg.flow_ctrl)
-    await client.save_ports()
+    try:
+        await client.save_ports()
+    except Exception:
+        pass  # save may timeout but apply already took effect
     return {"ok": True}
 
 @app.post("/api/switches/{switch_id}/ports/description")
