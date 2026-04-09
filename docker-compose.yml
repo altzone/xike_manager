@@ -10,3 +10,4 @@ services:
     environment:
       - DB_PATH=/app/data/switchpilot.db
       - SECRET_KEY=switchpilot-prod-change-me
+      - DEMO=true

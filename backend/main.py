@@ -7,10 +7,13 @@ import aiosqlite
 import json
 
 import socket
+import os
 from db import init_db, DB_PATH
 from auth import hash_password, verify_password, create_token, decode_token, get_current_user, require_admin
 from switch_client import SwitchClient, MAX_FID, MAX_TAG_ENTRIES, PORT_MAP
 from sse import get_switch_client, sse_endpoint
+
+DEMO_MODE = os.environ.get("DEMO", "").lower() in ("1", "true", "yes")
 
 
 @asynccontextmanager
@@ -19,6 +22,9 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="SwitchPilot", version="2.0.0", lifespan=lifespan)
+
+if DEMO_MODE:
+    import demo
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -87,6 +93,8 @@ class PortDescription(BaseModel):
 # ── Setup ──
 @app.get("/api/setup/status")
 async def setup_status():
+    if DEMO_MODE:
+        return {"setup_complete": True}
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT COUNT(*) as c FROM users")
@@ -95,6 +103,8 @@ async def setup_status():
 
 @app.post("/api/setup")
 async def setup(req: SetupRequest):
+    if DEMO_MODE:
+        return {"ok": True}
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT COUNT(*) as c FROM users")
@@ -110,6 +120,9 @@ async def setup(req: SetupRequest):
 # ── Auth ──
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
+    if DEMO_MODE:
+        token = create_token(1, req.username, "admin")
+        return {"token": token, "username": req.username, "role": "admin"}
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM users WHERE username = ?", (req.username,))
@@ -127,6 +140,8 @@ async def me(user=Depends(get_current_user)):
 # ── Switches CRUD ──
 @app.get("/api/switches")
 async def list_switches(user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo; return demo.DEMO_SWITCHES if hasattr(demo, 'DEMO_SWITCHES') else []
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT id, name, ip, username, model, firmware, mac_address, created_at FROM switches")
@@ -161,6 +176,8 @@ async def delete_switch(switch_id: int, user=Depends(require_admin)):
 
 # ── Helper ──
 async def _get_client(switch_id: int) -> SwitchClient:
+    if DEMO_MODE:
+        return None  # demo routes handle this
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM switches WHERE id = ?", (switch_id,))
@@ -173,6 +190,8 @@ async def _get_client(switch_id: int) -> SwitchClient:
 # ── SSE ──
 @app.get("/api/switches/{switch_id}/sse")
 async def switch_sse(switch_id: int, token: str = Query(...)):
+    if DEMO_MODE:
+        import demo; return demo.demo_sse()
     decode_token(token)
     client = await _get_client(switch_id)
     return await sse_endpoint(client)
@@ -181,6 +200,11 @@ async def switch_sse(switch_id: int, token: str = Query(...)):
 # ── Switch Info (name from DB) ──
 @app.get("/api/switches/{switch_id}/info")
 async def switch_info(switch_id: int, user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo
+        for s in (demo.DEMO_SWITCHES if hasattr(demo, 'DEMO_SWITCHES') else []):
+            if s["id"] == switch_id: return s
+        return {"id": switch_id, "name": f"Switch #{switch_id}", "ip": "192.168.10.12", "model": "SKS3200-8E2X", "firmware": "1.0.0.4", "mac_address": "8C:A6:82:DE:MO:01"}
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT id, name, ip, model, firmware, mac_address FROM switches WHERE id=?", (switch_id,))
@@ -192,6 +216,8 @@ async def switch_info(switch_id: int, user=Depends(get_current_user)):
 @app.get("/api/switches/{switch_id}/ping")
 async def switch_ping(switch_id: int, user=Depends(get_current_user)):
     """Quick check if switch is reachable"""
+    if DEMO_MODE:
+        import random; return {"online": True, "temperature": str(random.randint(36, 42))}
     try:
         client = await _get_client(switch_id)
         status = await client.get_status()
@@ -215,6 +241,8 @@ async def set_network(switch_id: int, data: dict, user=Depends(require_admin)):
 # ── System ──
 @app.get("/api/switches/{switch_id}/status")
 async def switch_status(switch_id: int, user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo; return demo.DEMO_STATUS
     client = await _get_client(switch_id)
     status = await client.get_status()
     network = await client.get_network()
@@ -224,6 +252,8 @@ async def switch_status(switch_id: int, user=Depends(get_current_user)):
 # ── Ports ──
 @app.get("/api/switches/{switch_id}/ports")
 async def get_ports(switch_id: int, user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo; return [dict(p) for p in demo._demo_ports]
     client = await _get_client(switch_id)
     ports = await client.get_ports()
     # Enrich with local descriptions
@@ -256,6 +286,8 @@ async def set_port_description(switch_id: int, req: PortDescription, user=Depend
 
 @app.get("/api/switches/{switch_id}/ports/stats")
 async def get_port_stats(switch_id: int, user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo; demo._tick_ports(); return [dict(p) for p in demo._demo_ports]
     client = await _get_client(switch_id)
     return await client.get_port_stats()
 
@@ -513,6 +545,11 @@ async def _lookup_vendors(macs: list) -> list:
 
 @app.get("/api/switches/{switch_id}/mac/dynamic")
 async def get_dynamic_macs(switch_id: int, search: Optional[str] = None, user=Depends(get_current_user)):
+    if DEMO_MODE:
+        import demo
+        macs = demo.DEMO_MACS
+        if search: macs = [m for m in macs if search.upper() in m["mac"].upper()]
+        return {"entries": macs, "total": len(macs)}
     client = await _get_client(switch_id)
     if search:
         raw = await client._get(f"mac_search_dynamic_mac_entries.json?mac_search_txt={search}")
@@ -763,6 +800,8 @@ async def sync_vlans(switch_id: int, user=Depends(require_admin)):
 # ── User Management ──
 @app.get("/api/users")
 async def list_users(user=Depends(require_admin)):
+    if DEMO_MODE:
+        import demo; return demo._demo_users
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT id, username, role, created_at FROM users")
@@ -814,3 +853,9 @@ async def reboot_switch(switch_id: int, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await client.reboot()
     return {"ok": True}
+
+
+# ── Demo mode indicator ──
+@app.get("/api/demo")
+async def demo_status():
+    return {"demo": DEMO_MODE}

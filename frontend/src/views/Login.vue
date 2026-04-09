@@ -52,6 +52,13 @@ onMounted(async () => {
     if (!data.setup_complete) {
       router.replace('/setup')
     }
+    // Pre-fill in demo mode
+    const demoRes = await fetch('/api/demo')
+    const demoData = await demoRes.json()
+    if (demoData.demo) {
+      username.value = 'demo'
+      password.value = 'demo'
+    }
   } catch (e) {}
 })
 
