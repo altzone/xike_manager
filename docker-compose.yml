@@ -1,0 +1,12 @@
+services:
+  switchpilot:
+    build: .
+    container_name: switchpilot
+    restart: unless-stopped
+    ports:
+      - "8880:80"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/switchpilot.db
+      - SECRET_KEY=switchpilot-prod-change-me
