@@ -13,7 +13,7 @@
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Description <Tip>Custom label stored in SwitchPilot (not on switch hardware). Helps identify what is connected to each port.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Status <Tip>Click to enable or disable a port. Disabled ports will not forward any traffic.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Speed <Tip title="Speed / Duplex">Auto: negotiates best speed with the connected device. You can force a specific speed if auto-negotiation fails. RJ45 ports support up to 2.5G, SFP+ up to 10G.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Actual</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Link <Tip>Current link state and negotiated speed. Updates live every 3 seconds.</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Flow <Tip title="Flow Control (802.3x)">When enabled, the port sends PAUSE frames to slow down the sender when buffers are full. Helps prevent packet loss but can cause latency. Usually best left On.</Tip></span></th>
             <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">TX <Tip>Total packets transmitted from this port since last reset.</Tip></span></th>
             <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">RX <Tip>Total packets received on this port since last reset.</Tip></span></th>
@@ -24,6 +24,7 @@
           <tr v-for="port in ports" :key="port.port" class="hover:bg-gray-50/50 transition">
             <td class="px-5 py-3">
               <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0 transition-colors" :class="(stats[port.port]?.link && stats[port.port]?.link !== 'Link Down') ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></span>
                 <span class="font-semibold text-gray-900">{{ port.port }}</span>
                 <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                   :class="port.type?.includes('SFP') ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'">
@@ -69,11 +70,18 @@
                 {{ port.flow_ctrl_config }}
               </button>
             </td>
-            <td class="px-5 py-3 text-right font-mono text-gray-600 tabular-nums text-xs">
-              {{ stats[port.port]?.tx_good?.toLocaleString() || '0' }}
+            <td class="px-5 py-3">
+              <span class="text-xs font-medium" :class="stats[port.port]?.link !== 'Link Down' ? 'text-emerald-600' : 'text-gray-400'">
+                {{ stats[port.port]?.link || port.speed_actual }}
+              </span>
             </td>
-            <td class="px-5 py-3 text-right font-mono text-gray-600 tabular-nums text-xs">
-              {{ stats[port.port]?.rx_good?.toLocaleString() || '0' }}
+            <td class="px-5 py-3 text-right font-mono tabular-nums text-xs">
+              <span class="text-gray-600">{{ stats[port.port]?.tx_good?.toLocaleString() || '0' }}</span>
+              <span v-if="pps[port.port]?.tx > 0" class="text-emerald-600 ml-1">+{{ pps[port.port].tx }}/s</span>
+            </td>
+            <td class="px-5 py-3 text-right font-mono tabular-nums text-xs">
+              <span class="text-gray-600">{{ stats[port.port]?.rx_good?.toLocaleString() || '0' }}</span>
+              <span v-if="pps[port.port]?.rx > 0" class="text-emerald-600 ml-1">+{{ pps[port.port].rx }}/s</span>
             </td>
             <td class="px-5 py-3 text-right">
               <span v-if="(stats[port.port]?.tx_bad || 0) + (stats[port.port]?.rx_bad || 0) > 0"
@@ -92,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import Tip from '../components/Tip.vue'
@@ -101,8 +109,11 @@ const props = defineProps({ switchId: Number })
 const toast = useToast()
 const ports = ref([])
 const statsRaw = ref([])
+const prevStats = ref({})
+const pps = ref({})
 const msg = ref('')
 const msgOk = ref(true)
+let pollTimer = null
 const stats = computed(() => {
   const m = {}; statsRaw.value.forEach(s => m[s.port] = s); return m
 })
@@ -141,8 +152,35 @@ async function toggleFlow(port) {
 
 async function reload() {
   ports.value = await api(`/api/switches/${props.switchId}/ports`)
-  statsRaw.value = await api(`/api/switches/${props.switchId}/ports/stats`)
+  await pollStats()
 }
 
-onMounted(reload)
+async function pollStats() {
+  try {
+    const newStats = await api(`/api/switches/${props.switchId}/ports/stats`)
+    // Calculate pps delta
+    const newPps = {}
+    for (const s of newStats) {
+      const prev = prevStats.value[s.port]
+      if (prev) {
+        newPps[s.port] = {
+          tx: Math.max(0, s.tx_good - prev.tx_good),
+          rx: Math.max(0, s.rx_good - prev.rx_good),
+        }
+      } else {
+        newPps[s.port] = { tx: 0, rx: 0 }
+      }
+    }
+    prevStats.value = {}
+    for (const s of newStats) prevStats.value[s.port] = { tx_good: s.tx_good, rx_good: s.rx_good }
+    pps.value = newPps
+    statsRaw.value = newStats
+  } catch(e) {}
+}
+
+onMounted(() => {
+  reload()
+  pollTimer = setInterval(pollStats, 3000)
+})
+onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
