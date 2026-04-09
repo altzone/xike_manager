@@ -73,10 +73,18 @@ Open **http://localhost:8880** in your browser.
 
 That's it. No SSL certificates, no reverse proxy, no configuration files needed.
 
+### Xikestor Default Settings
+
+| Setting | Default |
+|---------|---------|
+| **IP Address** | `192.168.10.12` |
+| **Username** | `admin` |
+| **Password** | `admin` |
+
 ### First Run
 
-1. **Create admin account** — Enter your desired username and password
-2. **Add your switch** — Click "Add Switch", enter the switch IP, username (`admin`) and password (`admin` by default)
+1. **Create admin account** — Enter your desired username and password (this is for SwitchPilot, not the switch)
+2. **Add your switch** — Click "Add Switch", enter the switch IP (default `192.168.10.12`), username `admin`, password `admin`
 3. **Start managing** — Dashboard, Ports, VLANs, and all features are immediately available
 
 ### Running on a Specific Port
