@@ -48,17 +48,9 @@
 
     <!-- Step 2: Port Assignment -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <h2 class="font-semibold text-gray-900">Port Assignment</h2>
-          <p class="text-xs text-gray-400 mt-0.5">Configure each port mode and VLAN membership</p>
-        </div>
-        <button @click="applyAll" :disabled="applying"
-          class="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5">
-          <svg v-if="!applying" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          <svg v-else class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-          {{ applying ? 'Applying...' : 'Apply & Save' }}
-        </button>
+      <div class="px-5 py-4 border-b border-gray-100">
+        <h2 class="font-semibold text-gray-900">Port Assignment</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Configure each port mode and VLAN membership. Changes are saved via the bottom banner.</p>
       </div>
       <table class="w-full text-sm">
         <thead class="bg-gray-50/80">
