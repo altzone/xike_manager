@@ -2,12 +2,12 @@
   <div class="space-y-6" @input.capture="markDirty" @change.capture="markDirty">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h1 class="text-xl font-bold text-gray-900">VLAN Configuration</h1>
-        <Tip title="VLANs (Virtual LANs)">VLANs allow you to segment your network into isolated broadcast domains. Devices on different VLANs cannot communicate unless routed. Create VLANs first, then assign them to ports below.</Tip>
+        <h1 class="text-xl font-bold text-gray-900">{{ t('vlans.title') }}</h1>
+        <Tip :title="t('vlans.title')">{{ t('vlans.tip') }}</Tip>
       </div>
       <div class="flex items-center gap-2 text-xs text-gray-400">
-        <span class="bg-gray-100 px-2 py-1 rounded flex items-center gap-1">Tag entries: {{ limits.used }}/{{ limits.max }} <Tip>The switch has a maximum of 111 tagged VLAN entries across all ports. Each trunk port + VLAN combination uses one entry.</Tip></span>
-        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded flex items-center gap-1">Native VLAN max: 63 <Tip>Due to hardware limitations, the native (untagged) VLAN ID on this switch cannot exceed 63. Tagged VLANs can use any ID up to 4095.</Tip></span>
+        <span class="bg-gray-100 px-2 py-1 rounded flex items-center gap-1">{{ t('vlans.tagEntries', { used: limits.used, max: limits.max }) }} <Tip>{{ t('vlans.tagTip') }}</Tip></span>
+        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded flex items-center gap-1">{{ t('vlans.nativeMax') }} <Tip>{{ t('vlans.nativeTip') }}</Tip></span>
       </div>
     </div>
 
@@ -15,20 +15,20 @@
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <div>
-          <h2 class="font-semibold text-gray-900">Networks</h2>
-          <p class="text-xs text-gray-400 mt-0.5">Define your VLANs, then assign them to ports below</p>
+          <h2 class="font-semibold text-gray-900">{{ t('vlans.networks') }}</h2>
+          <p class="text-xs text-gray-400 mt-0.5">{{ t('vlans.networksDesc') }}</p>
         </div>
         <div class="flex gap-2">
           <button @click="syncVlans" :disabled="syncing"
             class="px-3.5 py-2 bg-amber-50 text-amber-700 text-sm rounded-lg hover:bg-amber-100 border border-amber-200 transition-all flex items-center gap-1.5"
             title="Copy these VLAN definitions to all other switches">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            {{ syncing ? 'Syncing...' : 'Sync to all switches' }}
+            {{ syncing ? t('vlans.syncing') : t('vlans.sync') }}
           </button>
           <button @click="showAddVlan = true"
             class="px-3.5 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add VLAN
+            {{ t('vlans.addVlan') }}
           </button>
         </div>
       </div>
@@ -46,22 +46,22 @@
           </button>
         </div>
       </div>
-      <div v-else class="px-5 py-8 text-center text-gray-400 text-sm">No VLANs defined. Add one to get started.</div>
+      <div v-else class="px-5 py-8 text-center text-gray-400 text-sm">{{ t('vlans.noVlans') }}</div>
     </div>
 
     <!-- Step 2: Port Assignment -->
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-900">Port Assignment</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Configure each port mode and VLAN membership. Changes are saved via the bottom banner.</p>
+        <h2 class="font-semibold text-gray-900">{{ t('vlans.portAssign') }}</h2>
+        <p class="text-xs text-gray-400 mt-0.5">{{ t('vlans.portAssignDesc') }}</p>
       </div>
       <table class="w-full text-sm">
         <thead class="bg-gray-50/80">
           <tr>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Mode <Tip title="Port Mode">Flat: no VLAN tagging, all traffic passes through. Access: port belongs to a single VLAN (untagged). Trunk: port carries multiple VLANs with 802.1Q tags.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Access / Native VLAN <Tip title="PVID">For Access mode: the VLAN this port belongs to. For Trunk mode: the native VLAN (untagged traffic). Limited to ID 0-63 due to hardware.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Allowed VLANs <Tip title="Trunk VLANs">Select which VLANs are allowed to pass through this trunk port as tagged (802.1Q) traffic. Only selected VLANs will be forwarded.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('ports.port') }}</th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.mode') }} <Tip :title="t('vlans.mode')">{{ t('vlans.modeTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.pvid') }} <Tip :title="t('vlans.pvid')">{{ t('vlans.pvidTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.allowed') }} <Tip :title="t('vlans.allowed')">{{ t('vlans.allowedTip') }}</Tip></span></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
@@ -74,15 +74,15 @@
                   :class="pa.port >= 9 ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'">
                   {{ pa.port >= 9 ? 'SFP+ 10G' : 'RJ45 2.5G' }}
                 </span>
-                <span v-if="pa.port === 1" class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">MGMT</span>
+                <span v-if="pa.port === 1" class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{{ t('vlans.mgmt') }}</span>
               </div>
             </td>
             <td class="px-5 py-3">
               <select v-model="pa.mode" :disabled="pa.port === 1"
                 class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 transition">
-                <option value="flat">Flat</option>
-                <option value="access">Access</option>
-                <option value="trunk">Trunk</option>
+                <option value="flat">{{ t('vlans.flat') }}</option>
+                <option value="access">{{ t('vlans.access') }}</option>
+                <option value="trunk">{{ t('vlans.trunk') }}</option>
               </select>
             </td>
             <td class="px-5 py-3">
@@ -90,7 +90,7 @@
                 class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
                 <option v-for="v in vlans" :key="v.vlan_id" :value="v.vlan_id"
                   :disabled="v.vlan_id > 63">
-                  {{ v.name }} ({{ v.vlan_id }}){{ v.vlan_id > 63 ? ' - exceeds PVID limit!' : '' }}
+                  {{ v.name }} ({{ v.vlan_id }}){{ v.vlan_id > 63 ? t('vlans.exceedsPvid') : '' }}
                 </option>
               </select>
               <select v-else-if="pa.mode === 'trunk'" v-model.number="pa.native_vlan"
@@ -123,12 +123,12 @@
         <div v-if="dirty" class="fixed bottom-0 left-0 right-0 z-50 bg-amber-500 text-white px-6 py-3 flex items-center justify-between shadow-lg">
           <div class="flex items-center gap-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <span class="text-sm font-medium">You have unsaved changes</span>
+            <span class="text-sm font-medium">{{ t('vlans.unsaved') }}</span>
           </div>
           <div class="flex gap-2">
-            <button @click="dirty = false" class="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 transition">Discard</button>
+            <button @click="dirty = false" class="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 transition">{{ t('vlans.discard') }}</button>
             <button @click="applyAll" :disabled="applying" class="px-4 py-1.5 text-sm rounded-lg bg-white text-amber-700 font-medium hover:bg-amber-50 transition disabled:opacity-50">
-              {{ applying ? 'Saving...' : 'Apply & Save' }}
+              {{ applying ? t('vlans.saving') : t('vlans.applySave') }}
             </button>
           </div>
         </div>
@@ -138,24 +138,24 @@
     <!-- Add VLAN modal -->
     <div v-if="showAddVlan" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showAddVlan = false">
       <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold text-gray-900 mb-4">Create VLAN</h2>
+        <h2 class="text-lg font-bold text-gray-900 mb-4">{{ t('vlans.createVlan') }}</h2>
         <form @submit.prevent="addVlan" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">VLAN ID</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('vlans.vlanId') }}</label>
             <input v-model.number="newVlan.id" type="number" min="1" max="4095" required placeholder="10"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('vlans.vlanName') }}</label>
             <input v-model="newVlan.name" required placeholder="e.g. LAN, VoIP, Guest..."
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
           </div>
           <p v-if="newVlan.id > 63" class="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-            VLAN {{ newVlan.id }} can only be used as tagged (trunk). It cannot be set as native/access VLAN (hardware limit: max 63).
+            {{ t('vlans.vlanIdWarn', { id: newVlan.id }) }}
           </p>
           <div class="flex gap-3 pt-1">
-            <button type="button" @click="showAddVlan = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">Cancel</button>
-            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">Create</button>
+            <button type="button" @click="showAddVlan = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">{{ t('common.cancel') }}</button>
+            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">{{ t('vlans.create') }}</button>
           </div>
         </form>
       </div>
@@ -167,10 +167,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()
+const { t } = useI18n()
 const vlans = ref([])
 const portAssignments = ref([])
 const limits = reactive({ used: 0, max: 111 })
@@ -210,7 +212,7 @@ async function addVlan() {
 }
 
 async function deleteVlan(vid) {
-  if (!confirm(`Delete VLAN ${vid}?`)) return
+  if (!confirm(t('vlans.deleteConfirm', { id: vid }))) return
   await api(`/api/switches/${props.switchId}/vlans/${vid}`, { method: 'DELETE' })
   await load()
 }
@@ -229,7 +231,7 @@ async function applyAll() {
       method: 'POST', body: JSON.stringify(assignments)
     })
     dirty.value = false
-    toast.success(`Applied: ${res.port_vlans} port configs, ${res.tag_entries} tag entries`)
+    toast.success(t('vlans.applied', { ports: res.port_vlans, tags: res.tag_entries }))
     await load()
   } catch (e) { toast.error(e.message) }
   finally { applying.value = false }
@@ -240,7 +242,7 @@ async function syncVlans() {
   syncing.value = true
   try {
     const res = await api(`/api/switches/${props.switchId}/vlans/sync`, { method: 'POST' })
-    msg.value = `Synced to ${res.targets} switch(es)`; msgOk.value = true
+    msg.value = t('vlans.synced', { targets: res.targets }); msgOk.value = true
   } catch (e) { msg.value = e.message; msgOk.value = false }
   finally { syncing.value = false }
 }

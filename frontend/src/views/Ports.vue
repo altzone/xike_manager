@@ -1,23 +1,23 @@
 <template>
   <div class="space-y-6">
     <div class="flex items-center gap-2">
-      <h1 class="text-xl font-bold text-gray-900">Port Configuration</h1>
-      <Tip title="Port Settings">Configure physical port parameters. Changes apply immediately when you modify a setting. Descriptions are stored locally (not on the switch).</Tip>
+      <h1 class="text-xl font-bold text-gray-900">{{ t('ports.title') }}</h1>
+      <Tip :title="t('ports.title')">{{ t('ports.tip') }}</Tip>
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <table class="w-full text-sm">
         <thead class="bg-gray-50/80">
           <tr>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-2"><span class="w-2.5"></span>Port</span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Description <Tip>Custom label stored in SwitchPilot (not on switch hardware). Helps identify what is connected to each port.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Status <Tip>Click to enable or disable a port. Disabled ports will not forward any traffic.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Speed <Tip title="Speed / Duplex">Auto: negotiates best speed with the connected device. You can force a specific speed if auto-negotiation fails. RJ45 ports support up to 2.5G, SFP+ up to 10G.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Link <Tip>Current link state and negotiated speed. Updates live every 3 seconds.</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Flow <Tip title="Flow Control (802.3x)">When enabled, the port sends PAUSE frames to slow down the sender when buffers are full. Helps prevent packet loss but can cause latency. Usually best left On.</Tip></span></th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">TX <Tip>Total packets transmitted from this port since last reset.</Tip></span></th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">RX <Tip>Total packets received on this port since last reset.</Tip></span></th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">Errors <Tip>Sum of TX and RX bad packets. Non-zero values may indicate cable issues, duplex mismatch, or CRC errors.</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-2"><span class="w-2.5"></span>{{ t('ports.port') }}</span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.desc') }} <Tip>{{ t('ports.descTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.status') }} <Tip>{{ t('ports.statusTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.speed') }} <Tip :title="t('ports.speed')">{{ t('ports.speedTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.link') }} <Tip>{{ t('ports.linkTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.flow') }} <Tip :title="t('ports.flow')">{{ t('ports.flowTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.tx') }} <Tip>{{ t('ports.txTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.rx') }} <Tip>{{ t('ports.rxTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.errors') }} <Tip>{{ t('ports.errorsTip') }}</Tip></span></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
@@ -35,14 +35,14 @@
             <td class="px-5 py-3">
               <input v-model="port.description" @blur="saveDesc(port)"
                 class="w-full px-2 py-1 text-sm bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-indigo-500 outline-none transition"
-                placeholder="Add description..."/>
+                :placeholder="t('ports.addDesc')"/>
             </td>
             <td class="px-5 py-3">
               <button @click="togglePort(port)"
                 class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition cursor-pointer"
                 :class="port.status === 'Enabled' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-red-50 text-red-600 hover:bg-red-100'">
                 <span class="w-1.5 h-1.5 rounded-full" :class="port.status === 'Enabled' ? 'bg-emerald-500' : 'bg-red-400'"></span>
-                {{ port.status === 'Enabled' ? 'Enabled' : 'Disabled' }}
+                {{ port.status === 'Enabled' ? t('ports.enabled') : t('ports.disabled') }}
               </button>
             </td>
             <td class="px-5 py-3">
@@ -71,7 +71,7 @@
               </button>
             </td>
             <td class="px-5 py-3">
-              <span class="text-xs font-medium" :class="portLink(port.port) !== 'Down' ? 'text-emerald-600' : 'text-gray-400'">
+              <span class="text-xs font-medium" :class="portLink(port.port) !== t('ports.down') ? 'text-emerald-600' : 'text-gray-400'">
                 {{ portLink(port.port) }}
               </span>
             </td>
@@ -103,10 +103,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()
+const { t } = useI18n()
 const ports = ref([])
 const statsRaw = ref([])
 const prevStats = ref({})
@@ -120,7 +122,7 @@ const stats = computed(() => {
 
 function portLink(port) {
   const link = stats.value[port]?.link || ''
-  if (!link || link === 'Link Down') return 'Down'
+  if (!link || link === 'Link Down') return t('ports.down')
   return link
 }
 
@@ -130,7 +132,7 @@ async function saveDesc(port) {
   await api(`/api/switches/${props.switchId}/ports/description`, {
     method: 'POST', body: JSON.stringify({ port: port.port, description: port.description })
   })
-  flash(`Port ${port.port} description saved`)
+  flash(t('ports.descSaved', { port: port.port }))
 }
 
 async function applyPort(port) {
@@ -141,7 +143,7 @@ async function applyPort(port) {
         speed: port.speed_config, flow_ctrl: port.flow_ctrl_config
       }])
     })
-    flash(`Port ${port.port} updated`)
+    flash(t('ports.updated', { port: port.port }))
     await reload()
   } catch (e) { flash(e.message, false) }
 }

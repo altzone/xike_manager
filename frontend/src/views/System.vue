@@ -1,36 +1,36 @@
 <template>
   <div class="space-y-6">
-    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">System & Features</h1><Tip title="System Settings">Configure switch features, time synchronization, port mirroring, loop protection, and more. Toggle switches apply changes immediately to the switch.</Tip></div>
-    <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">Failed to load: {{ loadError }}</div>
+    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">{{ t('sys.title') }}</h1><Tip :title="t('sys.title')">{{ t('sys.tip') }}</Tip></div>
+    <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{{ t('common.failedLoad') }} {{ loadError }}</div>
 
     <template v-if="loaded">
       <!-- System Info + Network -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">System</h3>
+          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{{ t('sys.system') }}</h3>
           <div v-for="(v, k) in sysInfo" :key="k" class="flex justify-between items-center text-sm py-1">
             <span class="text-gray-500">{{ k }}</span><span class="font-medium text-gray-900">{{ v }}</span>
           </div>
         </div>
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <span class="flex items-center gap-2 mb-3"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Management Interface</h3><Tip title="Management IP">Configure the switch's management IP address. Use DHCP to get an IP automatically from your router, or set a static IP. This is the IP you use to access SwitchPilot and the switch web interface. Warning: changing this may disconnect you!</Tip></span>
+          <span class="flex items-center gap-2 mb-3"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.mgmtIface') }}</h3><Tip :title="t('sys.mgmtIface')">{{ t('sys.mgmtTip') }}</Tip></span>
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">DHCP</span>
+              <span class="text-sm text-gray-500">{{ t('sys.dhcp') }}</span>
               <button @click="net.dhcp = !net.dhcp" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="net.dhcp ? 'bg-emerald-500' : 'bg-gray-300'">
                 <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="net.dhcp ? 'translate-x-5' : ''"></span>
               </button>
             </div>
             <template v-if="!net.dhcp">
-              <div><label class="text-xs text-gray-500">IP Address</label><input v-model="net.ip" class="inp w-full"/></div>
-              <div><label class="text-xs text-gray-500">Netmask</label><input v-model="net.netmask" class="inp w-full"/></div>
-              <div><label class="text-xs text-gray-500">Gateway</label><input v-model="net.gateway" class="inp w-full"/></div>
+              <div><label class="text-xs text-gray-500">{{ t('sys.ipAddress') }}</label><input v-model="net.ip" class="inp w-full"/></div>
+              <div><label class="text-xs text-gray-500">{{ t('sys.netmask') }}</label><input v-model="net.netmask" class="inp w-full"/></div>
+              <div><label class="text-xs text-gray-500">{{ t('sys.gateway') }}</label><input v-model="net.gateway" class="inp w-full"/></div>
             </template>
-            <p v-else class="text-xs text-gray-400">IP will be assigned automatically by DHCP server</p>
+            <p v-else class="text-xs text-gray-400">{{ t('sys.dhcpAuto') }}</p>
             <button @click="applyNetwork" class="w-full px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition">
-              {{ net.dhcp ? 'Switch to DHCP' : 'Apply Static IP' }}
+              {{ net.dhcp ? t('sys.applyDhcp') : t('sys.applyStatic') }}
             </button>
-            <p class="text-[10px] text-red-400">Warning: changing IP settings may disconnect you from this switch</p>
+            <p class="text-[10px] text-red-400">{{ t('sys.ipWarning') }}</p>
           </div>
         </div>
       </div>
@@ -38,9 +38,9 @@
       <!-- Time -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
-          <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Clock</h3><Tip title="System Clock">The switch uses its internal clock for MAC age timers and SNTP sync. Choose SNTP to auto-sync from an NTP server, or Manual to set the time yourself. The timezone affects how the time is displayed.</Tip></span>
+          <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.clock') }}</h3><Tip :title="t('sys.clock')">{{ t('sys.clockTip') }}</Tip></span>
           <div class="flex items-center gap-3 text-sm">
-            <span class="text-gray-500">Current:</span>
+            <span class="text-gray-500">{{ t('sys.current') }}</span>
             <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.timeVal || '--:--:--' }}</span>
             <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.dateVal || '--/--/----' }}</span>
             <span class="text-xs text-gray-400">{{ timeData.timezoneOffsetVal || '' }}</span>
@@ -50,62 +50,62 @@
         <div class="flex gap-2 mb-4">
           <button @click="timeMode = 'sntp'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
             :class="timeMode === 'sntp' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-            SNTP (automatic)
+            {{ t('sys.sntpAuto') }}
           </button>
           <button @click="timeMode = 'manual'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
             :class="timeMode === 'manual' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-            Manual
+            {{ t('sys.manual') }}
           </button>
         </div>
         <!-- SNTP mode -->
         <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">NTP Server</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.ntpServer') }}</label>
             <input v-model="sntp.server" class="inp w-full" placeholder="pool.ntp.org"/>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Poll Interval (seconds)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.pollInterval') }}</label>
             <input v-model.number="sntp.poll" type="number" min="30" max="99999" class="inp w-full" placeholder="64"/>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Timezone</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.timezone') }}</label>
             <select v-model="setTime.timezone" @change="applyTimezone" class="inp w-full">
               <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
               <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
             </select>
           </div>
           <div class="flex items-end gap-2">
-            <button @click="sntp.enabled = true; applySntp(); applyTimezone()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ sntp.enabled ? 'Update SNTP' : 'Enable SNTP' }}</button>
-            <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">Check</button>
+            <button @click="sntp.enabled = true; applySntp(); applyTimezone()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</button>
+            <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">{{ t('sys.check') }}</button>
           </div>
           <div v-if="sntpStatus" class="col-span-3 text-xs flex items-center gap-2 p-2 rounded-lg" :class="sntpStatus.synced ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
             <span class="w-2 h-2 rounded-full" :class="sntpStatus.synced ? 'bg-emerald-500' : 'bg-amber-500'"></span>
-            <span v-if="sntpStatus.synced">Synced &mdash; Server: {{ sntpStatus.server_ip }} &mdash; Time: {{ sntpStatus.time }} {{ sntpStatus.date }}</span>
-            <span v-else>Not synced (date still 01/01/1970) &mdash; Check server IP: {{ sntpStatus.server_ip }}</span>
+            <span v-if="sntpStatus.synced">{{ t('sys.sntpSynced') }} &mdash; Server: {{ sntpStatus.server_ip }} &mdash; Time: {{ sntpStatus.time }} {{ sntpStatus.date }}</span>
+            <span v-else>{{ t('sys.sntpNotSynced') }} &mdash; Check server IP: {{ sntpStatus.server_ip }}</span>
           </div>
           <p v-if="sntpResolved" class="col-span-3 text-xs text-gray-500">
-            Hostname resolved to: <span class="font-mono font-medium">{{ sntpResolved }}</span>
+            {{ t('sys.resolved') }} <span class="font-mono font-medium">{{ sntpResolved }}</span>
           </p>
         </div>
         <!-- Manual mode -->
         <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Time (HH:MM:SS)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.time') }}</label>
             <input v-model="setTime.time" class="inp w-full" placeholder="14:30:00"/>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Date (DD/MM/YYYY)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.date') }}</label>
             <input v-model="setTime.date" class="inp w-full" placeholder="09/04/2026"/>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Timezone</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.timezone') }}</label>
             <select v-model="setTime.timezone" class="inp w-full">
               <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
               <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
             </select>
           </div>
           <div class="flex items-end">
-            <button @click="sntp.enabled = false; applySntp(); applyTime()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Set Time</button>
+            <button @click="sntp.enabled = false; applySntp(); applyTime()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.setTime') }}</button>
           </div>
         </div>
       </div>
@@ -115,82 +115,82 @@
         <!-- STP -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">STP</h3><Tip title="Spanning Tree Protocol">Prevents broadcast storms caused by network loops. Enable if you have redundant links between switches. RSTP converges faster than classic STP.</Tip></span>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.stp') }}</h3><Tip :title="t('sys.stp')">{{ t('sys.stpTip') }}</Tip></span>
             <button @click="stp.enabled = !stp.enabled; applyStp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="stp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="stp.enabled ? 'translate-x-5' : ''"></span>
             </button>
           </div>
-          <p class="text-xs text-gray-400">Spanning Tree Protocol prevents network loops</p>
+          <p class="text-xs text-gray-400">{{ t('sys.stpTip') }}</p>
           <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" class="inp w-full mt-2">
-            <option value="stp">STP (Classic)</option><option value="rstp">RSTP (Rapid)</option>
+            <option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option>
           </select>
         </div>
         <!-- Storm -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">Storm Control</h3><Tip title="Broadcast Storm Control">Limits the rate of broadcast, multicast, and unknown unicast traffic. Protects the network from traffic floods caused by loops or misbehaving devices. Rate is in packets per second (1-1000).</Tip></span>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.storm') }}</h3><Tip :title="t('sys.storm')">{{ t('sys.stormTip') }}</Tip></span>
             <button @click="storm.enabled = !storm.enabled; applyStorm()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="storm.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="storm.enabled ? 'translate-x-5' : ''"></span>
             </button>
           </div>
-          <p class="text-xs text-gray-400">Limits broadcast/multicast storm traffic</p>
+          <p class="text-xs text-gray-400">{{ t('sys.stormTip') }}</p>
           <div v-if="storm.enabled" class="mt-2">
-            <label class="text-xs text-gray-500">Rate (1-1000 pps)</label>
+            <label class="text-xs text-gray-500">{{ t('sys.stormRate') }}</label>
             <input v-model.number="storm.rate" type="number" min="1" max="1000" @blur="applyStorm" class="inp w-full"/>
           </div>
         </div>
         <!-- IGMP -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">IGMP Snooping</h3><Tip title="IGMP Snooping">Optimizes multicast traffic by sending it only to ports that have joined the multicast group. Useful for IPTV, video streaming. Fast Leave removes ports immediately when a device leaves. Querier sends membership queries if no router does.</Tip></span>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.igmp') }}</h3><Tip :title="t('sys.igmp')">{{ t('sys.igmpTip') }}</Tip></span>
             <button @click="igmp.enabled = !igmp.enabled; applyIgmp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="igmp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="igmp.enabled ? 'translate-x-5' : ''"></span>
             </button>
           </div>
-          <p class="text-xs text-gray-400">Optimizes multicast traffic delivery</p>
+          <p class="text-xs text-gray-400">{{ t('sys.igmpTip') }}</p>
           <div v-if="igmp.enabled" class="mt-2 space-y-1">
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> Fast Leave
+              <input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.fastLeave') }}
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input type="checkbox" v-model="igmp.querier" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> Querier
+              <input type="checkbox" v-model="igmp.querier" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.querier') }}
             </label>
           </div>
         </div>
         <!-- EEE -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">Energy Efficient Ethernet</h3><Tip title="EEE (802.3az)">Reduces power consumption when link utilization is low. The port enters a low-power idle state between bursts of traffic. May add a few microseconds of latency. Safe to enable for most use cases.</Tip></span>
+            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.eee') }}</h3><Tip :title="t('sys.eee')">{{ t('sys.eeeTip') }}</Tip></span>
             <button @click="eee.enabled = !eee.enabled; applyEee()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="eee.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="eee.enabled ? 'translate-x-5' : ''"></span>
             </button>
           </div>
-          <p class="text-xs text-gray-400">Reduces power during low traffic periods</p>
+          <p class="text-xs text-gray-400">{{ t('sys.eeeTip') }}</p>
         </div>
       </div>
 
       <!-- Port Mirror - redesigned -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center gap-2 mb-1"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Port Mirroring</h3><Tip title="Port Mirroring (SPAN)">Copies all traffic from selected source ports to a monitoring (destination) port. Connect a packet analyzer (e.g. Wireshark) to the monitoring port to capture and inspect traffic without disrupting the network.</Tip></div>
-        <p class="text-xs text-gray-400 mb-4">Copy traffic from source ports to a monitoring port for analysis</p>
+        <div class="flex items-center gap-2 mb-1"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.mirror') }}</h3><Tip :title="t('sys.mirror')">{{ t('sys.mirrorTip') }}</Tip></div>
+        <p class="text-xs text-gray-400 mb-4">{{ t('sys.mirrorTip') }}</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Step 1: Destination -->
           <div>
             <div class="flex items-center gap-2 mb-2">
               <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">1</span>
-              <span class="text-sm font-medium text-gray-700">Destination (monitor)</span>
+              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorDest') }}</span>
             </div>
             <select v-model.number="mirror.monitoring_port" class="inp w-full">
-              <option :value="0">Disabled</option>
-              <option v-for="p in 10" :key="p" :value="p">Port {{ p }} {{ p >= 9 ? '(SFP+)' : '' }}</option>
+              <option :value="0">{{ t('sys.mirrorDisabled') }}</option>
+              <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }} {{ p >= 9 ? '(SFP+)' : '' }}</option>
             </select>
-            <p class="text-[10px] text-gray-400 mt-1">Traffic will be copied TO this port</p>
+            <p class="text-[10px] text-gray-400 mt-1">{{ t('sys.mirrorDestDesc') }}</p>
           </div>
           <!-- Step 2: Sources -->
           <div>
             <div class="flex items-center gap-2 mb-2">
               <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">2</span>
-              <span class="text-sm font-medium text-gray-700">Sources (mirrored)</span>
+              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorSrc') }}</span>
             </div>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="p in 10" :key="p" v-show="p !== mirror.monitoring_port" @click="toggleMirrorPort(p)"
@@ -199,25 +199,25 @@
                 P{{ p }}
               </button>
             </div>
-            <p class="text-[10px] text-gray-400 mt-1">Traffic FROM these ports will be copied</p>
+            <p class="text-[10px] text-gray-400 mt-1">{{ t('sys.mirrorSrcDesc') }}</p>
           </div>
           <!-- Step 3: Direction -->
           <div>
             <div class="flex items-center gap-2 mb-2">
               <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">3</span>
-              <span class="text-sm font-medium text-gray-700">Direction</span>
+              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorDir') }}</span>
             </div>
             <div class="space-y-2">
               <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.ingress === '1' ? 'text-indigo-700' : 'text-gray-400'">
                 <input type="checkbox" :checked="mirror.ingress === '1'" @change="mirror.ingress = mirror.ingress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
-                Ingress (incoming traffic)
+                {{ t('sys.mirrorIngress') }}
               </label>
               <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.egress === '1' ? 'text-indigo-700' : 'text-gray-400'">
                 <input type="checkbox" :checked="mirror.egress === '1'" @change="mirror.egress = mirror.egress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
-                Egress (outgoing traffic)
+                {{ t('sys.mirrorEgress') }}
               </label>
             </div>
-            <button v-if="mirror.monitoring_port > 0" @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Apply Mirror</button>
+            <button v-if="mirror.monitoring_port > 0" @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.mirrorApply') }}</button>
           </div>
         </div>
         <!-- Visual summary -->
@@ -235,101 +235,101 @@
 
       <!-- Loop Detection -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center gap-2 mb-2"><h3 class="text-sm font-semibold text-gray-700">Loop Detection</h3><Tip title="Loop Detection">Monitors each port for network loops (e.g. a cable plugged into two ports on the same switch). When a loop is detected, the port is blocked to prevent a broadcast storm. Unlike STP, this works at the port level and is simpler to configure.</Tip></div>
-        <p class="text-xs text-gray-400 mb-3">Enable per port to detect and block network loops</p>
+        <div class="flex items-center gap-2 mb-2"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.loop') }}</h3><Tip :title="t('sys.loop')">{{ t('sys.loopTip') }}</Tip></div>
+        <p class="text-xs text-gray-400 mb-3">{{ t('sys.loopDesc') }}</p>
         <div class="flex flex-wrap gap-2">
           <button v-for="lp in loop" :key="lp.port" @click="toggleLoop(lp.port)"
             class="px-3 py-2 rounded-lg text-xs font-medium border transition-all"
             :class="lp.enabled ? (lp.violation ? 'bg-red-50 border-red-300 text-red-700' : 'bg-emerald-50 border-emerald-300 text-emerald-700') : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'">
-            Port {{ lp.port }} <span v-if="lp.violation" class="ml-1 animate-pulse">LOOP!</span>
+            {{ t('mac.port') }} {{ lp.port }} <span v-if="lp.violation" class="ml-1 animate-pulse">LOOP!</span>
           </button>
         </div>
       </div>
 
       <!-- Static MAC - redesigned -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Static MAC Entries</h3>
-        <p class="text-xs text-gray-400 mb-4">Permanently bind a MAC address to a specific port. Useful for security or fixed devices.</p>
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">{{ t('sys.staticMac') }}</h3>
+        <p class="text-xs text-gray-400 mb-4">{{ t('sys.staticMacTip') }}</p>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">MAC Address</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macAddress') }}</label>
             <input v-model="staticMac.mac" class="inp w-full" placeholder="AA:BB:CC:DD:EE:FF"/>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">Port (1-10)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macPort') }}</label>
             <select v-model.number="staticMac.port" class="inp w-full">
-              <option v-for="p in 10" :key="p" :value="p">Port {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
+              <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
             </select>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">VLAN Group (0-63)</label>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macVlanGroup') }}</label>
             <input v-model.number="staticMac.fid" type="number" min="0" max="63" class="inp w-full" placeholder="0"/>
-            <p class="text-[10px] text-gray-400 mt-0.5">Must match the port VLAN group (PVID)</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">{{ t('sys.macVlanGroupDesc') }}</p>
           </div>
           <div class="flex items-end">
-            <button @click="addStaticMac" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Add Entry</button>
+            <button @click="addStaticMac" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.macAdd') }}</button>
           </div>
         </div>
         <div v-if="staticMacs.length" class="border border-gray-100 rounded-lg overflow-hidden">
           <table class="w-full text-sm">
             <thead class="bg-gray-50"><tr>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">MAC</th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Port</th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">VLAN Group</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('sys.macAddress') }}</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('mac.port') }}</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('mac.vlanGroup') }}</th>
             </tr></thead>
             <tbody class="divide-y divide-gray-50">
               <tr v-for="(m, i) in staticMacs" :key="i" class="hover:bg-gray-50">
                 <td class="px-3 py-2 font-mono text-gray-700">{{ m.mac }}</td>
-                <td class="px-3 py-2"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs">Port {{ m.port }}</span></td>
+                <td class="px-3 py-2"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs">{{ t('mac.port') }} {{ m.port }}</span></td>
                 <td class="px-3 py-2 text-gray-500">{{ m.fid }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p v-else class="text-xs text-gray-400 mt-2">No static entries configured</p>
+        <p v-else class="text-xs text-gray-400 mt-2">{{ t('sys.macNone') }}</p>
       </div>
 
       <!-- Config Snapshots -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Configuration Snapshots</h3><Tip title="Config Backup">Save a complete snapshot of all switch settings (ports, VLANs, STP, LAG, etc.) to the SwitchPilot database. You can download snapshots as JSON files, import them back, or compare configurations over time. Useful before making changes.</Tip></span>
-            <p class="text-xs text-gray-400">Save and restore full switch configurations</p>
+            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.snapshots') }}</h3><Tip :title="t('sys.snapshots')">{{ t('sys.snapshotsTip') }}</Tip></span>
+            <p class="text-xs text-gray-400">{{ t('sys.snapshotsTip') }}</p>
           </div>
           <div class="flex gap-2">
-            <label class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 cursor-pointer">Import <input type="file" accept=".json" @change="importFile" class="hidden"/></label>
-            <button @click="showSaveSnapshot = true" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">Save Snapshot</button>
+            <label class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 cursor-pointer">{{ t('sys.snapshotImport') }} <input type="file" accept=".json" @change="importFile" class="hidden"/></label>
+            <button @click="showSaveSnapshot = true" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">{{ t('sys.snapshotSave') }}</button>
           </div>
         </div>
         <div v-if="snapshots.length" class="divide-y divide-gray-50">
           <div v-for="s in snapshots" :key="s.id" class="flex items-center justify-between py-2 group">
             <div><p class="text-sm font-medium text-gray-900">{{ s.name }}</p><p class="text-xs text-gray-400">{{ formatDate(s.created_at) }}</p></div>
             <div class="flex gap-1.5 opacity-0 group-hover:opacity-100 transition">
-              <button @click="viewSnapshot(s)" class="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200">View</button>
-              <button @click="downloadSnapshot(s)" class="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">Download</button>
-              <button @click="deleteSnapshot(s.id)" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+              <button @click="viewSnapshot(s)" class="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200">{{ t('sys.snapshotView') }}</button>
+              <button @click="downloadSnapshot(s)" class="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">{{ t('sys.snapshotDownload') }}</button>
+              <button @click="deleteSnapshot(s.id)" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">{{ t('sys.snapshotDelete') }}</button>
             </div>
           </div>
         </div>
-        <p v-else class="text-xs text-gray-400">No snapshots</p>
+        <p v-else class="text-xs text-gray-400">{{ t('sys.snapshotNone') }}</p>
       </div>
 
       <!-- Danger -->
       <div class="bg-white rounded-xl border border-red-200 shadow-sm p-5">
-        <h3 class="font-semibold text-red-600 mb-2">Danger Zone</h3>
-        <button @click="doReboot" class="px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 border border-red-200">Reboot Switch</button>
+        <h3 class="font-semibold text-red-600 mb-2">{{ t('sys.danger') }}</h3>
+        <button @click="doReboot" class="px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 border border-red-200">{{ t('sys.reboot') }}</button>
       </div>
     </template>
 
     <!-- Modals -->
     <div v-if="showSaveSnapshot" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showSaveSnapshot = false">
       <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">Save Snapshot</h2>
+        <h2 class="text-lg font-bold mb-4">{{ t('sys.snapshotSave') }}</h2>
         <form @submit.prevent="saveSnapshot" class="space-y-4">
-          <input v-model="snapshotName" required placeholder="e.g. Before VLAN change" autofocus class="w-full inp"/>
+          <input v-model="snapshotName" required :placeholder="t('sys.snapshotName')" autofocus class="w-full inp"/>
           <div class="flex gap-3">
-            <button type="button" @click="showSaveSnapshot = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button type="submit" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save</button>
+            <button type="button" @click="showSaveSnapshot = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('common.cancel') }}</button>
+            <button type="submit" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('common.save') }}</button>
           </div>
         </form>
       </div>
@@ -350,10 +350,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 
 const props = defineProps({ switchId: Number })
 const toast = useToast()
+const { t } = useI18n()
 const loaded = ref(false)
 const loadError = ref('')
 const sysInfo = ref({})
@@ -407,20 +409,20 @@ async function load() {
 }
 
 async function applyNetwork() {
-  if (!net.dhcp && !confirm('Changing IP settings may disconnect you. Continue?')) return
+  if (!net.dhcp && !confirm(t('sys.ipWarning'))) return
   try {
     await api(`/api/switches/${props.switchId}/network`, { method: 'POST', body: JSON.stringify(net) })
-    flash('Network settings applied')
+    flash(t('sys.networkApplied'))
     await load()
   } catch(e) { flash(e.message, false) }
 }
-async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash('Time set'); await load() } catch(e) { flash(e.message, false) } }
-async function applyTimezone() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify({ timezone: setTime.timezone }) }); flash('Timezone set'); await load() } catch(e) { flash(e.message, false) } }
+async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash(t('sys.timeSet')); await load() } catch(e) { flash(e.message, false) } }
+async function applyTimezone() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify({ timezone: setTime.timezone }) }); flash(t('sys.timezoneSet')); await load() } catch(e) { flash(e.message, false) } }
 async function applySntp() {
   try {
     const res = await api(`/api/switches/${props.switchId}/sntp`, { method: 'POST', body: JSON.stringify(sntp) })
     sntpResolved.value = res.resolved_ip !== sntp.server ? res.resolved_ip : ''
-    flash('SNTP updated' + (sntpResolved.value ? ` (resolved to ${sntpResolved.value})` : ''))
+    flash(t('sys.sntpUpdated') + (sntpResolved.value ? ` (${t('sys.resolved')} ${sntpResolved.value})` : ''))
   } catch(e) { flash(e.message, false) }
 }
 async function checkSntp() {
@@ -428,19 +430,19 @@ async function checkSntp() {
     sntpStatus.value = await api(`/api/switches/${props.switchId}/sntp/check`)
   } catch(e) { flash(e.message, false) }
 }
-async function applyStp() { await api(`/api/switches/${props.switchId}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); flash('STP updated') }
-async function applyStorm() { await api(`/api/switches/${props.switchId}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate }) }); flash('Storm updated') }
-async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); flash('IGMP updated') }
-async function applyEee() { await api(`/api/switches/${props.switchId}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); flash('EEE updated') }
-async function toggleLoop(port) { const lp = loop.value.find(l => l.port === port); lp.enabled = !lp.enabled; const ports = {}; loop.value.forEach(l => ports[l.port] = l.enabled); await api(`/api/switches/${props.switchId}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); flash(`Loop P${port}: ${lp.enabled ? 'ON' : 'OFF'}`) }
-async function applyMirror() { await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify(mirror) }); flash('Mirror updated') }
-async function addStaticMac() { if (!staticMac.mac) return; await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash('Static MAC added'); staticMac.mac = ''; await load() }
-async function doReboot() { if (!confirm('Reboot the switch?')) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash('Rebooting...') }
-async function saveSnapshot() { await api(`/api/switches/${props.switchId}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSaveSnapshot.value = false; snapshotName.value = ''; flash('Saved'); await load() }
+async function applyStp() { await api(`/api/switches/${props.switchId}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); flash(t('sys.stpUpdated')) }
+async function applyStorm() { await api(`/api/switches/${props.switchId}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate }) }); flash(t('sys.stormUpdated')) }
+async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); flash(t('sys.igmpUpdated')) }
+async function applyEee() { await api(`/api/switches/${props.switchId}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); flash(t('sys.eeeUpdated')) }
+async function toggleLoop(port) { const lp = loop.value.find(l => l.port === port); lp.enabled = !lp.enabled; const ports = {}; loop.value.forEach(l => ports[l.port] = l.enabled); await api(`/api/switches/${props.switchId}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); flash(t('sys.loopToggle', { port, state: lp.enabled ? t('common.on') : t('common.off') })) }
+async function applyMirror() { await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify(mirror) }); flash(t('sys.mirrorUpdated')) }
+async function addStaticMac() { if (!staticMac.mac) return; await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash(t('sys.macAdded')); staticMac.mac = ''; await load() }
+async function doReboot() { if (!confirm(t('sys.rebootConfirm'))) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash(t('sys.rebooting')) }
+async function saveSnapshot() { await api(`/api/switches/${props.switchId}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSaveSnapshot.value = false; snapshotName.value = ''; flash(t('sys.snapshotSaved')); await load() }
 async function viewSnapshot(s) { viewing.value = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`) }
 async function downloadSnapshot(s) { const full = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(full, null, 2)])); a.download = `${s.name}.json`; a.click() }
-async function deleteSnapshot(id) { if (!confirm('Delete?')) return; await api(`/api/switches/${props.switchId}/snapshots/${id}`, { method: 'DELETE' }); flash('Deleted'); await load() }
-async function importFile(e) { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); await api(`/api/switches/${props.switchId}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: `Import: ${f.name}`, config: d.config || d }) }); flash('Imported'); await load() } catch(err) { flash('Invalid JSON', false) }; e.target.value = '' }
+async function deleteSnapshot(id) { if (!confirm(t('sys.snapshotDelete') + '?')) return; await api(`/api/switches/${props.switchId}/snapshots/${id}`, { method: 'DELETE' }); flash(t('sys.snapshotDeleted')); await load() }
+async function importFile(e) { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); await api(`/api/switches/${props.switchId}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: `Import: ${f.name}`, config: d.config || d }) }); flash(t('sys.snapshotImported')); await load() } catch(err) { flash(t('common.error'), false) }; e.target.value = '' }
 
 onMounted(load)
 </script>

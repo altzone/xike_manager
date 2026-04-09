@@ -1,16 +1,16 @@
 <template>
   <div class="max-w-6xl mx-auto p-6">
     <div class="flex items-center justify-between mb-8">
-      <h1 class="text-2xl font-bold text-gray-900">Switches</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('dash.title') }}</h1>
       <div class="flex gap-2">
         <router-link to="/users" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          Users
+          {{ t('nav.users') }}
         </router-link>
         <button @click="showAdd = true"
           class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Add Switch
+          {{ t('dash.addSwitch') }}
         </button>
       </div>
     </div>
@@ -43,42 +43,42 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
       </div>
-      <p class="text-gray-500">No switches configured</p>
-      <button @click="showAdd = true" class="mt-3 text-indigo-600 text-sm font-medium hover:underline">Add your first switch</button>
+      <p class="text-gray-500">{{ t('dash.noSwitches') }}</p>
+      <button @click="showAdd = true" class="mt-3 text-indigo-600 text-sm font-medium hover:underline">{{ t('dash.addFirst') }}</button>
     </div>
 
     <!-- Add modal -->
     <div v-if="showAdd" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAdd = false">
       <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">Add Switch</h2>
+        <h2 class="text-lg font-bold mb-4">{{ t('dash.addSwitch') }}</h2>
         <form @submit.prevent="doAdd" class="space-y-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.name') }}</label>
             <input v-model="form.name" required placeholder="e.g. SW-Bureau"
               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">IP Address</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.ip') }}</label>
             <input v-model="form.ip" required placeholder="10.1.10.40"
               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.username') }}</label>
               <input v-model="form.username" required
                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.password') }}</label>
               <input v-model="form.password" type="password" required
                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
             </div>
           </div>
           <p v-if="addError" class="text-red-500 text-sm">{{ addError }}</p>
           <div class="flex gap-3 pt-2">
-            <button type="button" @click="showAdd = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button type="button" @click="showAdd = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('dash.cancel') }}</button>
             <button type="submit" :disabled="adding" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-              {{ adding ? 'Testing...' : 'Add' }}
+              {{ adding ? t('dash.testing') : t('dash.add') }}
             </button>
           </div>
         </form>
@@ -90,6 +90,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useI18n } from '../i18n/index.js'
+
+const { t } = useI18n()
 
 const switches = ref([])
 const showAdd = ref(false)
