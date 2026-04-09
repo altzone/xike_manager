@@ -15,11 +15,19 @@
           <h2 class="font-semibold text-gray-900">Networks</h2>
           <p class="text-xs text-gray-400 mt-0.5">Define your VLANs, then assign them to ports below</p>
         </div>
-        <button @click="showAddVlan = true"
-          class="px-3.5 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          Add VLAN
-        </button>
+        <div class="flex gap-2">
+          <button @click="syncVlans" :disabled="syncing"
+            class="px-3.5 py-2 bg-amber-50 text-amber-700 text-sm rounded-lg hover:bg-amber-100 border border-amber-200 transition-all flex items-center gap-1.5"
+            title="Copy these VLAN definitions to all other switches">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            {{ syncing ? 'Syncing...' : 'Sync to all switches' }}
+          </button>
+          <button @click="showAddVlan = true"
+            class="px-3.5 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Add VLAN
+          </button>
+        </div>
       </div>
       <div v-if="vlans.length" class="divide-y divide-gray-50">
         <div v-for="v in vlans" :key="v.vlan_id" class="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition">
@@ -161,6 +169,7 @@ const limits = reactive({ used: 0, max: 111 })
 const showAddVlan = ref(false)
 const newVlan = ref({ id: '', name: '' })
 const applying = ref(false)
+const syncing = ref(false)
 const msg = ref('')
 const msgOk = ref(true)
 
@@ -213,6 +222,16 @@ async function applyAll() {
     await load()
   } catch (e) { msg.value = e.message; msgOk.value = false }
   finally { applying.value = false }
+}
+
+async function syncVlans() {
+  if (!confirm('Copy all VLAN definitions from this switch to every other switch?')) return
+  syncing.value = true
+  try {
+    const res = await api(`/api/switches/${props.switchId}/vlans/sync`, { method: 'POST' })
+    msg.value = `Synced to ${res.targets} switch(es)`; msgOk.value = true
+  } catch (e) { msg.value = e.message; msgOk.value = false }
+  finally { syncing.value = false }
 }
 
 onMounted(load)

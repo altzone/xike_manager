@@ -9,6 +9,7 @@ const routes = [
     meta: { auth: true },
     children: [
       { path: '', name: 'dashboard', component: () => import('./views/Dashboard.vue') },
+      { path: 'users', name: 'users', component: () => import('./views/Users.vue') },
       { path: 'switch/:id', name: 'switch', component: () => import('./views/SwitchView.vue'),
         children: [
           { path: '', name: 'switch-dashboard', component: () => import('./views/SwitchDashboard.vue') },
