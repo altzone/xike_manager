@@ -152,8 +152,10 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
 
 const props = defineProps({ switchId: Number })
+const toast = useToast()
 const allPorts = ref([])
 const groupNames = ref({})
 const systemPriority = ref(32768)
@@ -163,7 +165,7 @@ const msg = ref('')
 const msgOk = ref(true)
 const newGroup = reactive({ id: 1, name: '', mode: 2, timeout: 0, ports: [] })
 
-function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 3000) }
+function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
 
 const groups = computed(() => {
   const map = {}

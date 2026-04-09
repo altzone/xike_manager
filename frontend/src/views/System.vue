@@ -334,8 +334,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
 
 const props = defineProps({ switchId: Number })
+const toast = useToast()
 const loaded = ref(false)
 const loadError = ref('')
 const sysInfo = ref({})
@@ -361,7 +363,7 @@ const sntpResolved = ref('')
 const msg = ref('')
 const msgOk = ref(true)
 
-function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 3000) }
+function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
 function formatDate(d) { return d ? new Date(d + 'Z').toLocaleString() : '' }
 function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 0 ? mirror.mirrored_ports.splice(i, 1) : mirror.mirrored_ports.push(p) }
 

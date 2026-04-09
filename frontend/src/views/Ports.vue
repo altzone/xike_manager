@@ -94,8 +94,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
 
 const props = defineProps({ switchId: Number })
+const toast = useToast()
 const ports = ref([])
 const statsRaw = ref([])
 const msg = ref('')
@@ -104,7 +106,7 @@ const stats = computed(() => {
   const m = {}; statsRaw.value.forEach(s => m[s.port] = s); return m
 })
 
-function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 2000) }
+function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
 
 async function saveDesc(port) {
   await api(`/api/switches/${props.switchId}/ports/description`, {

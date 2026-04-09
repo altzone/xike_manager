@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6" @input.capture="markDirty" @change.capture="markDirty">
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-bold text-gray-900">VLAN Configuration</h1>
       <div class="flex items-center gap-2 text-xs text-gray-400">
@@ -122,13 +122,23 @@
       </table>
     </div>
 
-    <!-- Status message -->
-    <div v-if="msg" class="rounded-lg px-4 py-3 text-sm flex items-center gap-2 transition-all"
-      :class="msgOk ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'">
-      <svg v-if="msgOk" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-      <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
-      {{ msg }}
-    </div>
+    <!-- Unsaved changes banner -->
+    <Teleport to="body">
+      <transition name="banner">
+        <div v-if="dirty" class="fixed bottom-0 left-0 right-0 z-50 bg-amber-500 text-white px-6 py-3 flex items-center justify-between shadow-lg">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span class="text-sm font-medium">You have unsaved changes</span>
+          </div>
+          <div class="flex gap-2">
+            <button @click="dirty = false" class="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 transition">Discard</button>
+            <button @click="applyAll" :disabled="applying" class="px-4 py-1.5 text-sm rounded-lg bg-white text-amber-700 font-medium hover:bg-amber-50 transition disabled:opacity-50">
+              {{ applying ? 'Saving...' : 'Apply & Save' }}
+            </button>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- Add VLAN modal -->
     <div v-if="showAddVlan" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showAddVlan = false">
@@ -161,8 +171,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
 
 const props = defineProps({ switchId: Number })
+const toast = useToast()
 const vlans = ref([])
 const portAssignments = ref([])
 const limits = reactive({ used: 0, max: 111 })
@@ -170,8 +182,11 @@ const showAddVlan = ref(false)
 const newVlan = ref({ id: '', name: '' })
 const applying = ref(false)
 const syncing = ref(false)
+const dirty = ref(false)
 const msg = ref('')
 const msgOk = ref(true)
+
+function markDirty() { dirty.value = true }
 
 async function load() {
   vlans.value = await api(`/api/switches/${props.switchId}/vlans`)
@@ -217,10 +232,10 @@ async function applyAll() {
     const res = await api(`/api/switches/${props.switchId}/vlans/apply`, {
       method: 'POST', body: JSON.stringify(assignments)
     })
-    msg.value = `Applied: ${res.port_vlans} port configs, ${res.tag_entries} tag entries`
-    msgOk.value = true
+    dirty.value = false
+    toast.success(`Applied: ${res.port_vlans} port configs, ${res.tag_entries} tag entries`)
     await load()
-  } catch (e) { msg.value = e.message; msgOk.value = false }
+  } catch (e) { toast.error(e.message) }
   finally { applying.value = false }
 }
 

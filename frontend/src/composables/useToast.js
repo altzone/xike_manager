@@ -1,15 +1,15 @@
-import { ref } from 'vue'
+import { reactive } from 'vue'
 
-const toasts = ref([])
+const state = reactive({ toasts: [] })
 let nextId = 0
 
 export function useToast() {
-  function show(msg, ok = true) {
+  function success(msg) { add(msg, true) }
+  function error(msg) { add(msg, false) }
+  function add(msg, ok) {
     const id = nextId++
-    toasts.value.push({ id, msg, ok })
-    setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id) }, 3500)
+    state.toasts.push({ id, msg, ok })
+    setTimeout(() => { state.toasts = state.toasts.filter(t => t.id !== id) }, 3500)
   }
-  function success(msg) { show(msg, true) }
-  function error(msg) { show(msg, false) }
-  return { toasts, show, success, error }
+  return { toasts: state.toasts, success, error }
 }

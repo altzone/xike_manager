@@ -1,9 +1,9 @@
 <template>
   <div class="min-h-screen bg-gray-50">
     <!-- Toast notifications -->
-    <Teleport to="body">
-      <transition-group name="toast" tag="div" class="fixed top-4 right-4 z-[100] space-y-2">
-        <div v-for="t in toasts" :key="t.id"
+    <div class="fixed top-4 right-4 z-[100] space-y-2">
+      <transition-group name="toast">
+        <div v-for="t in toast.toasts" :key="t.id"
           class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border backdrop-blur-sm min-w-[280px] max-w-sm"
           :class="t.ok ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' : 'bg-red-50/95 border-red-200 text-red-800'">
           <svg v-if="t.ok" class="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -15,7 +15,7 @@
           <span class="text-sm font-medium">{{ t.msg }}</span>
         </div>
       </transition-group>
-    </Teleport>
+    </div>
 
     <!-- Top bar -->
     <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -43,7 +43,7 @@ import { useToast } from '../composables/useToast.js'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { toasts } = useToast()
+const toast = useToast()
 
 function doLogout() {
   auth.logout()
@@ -53,7 +53,7 @@ function doLogout() {
 
 <style>
 .toast-enter-active { animation: toastIn 0.3s ease; }
-.toast-leave-active { animation: toastOut 0.3s ease; }
+.toast-leave-active { animation: toastOut 0.25s ease; }
 @keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
 </style>
