@@ -581,6 +581,74 @@ async def delete_static_mac(switch_id: int, data: dict, user=Depends(require_adm
     await client._post("mac_save_static_mac_entries.json", {})
     return {"ok": True}
 
+# ── Config Snapshots ──
+@app.get("/api/switches/{switch_id}/snapshots")
+async def list_snapshots(switch_id: int, user=Depends(get_current_user)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, name, created_at FROM config_snapshots WHERE switch_id=? ORDER BY created_at DESC", (switch_id,))
+        return [dict(r) for r in await cursor.fetchall()]
+
+@app.post("/api/switches/{switch_id}/snapshots")
+async def create_snapshot(switch_id: int, data: dict, user=Depends(require_admin)):
+    """Save a full snapshot of all switch settings"""
+    client = await _get_client(switch_id)
+    snapshot = {
+        "status": await client.get_status(),
+        "network": await client.get_network(),
+        "ports": await client.get_ports(),
+        "port_vlans": await client.get_port_vlans(),
+        "tag_vlans": await client.get_tag_vlans(),
+        "stp": await client.get_stp(),
+        "storm": await client.get_storm_control(),
+        "igmp_config": await client.get_igmp_config(),
+        "eee": await client.get_eee(),
+        "lag": await client.get_lag(),
+        "mirror": await client.get_mirror(),
+        "loop": await client.get_loop_config(),
+        "sntp": await client.get_sntp(),
+    }
+    name = data.get("name", "Snapshot")
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO config_snapshots (switch_id, name, config_json) VALUES (?,?,?)",
+            (switch_id, name, json.dumps(snapshot)))
+        await db.commit()
+        return {"id": cursor.lastrowid, "name": name}
+
+@app.get("/api/switches/{switch_id}/snapshots/{snapshot_id}")
+async def get_snapshot(switch_id: int, snapshot_id: int, user=Depends(get_current_user)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM config_snapshots WHERE id=? AND switch_id=?", (snapshot_id, switch_id))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(404, "Snapshot not found")
+        return {"id": row["id"], "name": row["name"], "created_at": row["created_at"],
+                "config": json.loads(row["config_json"])}
+
+@app.delete("/api/switches/{switch_id}/snapshots/{snapshot_id}")
+async def delete_snapshot(switch_id: int, snapshot_id: int, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM config_snapshots WHERE id=? AND switch_id=?", (snapshot_id, switch_id))
+        await db.commit()
+        return {"ok": True}
+
+@app.post("/api/switches/{switch_id}/snapshots/import")
+async def import_snapshot(switch_id: int, data: dict, user=Depends(require_admin)):
+    """Import a snapshot config (save to DB, not apply to switch)"""
+    name = data.get("name", "Imported")
+    config = data.get("config", {})
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO config_snapshots (switch_id, name, config_json) VALUES (?,?,?)",
+            (switch_id, name, json.dumps(config)))
+        await db.commit()
+        return {"id": cursor.lastrowid}
+
+
 # ── Reboot ──
 @app.post("/api/switches/{switch_id}/reboot")
 async def reboot_switch(switch_id: int, user=Depends(require_admin)):

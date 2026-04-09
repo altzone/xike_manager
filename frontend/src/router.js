@@ -17,6 +17,7 @@ const routes = [
           { path: 'lag', name: 'switch-lag', component: () => import('./views/Lag.vue') },
           { path: 'monitoring', name: 'switch-monitoring', component: () => import('./views/Monitoring.vue') },
           { path: 'system', name: 'switch-system', component: () => import('./views/System.vue') },
+          { path: 'config', name: 'switch-config', component: () => import('./views/ConfigHistory.vue') },
         ]
       },
     ]
