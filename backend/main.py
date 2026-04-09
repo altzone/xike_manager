@@ -494,6 +494,23 @@ async def set_eee(switch_id: int, cfg: EeeConfig, user=Depends(require_admin)):
 
 
 # ── MAC Table ──
+async def _lookup_vendors(macs: list) -> list:
+    """Enrich MAC entries with vendor name from OUI database"""
+    prefixes = set()
+    for m in macs:
+        mac = m["mac"].upper().replace(":", "").replace("-", "")
+        prefixes.add(mac[:6])
+    if not prefixes:
+        return macs
+    async with aiosqlite.connect(DB_PATH) as db:
+        placeholders = ",".join("?" for _ in prefixes)
+        cursor = await db.execute(f"SELECT prefix, vendor FROM oui WHERE prefix IN ({placeholders})", list(prefixes))
+        vendor_map = {r[0]: r[1] for r in await cursor.fetchall()}
+    for m in macs:
+        mac = m["mac"].upper().replace(":", "").replace("-", "")
+        m["vendor"] = vendor_map.get(mac[:6], "")
+    return macs
+
 @app.get("/api/switches/{switch_id}/mac/dynamic")
 async def get_dynamic_macs(switch_id: int, search: Optional[str] = None, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
@@ -514,6 +531,7 @@ async def get_dynamic_macs(switch_id: int, search: Optional[str] = None, user=De
             "fid": v["Dynamic_fid"],
             "age": v["Dynamic_age_timer"],
         })
+    macs = await _lookup_vendors(macs)
     return {"entries": macs, "total": raw.get("total_entries", len(macs))}
 
 @app.post("/api/switches/{switch_id}/mac/clear")

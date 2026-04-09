@@ -28,15 +28,20 @@
           <tr>
             <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
             <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">MAC Address</th>
+            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Vendor</th>
             <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Port</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">FID</th>
+            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">VLAN Group</th>
             <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">Age (s)</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
           <tr v-for="m in macs" :key="m.idx" class="hover:bg-gray-50/50 transition">
             <td class="px-5 py-2.5 text-gray-400">{{ m.idx }}</td>
-            <td class="px-5 py-2.5 font-mono text-gray-900 font-medium">{{ m.mac }}</td>
+            <td class="px-5 py-2.5 font-mono text-gray-900 font-medium text-xs">{{ m.mac }}</td>
+            <td class="px-5 py-2.5">
+              <span v-if="m.vendor" class="text-xs text-gray-600">{{ m.vendor }}</span>
+              <span v-else class="text-xs text-gray-300">Unknown</span>
+            </td>
             <td class="px-5 py-2.5">
               <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">Port {{ m.port }}</span>
             </td>
