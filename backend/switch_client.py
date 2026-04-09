@@ -84,6 +84,16 @@ class SwitchClient:
     async def factory_reset(self):
         return await self._post("factory_reset.json", {})
 
+    # Speed value mapping: switch returns without space, POST expects with space
+    SPEED_READ_TO_WRITE = {
+        "Auto": "Auto",
+        "10MbpsHalf": "10Mbps Half", "10MbpsFull": "10Mbps Full",
+        "100MbpsHalf": "100Mbps Half", "100MbpsFull": "100Mbps Full",
+        "1000MbpsFull": "1000Mbps Full",
+        "2500MbpsFull": "2500Mbps Full",
+        "10GbpsFull": "10Gbps Full",
+    }
+
     # ── Ports ──
     async def get_ports(self):
         raw = await self._get("port_setting_load.json")
@@ -91,12 +101,13 @@ class SwitchClient:
         for i in range(1, int(raw["PortNum"]) + 1):
             p = raw[f"Port_{i}"]
             user_port = PORT_MAP_REV.get(i, i)
+            raw_speed = p[f"Spd_Duplex_Cfg"]
             ports.append({
                 "port": user_port,
                 "internal_port": i,
                 "type": "SFP+" if user_port >= 9 else "RJ45 2.5G",
                 "status": p[f"Port_Status"],
-                "speed_config": p[f"Spd_Duplex_Cfg"],
+                "speed_config": self.SPEED_READ_TO_WRITE.get(raw_speed, raw_speed),
                 "speed_actual": p[f"Spd_Duplex_Actual"],
                 "flow_ctrl_config": p[f"Flow_Ctrl_Cfg"],
                 "flow_ctrl_actual": p[f"Flow_Ctrl_Actual"],
