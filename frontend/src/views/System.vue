@@ -1,10 +1,7 @@
 <template>
   <div class="space-y-6">
     <h1 class="text-xl font-bold text-gray-900">System & Features</h1>
-
-    <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-      Failed to load: {{ loadError }}
-    </div>
+    <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">Failed to load: {{ loadError }}</div>
 
     <template v-if="loaded">
       <!-- System Info + Network -->
@@ -23,38 +20,64 @@
         </div>
       </div>
 
-      <!-- Time & SNTP -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">System Time</h3>
-          <div class="text-sm space-y-1 mb-3">
-            <div class="flex justify-between"><span class="text-gray-500">Time</span><span class="font-medium">{{ timeData.timeVal || '-' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Date</span><span class="font-medium">{{ timeData.dateVal || '-' }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Timezone</span><span class="font-medium">{{ timeData.timezoneOffsetVal || '-' }}</span></div>
-          </div>
-          <div class="pt-3 border-t border-gray-100 space-y-2">
-            <div class="grid grid-cols-2 gap-2">
-              <input v-model="setTime.time" placeholder="HH:MM:SS" class="inp"/>
-              <input v-model="setTime.date" placeholder="DD/MM/YYYY" class="inp"/>
-            </div>
-            <select v-model="setTime.timezone" class="inp w-full">
-              <option value="-05:00">UTC -05:00 (EST)</option><option value="+00:00">UTC +00:00 (GMT)</option>
-              <option value="+01:00">UTC +01:00 (CET)</option><option value="+02:00">UTC +02:00 (CEST)</option><option value="+08:00">UTC +08:00</option>
-            </select>
-            <button @click="applyTime" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Set Time</button>
+      <!-- Time -->
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Clock</h3>
+          <div class="flex items-center gap-3 text-sm">
+            <span class="text-gray-500">Current:</span>
+            <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.timeVal || '--:--:--' }}</span>
+            <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.dateVal || '--/--/----' }}</span>
+            <span class="text-xs text-gray-400">{{ timeData.timezoneOffsetVal || '' }}</span>
           </div>
         </div>
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">SNTP</h3>
-            <button @click="sntp.enabled = !sntp.enabled; applySntp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="sntp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="sntp.enabled ? 'translate-x-5' : ''"></span>
-            </button>
+        <!-- Mode selector -->
+        <div class="flex gap-2 mb-4">
+          <button @click="timeMode = 'sntp'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
+            :class="timeMode === 'sntp' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+            SNTP (automatic)
+          </button>
+          <button @click="timeMode = 'manual'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
+            :class="timeMode === 'manual' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+            Manual
+          </button>
+        </div>
+        <!-- SNTP mode -->
+        <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">NTP Server</label>
+            <input v-model="sntp.server" class="inp w-full" placeholder="pool.ntp.org"/>
           </div>
-          <p class="text-xs text-gray-400 mb-3">Auto-sync time from NTP server</p>
-          <div v-if="sntp.enabled" class="space-y-2">
-            <div><label class="text-xs text-gray-500">Server</label><input v-model="sntp.server" @blur="applySntp" class="inp w-full"/></div>
-            <div><label class="text-xs text-gray-500">Poll (30-99999s)</label><input v-model.number="sntp.poll" type="number" min="30" @blur="applySntp" class="inp w-full"/></div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Poll Interval (seconds)</label>
+            <input v-model.number="sntp.poll" type="number" min="30" max="99999" class="inp w-full" placeholder="64"/>
+          </div>
+          <div class="flex items-end">
+            <button @click="sntp.enabled = true; applySntp()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Enable SNTP</button>
+          </div>
+          <p v-if="sntp.enabled" class="col-span-3 text-xs text-emerald-600 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> SNTP is active &mdash; server: {{ sntp.server }}
+          </p>
+        </div>
+        <!-- Manual mode -->
+        <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Time (HH:MM:SS)</label>
+            <input v-model="setTime.time" class="inp w-full" placeholder="14:30:00"/>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Date (DD/MM/YYYY)</label>
+            <input v-model="setTime.date" class="inp w-full" placeholder="09/04/2026"/>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Timezone</label>
+            <select v-model="setTime.timezone" class="inp w-full">
+              <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
+              <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button @click="sntp.enabled = false; applySntp(); applyTime()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Set Time</button>
           </div>
         </div>
       </div>
@@ -116,29 +139,68 @@
           </div>
           <p class="text-xs text-gray-400">Reduces power during low traffic periods</p>
         </div>
-        <!-- Mirror -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 md:col-span-2">
-          <h3 class="text-sm font-semibold text-gray-700 mb-3">Port Mirror</h3>
-          <div class="flex items-center gap-2 mb-2">
-            <label class="text-xs text-gray-500">Monitor port:</label>
-            <select v-model.number="mirror.monitoring_port" class="inp">
-              <option :value="0">Disabled</option>
-              <option v-for="p in 10" :key="p" :value="p">Port {{ p }}</option>
-            </select>
-          </div>
-          <div v-if="mirror.monitoring_port > 0" class="space-y-2">
-            <div class="flex items-center gap-2">
-              <select v-model="mirror.ingress" class="inp"><option value="1">Ingress On</option><option value="0">Ingress Off</option></select>
-              <select v-model="mirror.egress" class="inp"><option value="1">Egress On</option><option value="0">Egress Off</option></select>
+      </div>
+
+      <!-- Port Mirror - redesigned -->
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Port Mirroring</h3>
+        <p class="text-xs text-gray-400 mb-4">Copy traffic from source ports to a monitoring port for analysis</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Step 1: Destination -->
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">1</span>
+              <span class="text-sm font-medium text-gray-700">Destination (monitor)</span>
             </div>
-            <div class="flex flex-wrap gap-1">
-              <label v-for="p in 10" :key="p" v-show="p !== mirror.monitoring_port"
-                class="inline-flex items-center px-2 py-1 rounded text-xs font-medium cursor-pointer transition select-none"
-                :class="mirror.mirrored_ports.includes(p) ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'">
-                <input type="checkbox" :value="p" v-model="mirror.mirrored_ports" class="hidden"> P{{ p }}
+            <select v-model.number="mirror.monitoring_port" class="inp w-full">
+              <option :value="0">Disabled</option>
+              <option v-for="p in 10" :key="p" :value="p">Port {{ p }} {{ p >= 9 ? '(SFP+)' : '' }}</option>
+            </select>
+            <p class="text-[10px] text-gray-400 mt-1">Traffic will be copied TO this port</p>
+          </div>
+          <!-- Step 2: Sources -->
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">2</span>
+              <span class="text-sm font-medium text-gray-700">Sources (mirrored)</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="p in 10" :key="p" v-show="p !== mirror.monitoring_port" @click="toggleMirrorPort(p)"
+                class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition"
+                :class="mirror.mirrored_ports.includes(p) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'">
+                P{{ p }}
+              </button>
+            </div>
+            <p class="text-[10px] text-gray-400 mt-1">Traffic FROM these ports will be copied</p>
+          </div>
+          <!-- Step 3: Direction -->
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">3</span>
+              <span class="text-sm font-medium text-gray-700">Direction</span>
+            </div>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.ingress === '1' ? 'text-indigo-700' : 'text-gray-400'">
+                <input type="checkbox" :checked="mirror.ingress === '1'" @change="mirror.ingress = mirror.ingress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
+                Ingress (incoming traffic)
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.egress === '1' ? 'text-indigo-700' : 'text-gray-400'">
+                <input type="checkbox" :checked="mirror.egress === '1'" @change="mirror.egress = mirror.egress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
+                Egress (outgoing traffic)
               </label>
             </div>
-            <button @click="applyMirror" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">Apply</button>
+            <button v-if="mirror.monitoring_port > 0" @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Apply Mirror</button>
+          </div>
+        </div>
+        <!-- Visual summary -->
+        <div v-if="mirror.monitoring_port > 0 && mirror.mirrored_ports.length" class="mt-4 pt-4 border-t border-gray-100">
+          <div class="flex items-center gap-3 text-sm text-gray-500">
+            <div class="flex gap-1">
+              <span v-for="p in mirror.mirrored_ports" :key="p" class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded text-xs font-medium">P{{ p }}</span>
+            </div>
+            <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+            <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">P{{ mirror.monitoring_port }}</span>
+            <span class="text-xs text-gray-400">({{ mirror.ingress === '1' ? 'in' : '' }}{{ mirror.ingress === '1' && mirror.egress === '1' ? '+' : '' }}{{ mirror.egress === '1' ? 'out' : '' }})</span>
           </div>
         </div>
       </div>
@@ -156,22 +218,56 @@
         </div>
       </div>
 
-      <!-- Static MAC -->
+      <!-- Static MAC - redesigned -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 class="text-sm font-semibold text-gray-700 mb-3">Static MAC Entries</h3>
-        <div class="flex items-center gap-2 mb-3">
-          <input v-model="staticMac.mac" placeholder="xx:xx:xx:xx:xx:xx" class="inp flex-1"/>
-          <input v-model.number="staticMac.port" type="number" min="1" max="10" placeholder="Port" class="inp w-20"/>
-          <input v-model.number="staticMac.fid" type="number" min="0" max="63" placeholder="FID" class="inp w-20"/>
-          <button @click="addStaticMac" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">Add</button>
+        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Static MAC Entries</h3>
+        <p class="text-xs text-gray-400 mb-4">Permanently bind a MAC address to a specific port. Useful for security or fixed devices.</p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">MAC Address</label>
+            <input v-model="staticMac.mac" class="inp w-full" placeholder="AA:BB:CC:DD:EE:FF"/>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Port (1-10)</label>
+            <select v-model.number="staticMac.port" class="inp w-full">
+              <option v-for="p in 10" :key="p" :value="p">Port {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">FID (0-63)</label>
+            <input v-model.number="staticMac.fid" type="number" min="0" max="63" class="inp w-full" placeholder="0"/>
+            <p class="text-[10px] text-gray-400 mt-0.5">Filtering ID / VLAN group</p>
+          </div>
+          <div class="flex items-end">
+            <button @click="addStaticMac" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">Add Entry</button>
+          </div>
         </div>
-        <p v-if="!staticMacs.length" class="text-xs text-gray-400">No static MAC entries</p>
+        <div v-if="staticMacs.length" class="border border-gray-100 rounded-lg overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50"><tr>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">MAC</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Port</th>
+              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">FID</th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-50">
+              <tr v-for="(m, i) in staticMacs" :key="i" class="hover:bg-gray-50">
+                <td class="px-3 py-2 font-mono text-gray-700">{{ m.mac }}</td>
+                <td class="px-3 py-2"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs">Port {{ m.port }}</span></td>
+                <td class="px-3 py-2 text-gray-500">{{ m.fid }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="text-xs text-gray-400 mt-2">No static entries configured</p>
       </div>
 
       <!-- Config Snapshots -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-gray-700">Configuration Snapshots</h3>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Configuration Snapshots</h3>
+            <p class="text-xs text-gray-400">Save and restore full switch configurations</p>
+          </div>
           <div class="flex gap-2">
             <label class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 cursor-pointer">Import <input type="file" accept=".json" @change="importFile" class="hidden"/></label>
             <button @click="showSaveSnapshot = true" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">Save Snapshot</button>
@@ -232,6 +328,7 @@ const loadError = ref('')
 const sysInfo = ref({})
 const netInfo = ref({})
 const timeData = ref({})
+const timeMode = ref('sntp')
 const setTime = reactive({ time: '', date: '', timezone: '+01:00' })
 const sntp = reactive({ enabled: false, server: 'pool.ntp.org', poll: 64 })
 const stp = reactive({ enabled: false, mode: 'stp' })
@@ -251,16 +348,16 @@ const msgOk = ref(true)
 
 function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 3000) }
 function formatDate(d) { return d ? new Date(d + 'Z').toLocaleString() : '' }
+function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 0 ? mirror.mirrored_ports.splice(i, 1) : mirror.mirrored_ports.push(p) }
 
 async function load() {
   try {
     const s = await api(`/api/switches/${props.switchId}/status`)
     sysInfo.value = { Model: s.modle, Firmware: s.fw_ver, Hardware: s.hw_ver, MAC: s.sys_macaddr, Temperature: `${s.temperature}C` }
     netInfo.value = { IPv4: s.ipAddress, Netmask: s.netmask, Gateway: s.gateway, DHCP: s.dhcpEnabled === '1' ? 'On' : 'Off' }
-
     const t = await api(`/api/switches/${props.switchId}/time`)
     timeData.value = t; sntp.enabled = t.sntp_state === '1'; sntp.server = t.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(t.sntp_poll) || 64
-
+    timeMode.value = sntp.enabled ? 'sntp' : 'manual'
     const st = await api(`/api/switches/${props.switchId}/stp`); stp.enabled = st.enabled; stp.mode = st.mode
     const sc = await api(`/api/switches/${props.switchId}/storm`); storm.enabled = sc.sctrl_state === '1'; storm.rate = parseInt(sc.sctrl_rate)
     const ig = await api(`/api/switches/${props.switchId}/igmp`); igmp.enabled = ig.config.igmp === 'on'; igmp.fast_leave = ig.config.fast_leave === 'on'; igmp.querier = ig.config.snoop_querier === 'on'
@@ -281,8 +378,8 @@ async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, {
 async function applyEee() { await api(`/api/switches/${props.switchId}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); flash('EEE updated') }
 async function toggleLoop(port) { const lp = loop.value.find(l => l.port === port); lp.enabled = !lp.enabled; const ports = {}; loop.value.forEach(l => ports[l.port] = l.enabled); await api(`/api/switches/${props.switchId}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); flash(`Loop P${port}: ${lp.enabled ? 'ON' : 'OFF'}`) }
 async function applyMirror() { await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify(mirror) }); flash('Mirror updated') }
-async function addStaticMac() { await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash('Added'); staticMac.mac = ''; await load() }
-async function doReboot() { if (!confirm('Reboot?')) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash('Rebooting...') }
+async function addStaticMac() { if (!staticMac.mac) return; await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash('Static MAC added'); staticMac.mac = ''; await load() }
+async function doReboot() { if (!confirm('Reboot the switch?')) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash('Rebooting...') }
 async function saveSnapshot() { await api(`/api/switches/${props.switchId}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSaveSnapshot.value = false; snapshotName.value = ''; flash('Saved'); await load() }
 async function viewSnapshot(s) { viewing.value = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`) }
 async function downloadSnapshot(s) { const full = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(full, null, 2)])); a.download = `${s.name}.json`; a.click() }
