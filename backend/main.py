@@ -177,6 +177,27 @@ async def switch_sse(switch_id: int, token: str = Query(...)):
     return await sse_endpoint(client)
 
 
+# ── Switch Info (name from DB) ──
+@app.get("/api/switches/{switch_id}/info")
+async def switch_info(switch_id: int, user=Depends(get_current_user)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id, name, ip, model, firmware, mac_address FROM switches WHERE id=?", (switch_id,))
+        sw = await cursor.fetchone()
+        if not sw:
+            raise HTTPException(404, "Switch not found")
+        return dict(sw)
+
+@app.get("/api/switches/{switch_id}/ping")
+async def switch_ping(switch_id: int, user=Depends(get_current_user)):
+    """Quick check if switch is reachable"""
+    try:
+        client = await _get_client(switch_id)
+        status = await client.get_status()
+        return {"online": True, "temperature": status.get("temperature")}
+    except Exception:
+        return {"online": False}
+
 # ── System ──
 @app.get("/api/switches/{switch_id}/status")
 async def switch_status(switch_id: int, user=Depends(get_current_user)):
@@ -660,6 +681,74 @@ async def import_snapshot(switch_id: int, data: dict, user=Depends(require_admin
             (switch_id, name, json.dumps(config)))
         await db.commit()
         return {"id": cursor.lastrowid}
+
+
+# ── Sync VLANs ──
+@app.post("/api/switches/{switch_id}/vlans/sync")
+async def sync_vlans(switch_id: int, user=Depends(require_admin)):
+    """Copy VLAN definitions from this switch to all other switches"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT vlan_id, name FROM vlans WHERE switch_id=?", (switch_id,))
+        source_vlans = await cursor.fetchall()
+        cursor = await db.execute("SELECT id FROM switches WHERE id != ?", (switch_id,))
+        other_switches = [r["id"] for r in await cursor.fetchall()]
+        synced = 0
+        for sid in other_switches:
+            for v in source_vlans:
+                await db.execute("INSERT OR IGNORE INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
+                                 (sid, v["vlan_id"], v["name"]))
+                synced += 1
+        await db.commit()
+        return {"ok": True, "synced": synced, "targets": len(other_switches)}
+
+
+# ── User Management ──
+@app.get("/api/users")
+async def list_users(user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id, username, role, created_at FROM users")
+        return [dict(r) for r in await cursor.fetchall()]
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+@app.post("/api/users")
+async def create_user(req: UserCreate, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("INSERT INTO users (username, password_hash, role) VALUES (?,?,?)",
+                             (req.username, hash_password(req.password), req.role))
+            await db.commit()
+            return {"ok": True}
+        except Exception:
+            raise HTTPException(400, "Username already exists")
+
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: int, user=Depends(require_admin)):
+    if str(user_id) == user.get("sub"):
+        raise HTTPException(400, "Cannot delete yourself")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM users WHERE id=?", (user_id,))
+        await db.commit()
+        return {"ok": True}
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = None
+    password: Optional[str] = None
+
+@app.put("/api/users/{user_id}")
+async def update_user(user_id: int, req: UserUpdate, user=Depends(require_admin)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        if req.role:
+            await db.execute("UPDATE users SET role=? WHERE id=?", (req.role, user_id))
+        if req.password:
+            await db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(req.password), user_id))
+        await db.commit()
+        return {"ok": True}
 
 
 # ── Reboot ──

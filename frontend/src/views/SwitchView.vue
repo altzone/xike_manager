@@ -2,10 +2,25 @@
   <div class="flex min-h-[calc(100vh-57px)]">
     <!-- Sidebar -->
     <aside class="w-60 bg-white border-r border-gray-200 p-5 flex flex-col">
-      <div class="mb-8">
+      <!-- Switch info + status -->
+      <div class="mb-6">
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Managing</h2>
-        <p class="text-lg font-bold text-gray-900 truncate">{{ switchName }}</p>
+        <p class="text-lg font-bold text-gray-900 truncate">{{ switchInfo.name || `Switch #${switchId}` }}</p>
+        <p class="text-xs text-gray-400 mt-0.5">{{ switchInfo.ip || '' }}</p>
+        <div class="flex items-center gap-1.5 mt-2">
+          <span class="w-2 h-2 rounded-full" :class="online ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'"></span>
+          <span class="text-xs font-medium" :class="online ? 'text-emerald-600' : 'text-red-500'">
+            {{ online ? 'Online' : 'Offline' }}
+          </span>
+          <span v-if="online && temperature" class="text-xs text-gray-400 ml-auto">{{ temperature }}°C</span>
+        </div>
       </div>
+
+      <!-- Offline banner -->
+      <div v-if="!online && checkedOnce" class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-xs text-red-700">
+        Switch is unreachable. Check connectivity.
+      </div>
+
       <nav class="flex-1 space-y-1">
         <router-link v-for="item in menu" :key="item.to" :to="item.to"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
@@ -14,7 +29,9 @@
           {{ item.label }}
         </router-link>
       </nav>
-      <div class="pt-4 border-t border-gray-200">
+
+      <!-- Bottom actions -->
+      <div class="pt-4 border-t border-gray-200 space-y-2">
         <router-link to="/" class="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-700 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"/></svg>
           All Switches
@@ -29,16 +46,44 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { api } from '../composables/useApi.js'
 
 const route = useRoute()
 const switchId = computed(() => parseInt(route.params.id))
-const switchName = computed(() => `Switch #${switchId.value}`)
+const switchInfo = ref({})
+const online = ref(true)
+const temperature = ref('')
+const checkedOnce = ref(false)
+let pingInterval = null
 
-function isActive(name) {
-  return route.name === name
+function isActive(name) { return route.name === name }
+
+async function loadInfo() {
+  try {
+    switchInfo.value = await api(`/api/switches/${switchId.value}/info`)
+  } catch (e) {}
 }
+
+async function checkOnline() {
+  try {
+    const res = await api(`/api/switches/${switchId.value}/ping`)
+    online.value = res.online
+    if (res.temperature) temperature.value = res.temperature
+  } catch (e) {
+    online.value = false
+  }
+  checkedOnce.value = true
+}
+
+onMounted(async () => {
+  await loadInfo()
+  await checkOnline()
+  pingInterval = setInterval(checkOnline, 10000)
+})
+
+onUnmounted(() => { if (pingInterval) clearInterval(pingInterval) })
 
 const base = computed(() => `/switch/${switchId.value}`)
 const i = (d) => `<svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">${d}</svg>`
