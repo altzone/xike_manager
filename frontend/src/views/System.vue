@@ -36,7 +36,7 @@
       </div>
 
       <!-- Time -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div v-if="timeSupported" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
           <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.clock') }}</h3><Tip :title="t('sys.clock')">{{ t('sys.clockTip') }}</Tip></span>
           <div class="flex items-center gap-3 text-sm">
@@ -158,7 +158,7 @@
           </div>
         </div>
         <!-- EEE -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div v-if="eeeSupported" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div class="flex items-center justify-between mb-2">
             <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.eee') }}</h3><Tip :title="t('sys.eee')">{{ t('sys.eeeTip') }}</Tip></span>
             <button @click="eee.enabled = !eee.enabled; applyEee()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="eee.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
@@ -361,6 +361,8 @@ const loadError = ref('')
 const sysInfo = ref({})
 const netInfo = ref({})
 const timeData = ref({})
+const timeSupported = ref(true)
+const eeeSupported = ref(true)
 const timeMode = ref('sntp')
 const setTime = reactive({ time: '', date: '', timezone: '+01:00' })
 const sntp = reactive({ enabled: false, server: 'pool.ntp.org', poll: 64 })
@@ -393,13 +395,14 @@ async function load() {
     netInfo.value = { IPv4: s.ipAddress, Netmask: s.netmask, Gateway: s.gateway, DHCP: s.dhcpEnabled === '1' ? 'On' : 'Off' }
     net.dhcp = s.dhcpEnabled === '1'; net.ip = s.ipAddress; net.netmask = s.netmask; net.gateway = s.gateway
     const t = await api(`/api/switches/${props.switchId}/time`)
+    timeSupported.value = t.supported !== false
     timeData.value = t; sntp.enabled = t.sntp_state === '1'; sntp.server = t.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(t.sntp_poll) || 64
     timeMode.value = sntp.enabled ? 'sntp' : 'manual'
     setTime.timezone = t.timezoneOffsetVal || '+01:00'
     const st = await api(`/api/switches/${props.switchId}/stp`); stp.enabled = st.enabled; stp.mode = st.mode
     const sc = await api(`/api/switches/${props.switchId}/storm`); storm.enabled = sc.sctrl_state === '1'; storm.rate = parseInt(sc.sctrl_rate)
     const ig = await api(`/api/switches/${props.switchId}/igmp`); igmp.enabled = ig.config.igmp === 'on'; igmp.fast_leave = ig.config.fast_leave === 'on'; igmp.querier = ig.config.snoop_querier === 'on'
-    const ee = await api(`/api/switches/${props.switchId}/eee`); eee.enabled = ee.eee === 'on'
+    const ee = await api(`/api/switches/${props.switchId}/eee`); eeeSupported.value = ee.supported !== false; eee.enabled = ee.eee === 'on'
     loop.value = await api(`/api/switches/${props.switchId}/loop`)
     const mi = await api(`/api/switches/${props.switchId}/mirror`); mirror.monitoring_port = mi.monitoring_port; mirror.mirrored_ports = mi.ports.filter(p => p.ingress || p.egress).map(p => p.port)
     try { staticMacs.value = await api(`/api/switches/${props.switchId}/mac/static`) } catch(e) {}
