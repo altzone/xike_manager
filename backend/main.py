@@ -484,11 +484,17 @@ async def set_mirror(switch_id: int, cfg: MirrorConfig, user=Depends(require_adm
 @app.get("/api/switches/{switch_id}/eee")
 async def get_eee(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    return await client.get_eee()
+    data = await client.get_eee()
+    # EEE (power-saving) was removed in firmware 1.0.0.5+ → empty body → None.
+    if data is None:
+        return {"supported": False}
+    return {"supported": True, **data}
 
 @app.post("/api/switches/{switch_id}/eee")
 async def set_eee(switch_id: int, cfg: EeeConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    if await client.get_eee() is None:
+        raise HTTPException(400, "Power-saving (EEE) is not supported on this firmware")
     await client.set_eee(cfg.enabled)
     return {"ok": True}
 
@@ -573,13 +579,19 @@ async def get_time(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
     time_data = await client.get_time()
     sntp_data = await client.get_sntp()
-    return {**time_data, **sntp_data}
+    # Time/SNTP config was removed in firmware 1.0.0.5+ (endpoints return an
+    # empty body → None). Report it as unsupported so the UI can hide the panel.
+    if time_data is None and sntp_data is None:
+        return {"supported": False}
+    return {"supported": True, **(time_data or {}), **(sntp_data or {})}
 
 @app.post("/api/switches/{switch_id}/time")
 async def set_time(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     # Read current time first so we don't reset fields
     current = await client.get_time()
+    if current is None:
+        raise HTTPException(400, "Time configuration is not supported on this firmware")
     await client._post("systemtime_settings.json", {
         "input_time": data.get("time") or current.get("timeVal", ""),
         "input_date": data.get("date") or current.get("dateVal", ""),
@@ -610,9 +622,13 @@ async def check_sntp(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
     sntp_cfg = await client.get_sntp()
     time_data = await client.get_time()
+    if time_data is None and sntp_cfg is None:
+        return {"supported": False}
+    sntp_cfg = sntp_cfg or {}
+    time_data = time_data or {}
     # If date is still 01/01/1970, SNTP is not synced
     synced = time_data.get("dateVal", "01/01/1970") != "01/01/1970"
-    return {"synced": synced, "server_ip": sntp_cfg.get("sntp_server_ip"), "time": time_data.get("timeVal"), "date": time_data.get("dateVal")}
+    return {"supported": True, "synced": synced, "server_ip": sntp_cfg.get("sntp_server_ip"), "time": time_data.get("timeVal"), "date": time_data.get("dateVal")}
 
 # ── Port Mirror ──
 @app.post("/api/switches/{switch_id}/mirror")

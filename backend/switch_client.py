@@ -1,6 +1,10 @@
 """Xikestor SKS3200-8E2X API Client"""
 import hashlib
+import json
 import httpx
+
+# Sentinel so _get can distinguish "no default supplied" from default=None
+_UNSET = object()
 
 # Port mapping: user-facing port ↔ internal port
 # Ports 9 and 10 are swapped internally
@@ -34,13 +38,21 @@ class SwitchClient:
         if not self._logged_in:
             await self.login()
 
-    async def _get(self, endpoint: str):
+    async def _get(self, endpoint: str, default=_UNSET):
         await self._ensure_login()
         r = await self.client.get(f"{self.base}/{endpoint}")
         if "login.html" in r.text:
             await self.login()
             r = await self.client.get(f"{self.base}/{endpoint}")
-        return r.json()
+        try:
+            return r.json()
+        except json.JSONDecodeError:
+            # Some endpoints (e.g. systemtime_settings.json before the clock is
+            # set) return an empty or non-JSON body. Fall back when a default
+            # is provided; otherwise surface the error as before.
+            if default is not _UNSET:
+                return default
+            raise
 
     async def _post(self, endpoint: str, data: dict):
         await self._ensure_login()
@@ -66,11 +78,15 @@ class SwitchClient:
     async def set_description(self, desc: str):
         return await self._post("set_des.json", {"input_des": desc})
 
+    # Time/SNTP and EEE (power-saving) config endpoints were removed in switch
+    # firmware 1.0.0.5+. On those versions the endpoint no longer exists and the
+    # switch answers with an empty body, so `default=None` signals "feature not
+    # supported on this firmware" (distinct from a real, empty `{}` payload).
     async def get_time(self):
-        return await self._get("systemtime_settings.json")
+        return await self._get("systemtime_settings.json", default=None)
 
     async def get_sntp(self):
-        return await self._get("sntp_setting.json")
+        return await self._get("sntp_setting.json", default=None)
 
     async def set_sntp(self, enabled: bool, server: str, poll: int = 64):
         return await self._post("sntp_setting.json", {
@@ -301,7 +317,8 @@ class SwitchClient:
 
     # ── EEE ──
     async def get_eee(self):
-        return await self._get("eee_config.json")
+        # Removed in firmware 1.0.0.5+ (empty body → None = unsupported).
+        return await self._get("eee_config.json", default=None)
 
     async def set_eee(self, enabled: bool):
         return await self._post("eee_config.json", {"eee": "on" if enabled else "off"})
