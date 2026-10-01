@@ -6,11 +6,13 @@ SwitchPilot is a web management proxy for Xikestor SKS3200-8E2X network switches
 ## Architecture
 ```
 frontend/ (Vue 3 + Vite + Tailwind CSS 4)
-├── src/views/          # Page components (Dashboard, Ports, Vlans, Lag, Monitoring, System, Users, Login, Setup)
-├── src/components/     # Reusable (Tip.vue for tooltips, Toast.vue)
-├── src/composables/    # useApi, useSSE, useToast, useDirty
-├── src/stores/         # Pinia (auth)
-├── src/i18n/           # 12 language files (en, fr, zh, es, pt, ar, de, ru, ja, ko, tr, it)
+├── src/main.css        # Design tokens (light/dark via CSS variables + @theme inline), base styles, .card/.input/.table primitives
+├── src/views/          # Layout (shell: sidebar, top bar, toasts), SwitchView (switch context + ping), Dashboard, SwitchDashboard
+│                       # (overview), Ports, Vlans, Lag, Monitoring (MAC + static entries), System, Users, Login, Setup
+├── src/components/     # Faceplate (front panel), Tip, AuthShell, ui/ (Icon, Btn, Badge, Toggle, Modal, ConfirmDialog, EmptyState, Stat)
+├── src/composables/    # useApi (ApiError, 401 redirect), useSSE (stream token, reconnect), useToast, useConfirm, useTheme
+├── src/stores/         # Pinia: auth (token/role, refresh), switches (list, current switch, live status)
+├── src/i18n/           # 12 language files (en, fr, zh, es, pt, ar, de, ru, ja, ko, tr, it), all keys in every file
 └── nginx.conf          # Serves frontend + proxies /api to uvicorn
 
 backend/ (Python 3.12 + FastAPI)
@@ -52,11 +54,17 @@ Docker: single container (nginx + supervisor + uvicorn)
 Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, oui, vlan_profiles, change_log
 
 ### i18n
-- 12 languages, ~270 keys each
-- Composable useI18n() with t('key', {params}) function
+- 12 languages, ~345 keys each; every key must exist in all 12 files (fallback to English is only for safety)
+- Composable useI18n() with t('key', {params}) function; `{param}` placeholders, every occurrence replaced
 - Technical terms (VLAN, LACP, STP, etc.) stay in English in all languages
-- Arabic has RTL support
-- Language stored in localStorage
+- Arabic has RTL support: use logical utilities (ps-/pe-/ms-/me-/start/end), never left/right; the Faceplate keeps physical order (dir="ltr")
+- Language stored in localStorage; `<html dir lang>` set at startup
+
+### UI conventions
+- Semantic colour utilities only (bg-surface, text-muted, border-line, text-ok…), never raw gray-*/indigo-* classes, so dark mode works
+- Confirmations through useConfirm() (translated dialog), never window.confirm; feedback through useToast()
+- Admin-only controls are hidden or disabled for viewers (auth.isAdmin); the backend enforces roles anyway
+- Every user-facing string goes through t(); add new keys to all 12 i18n files
 
 ## Build & Deploy
 ```bash

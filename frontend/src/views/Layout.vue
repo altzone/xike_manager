@@ -185,7 +185,7 @@ const SidebarContent = defineComponent({
             href: `/switch/${sw.currentId}${item.path}`,
             class: [linkBase, route.name === item.name ? linkActive : linkIdle],
             'aria-current': route.name === item.name ? 'page' : undefined,
-            onClick: (e) => { e.preventDefault(); emit('navigate'); navigate(e) },
+            onClick: (e) => { emit('navigate'); navigate(e) },  // navigate() handles preventDefault itself
           }, [h(Icon, { name: item.icon, size: 17 }), t(item.label)]),
         })) : []),
         h('div', { class: 'pt-4 pb-1.5' }, [h('p', { class: 'eyebrow text-side-muted px-3' }, t('ui.general'))]),

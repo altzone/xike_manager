@@ -43,6 +43,14 @@ long as `SECRET_KEY` in `docker-compose.yml` did not change.
 
 ## 3. What changed, and what to check after upgrading
 
+### The interface looks different
+
+The web UI was rebuilt: the navigation moved to a sidebar with a switch picker, the pages have
+a dark mode (top bar, next to the language), and confirmations are in-app dialogs. Everything
+you could do before is still there, in the same places, with two moves: **static MAC entries**
+now live on the **MAC Table** page, and the **System** page shows the **change log**. If a page
+looks broken right after the upgrade, do a hard refresh (Ctrl+Shift+R) once.
+
 ### You will be asked to log in again (once)
 
 Earlier versions signed login sessions with a key that was part of the repository. The new

@@ -99,6 +99,12 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
 - This changelog and the upgrade guide.
 
 ### Changed
+- **The web interface was rebuilt.** Sidebar with a switch picker and per-switch navigation,
+  top bar with live status, dark mode (follows the system by default), a front-panel view with
+  per-port LEDs and negotiated speeds, consistent cards/tables/forms, translated confirmation
+  dialogs instead of browser pop-ups, proper empty/loading/error states, and a phone layout.
+  Static MAC entries moved from System to the MAC Table page; the System page shows an audit log
+  of changes; viewers no longer see controls they cannot use.
 - All port translation lives in `SwitchClient` (`to_internal()` / `to_user()`); the module-level
   `PORT_MAP` is gone.
 - `POST /api/switches/{id}/lag` and `/mirror` bodies are validated models (see docs/api.md).
