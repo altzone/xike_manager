@@ -1,53 +1,34 @@
 <template>
-  <div class="max-w-4xl mx-auto p-6">
-    <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ t('users.title') }}</h1>
-        <p class="text-sm text-gray-400 mt-1">{{ t('users.subtitle') }}</p>
-      </div>
-      <div class="flex gap-2">
-        <router-link to="/" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">{{ t('users.back') }}</router-link>
-        <button @click="showAdd = true" class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition flex items-center gap-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          {{ t('users.addUser') }}
-        </button>
-      </div>
+  <div class="space-y-5">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <p class="hint">{{ t('users.subtitle') }}</p>
+      <Btn variant="primary" icon="plus" @click="openAdd">{{ t('users.addUser') }}</Btn>
     </div>
 
-    <!-- Users list -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50/80">
-          <tr>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('users.username') }}</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('users.role') }}</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('users.created') }}</th>
-            <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('users.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          <tr v-for="u in users" :key="u.id" class="hover:bg-gray-50/50 transition">
-            <td class="px-5 py-3">
-              <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                  :class="u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'">
-                  {{ u.username[0]?.toUpperCase() }}
-                </div>
-                <span class="font-medium text-gray-900">{{ u.username }}</span>
+    <div class="card overflow-hidden">
+      <table class="table">
+        <thead><tr><th>{{ t('users.username') }}</th><th>{{ t('users.role') }}</th><th>{{ t('users.created') }}</th><th class="!text-end">{{ t('users.actions') }}</th></tr></thead>
+        <tbody>
+          <tr v-for="u in users" :key="u.id">
+            <td>
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" :class="u.role === 'admin' ? 'bg-accent-soft text-accent-ink' : 'bg-surface-3 text-muted'">{{ u.username[0]?.toUpperCase() }}</span>
+                <span class="font-medium text-ink">{{ u.username }}</span>
+                <Badge v-if="u.id === me" tone="neutral">{{ t('users.you') }}</Badge>
               </div>
             </td>
-            <td class="px-5 py-3">
-              <select v-model="u.role" @change="updateRole(u)" class="text-xs px-2 py-1 rounded-lg border transition"
-                :class="u.role === 'admin' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-600'">
-                <option value="admin">{{ t('users.admin') }}</option>
-                <option value="viewer">{{ t('users.viewer') }}</option>
+            <td>
+              <select :value="u.role" @change="changeRole(u, $event)" :disabled="u.id === me || (u.role === 'admin' && adminCount <= 1)" class="select select-sm w-40"
+                :title="u.id === me ? t('users.ownRole') : (u.role === 'admin' && adminCount <= 1 ? t('users.lastAdmin') : '')">
+                <option value="admin">{{ t('users.roleAdmin') }}</option>
+                <option value="viewer">{{ t('users.roleViewer') }}</option>
               </select>
             </td>
-            <td class="px-5 py-3 text-gray-500">{{ formatDate(u.created_at) }}</td>
-            <td class="px-5 py-3 text-right">
-              <div class="flex gap-1.5 justify-end">
-                <button @click="resetPw(u)" class="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">{{ t('users.resetPw') }}</button>
-                <button @click="deleteUser(u)" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition" :disabled="u.username === currentUser">{{ t('users.delete') }}</button>
+            <td class="text-muted num">{{ fmtDate(u.created_at) }}</td>
+            <td class="text-end">
+              <div class="flex gap-1 justify-end">
+                <Btn size="xs" icon="key" @click="openReset(u)">{{ t('users.resetPw') }}</Btn>
+                <Btn size="xs" variant="danger-soft" icon="trash" :disabled="u.id === me || (u.role === 'admin' && adminCount <= 1)" @click="deleteUser(u)">{{ t('users.delete') }}</Btn>
               </div>
             </td>
           </tr>
@@ -55,115 +36,110 @@
       </table>
     </div>
 
-    <!-- Roles info -->
-    <div class="mt-6 bg-gray-50 rounded-xl p-5 text-sm text-gray-500">
-      <h3 class="font-semibold text-gray-700 mb-2">{{ t('users.rolePerms') }}</h3>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <p class="font-medium text-gray-700">{{ t('users.roleAdmin') }}</p>
-          <p class="text-xs text-gray-400">{{ t('users.roleAdminDesc') }}</p>
-        </div>
-        <div>
-          <p class="font-medium text-gray-700">{{ t('users.roleViewer') }}</p>
-          <p class="text-xs text-gray-400">{{ t('users.roleViewerDesc') }}</p>
-        </div>
-      </div>
+    <div class="card card-body grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+      <div class="flex gap-3"><span class="w-8 h-8 rounded-lg bg-accent-soft text-accent flex items-center justify-center shrink-0"><Icon name="shield" :size="16" /></span>
+        <div><p class="font-medium text-ink">{{ t('users.roleAdmin') }}</p><p class="hint">{{ t('users.roleAdminDesc') }}</p></div></div>
+      <div class="flex gap-3"><span class="w-8 h-8 rounded-lg bg-surface-3 text-muted flex items-center justify-center shrink-0"><Icon name="eye" :size="16" /></span>
+        <div><p class="font-medium text-ink">{{ t('users.roleViewer') }}</p><p class="hint">{{ t('users.roleViewerDesc') }}</p></div></div>
     </div>
 
-    <!-- Add modal -->
-    <div v-if="showAdd" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showAdd = false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">{{ t('users.addUser') }}</h2>
-        <form @submit.prevent="addUser" class="space-y-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('users.username') }}</label>
-            <input v-model="form.username" required class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('login.password') }}</label>
-            <input v-model="form.password" type="password" required class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('users.role') }}</label>
-            <select v-model="form.role" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option value="admin">{{ t('users.roleAdmin') }}</option>
-              <option value="viewer">{{ t('users.roleViewer') }}</option>
-            </select>
-          </div>
-          <p v-if="error" class="text-red-500 text-sm">{{ error }}</p>
-          <div class="flex gap-3 pt-1">
-            <button type="button" @click="showAdd = false" class="flex-1 py-2.5 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('common.cancel') }}</button>
-            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('vlans.create') }}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal :open="showAdd" :title="t('users.addUser')" width="sm" @close="showAdd = false">
+      <form id="user-form" @submit.prevent="addUser" class="space-y-3" novalidate>
+        <div><label class="label">{{ t('users.username') }}</label><input v-model.trim="form.username" required maxlength="64" class="input" autofocus autocomplete="off" /></div>
+        <div><label class="label">{{ t('login.password') }}</label><input v-model="form.password" type="password" required class="input" autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
+        <div><label class="label">{{ t('users.role') }}</label><select v-model="form.role" class="select"><option value="viewer">{{ t('users.roleViewer') }}</option><option value="admin">{{ t('users.roleAdmin') }}</option></select></div>
+        <p v-if="error" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ error }}</p>
+      </form>
+      <template #footer>
+        <Btn @click="showAdd = false">{{ t('common.cancel') }}</Btn>
+        <Btn variant="primary" type="submit" form="user-form" :disabled="!form.username || form.password.length < 6">{{ t('vlans.create') }}</Btn>
+      </template>
+    </Modal>
 
-    <!-- Reset password modal -->
-    <div v-if="resetUser" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="resetUser = null">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">{{ t('users.resetPw') }}: {{ resetUser.username }}</h2>
-        <form @submit.prevent="doResetPw" class="space-y-3">
-          <input v-model="newPassword" type="password" required :placeholder="t('users.newPw')" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
-          <div class="flex gap-3">
-            <button type="button" @click="resetUser = null" class="flex-1 py-2.5 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('common.cancel') }}</button>
-            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('users.reset') }}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <p v-if="msg" class="mt-4 text-sm" :class="msgOk ? 'text-emerald-600' : 'text-red-500'">{{ msg }}</p>
+    <Modal :open="!!resetUser" :title="t('users.resetPw')" :subtitle="resetUser?.username" width="sm" @close="resetUser = null">
+      <form id="reset-form" @submit.prevent="doReset" class="space-y-3" novalidate>
+        <div><label class="label">{{ t('users.newPw') }}</label><input v-model="newPassword" type="password" required class="input" autofocus autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
+        <p v-if="error" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ error }}</p>
+      </form>
+      <template #footer>
+        <Btn @click="resetUser = null">{{ t('common.cancel') }}</Btn>
+        <Btn variant="primary" type="submit" form="reset-form" :disabled="newPassword.length < 6">{{ t('users.reset') }}</Btn>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
 import { useI18n } from '../i18n/index.js'
+import Btn from '../components/ui/Btn.vue'
+import Badge from '../components/ui/Badge.vue'
+import Icon from '../components/ui/Icon.vue'
+import Modal from '../components/ui/Modal.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
+const auth = useAuthStore()
 
 const users = ref([])
+const me = ref(null)
 const showAdd = ref(false)
 const form = reactive({ username: '', password: '', role: 'viewer' })
 const error = ref('')
 const resetUser = ref(null)
 const newPassword = ref('')
-const msg = ref('')
-const msgOk = ref(true)
-const currentUser = localStorage.getItem('username')
+const adminCount = computed(() => users.value.filter(u => u.role === 'admin').length)
 
-function flash(m, ok = true) { msg.value = m; msgOk.value = ok; setTimeout(() => msg.value = '', 3000) }
-function formatDate(d) { return d ? new Date(d + 'Z').toLocaleString() : '' }
+function fmtDate(d) { return d ? new Date(d + 'Z').toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' }) : '' }
+function roleName(r) { return r === 'admin' ? t('users.roleAdmin') : t('users.roleViewer') }
 
-async function load() { users.value = await api('/api/users') }
+async function load() {
+  try {
+    users.value = await api('/api/users')
+    const info = await api('/api/auth/me')
+    me.value = Number(info.sub)
+  } catch (e) { toast.error(e.message) }
+}
 
+function openAdd() { Object.assign(form, { username: '', password: '', role: 'viewer' }); error.value = ''; showAdd.value = true }
 async function addUser() {
   error.value = ''
   try {
     await api('/api/users', { method: 'POST', body: JSON.stringify(form) })
-    showAdd.value = false; form.username = ''; form.password = ''; form.role = 'viewer'
-    flash(t('users.userCreated')); await load()
+    showAdd.value = false
+    toast.success(t('users.userCreated'))
+    await load()
   } catch (e) { error.value = e.message }
 }
 
-async function updateRole(u) {
-  await api(`/api/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ role: u.role }) })
-  flash(t('users.roleChanged', { user: u.username, role: u.role }))
+async function changeRole(u, ev) {
+  const role = ev.target.value
+  if (!await confirm({ title: t('users.role'), message: t('users.roleConfirm', { user: u.username, role: roleName(role) }) })) { ev.target.value = u.role; return }
+  try {
+    await api(`/api/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ role }) })
+    toast.success(t('users.roleChanged', { user: u.username, role: roleName(role) }))
+  } catch (e) { toast.error(e.message); ev.target.value = u.role }
+  await load()
 }
 
-function resetPw(u) { resetUser.value = u; newPassword.value = '' }
-async function doResetPw() {
-  await api(`/api/users/${resetUser.value.id}`, { method: 'PUT', body: JSON.stringify({ password: newPassword.value }) })
-  flash(t('users.pwReset', { user: resetUser.value.username })); resetUser.value = null
+function openReset(u) { resetUser.value = u; newPassword.value = ''; error.value = '' }
+async function doReset() {
+  error.value = ''
+  try {
+    await api(`/api/users/${resetUser.value.id}`, { method: 'PUT', body: JSON.stringify({ password: newPassword.value }) })
+    toast.success(t('users.pwReset', { user: resetUser.value.username }))
+    resetUser.value = null
+  } catch (e) { error.value = e.message }
 }
 
 async function deleteUser(u) {
-  if (u.username === currentUser) return
-  if (!confirm(t('users.deleteConfirm', { user: u.username }))) return
-  await api(`/api/users/${u.id}`, { method: 'DELETE' })
-  flash(t('users.userDeleted')); await load()
+  if (!await confirm({ title: t('users.delete'), message: t('users.deleteConfirm', { user: u.username }), danger: true, confirmText: t('users.delete') })) return
+  try { await api(`/api/users/${u.id}`, { method: 'DELETE' }); toast.success(t('users.userDeleted')); await load() } catch (e) { toast.error(e.message) }
 }
 
 onMounted(load)

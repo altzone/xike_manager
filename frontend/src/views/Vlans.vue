@@ -1,251 +1,261 @@
 <template>
-  <div class="space-y-6" @input.capture="markDirty" @change.capture="markDirty">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <h1 class="text-xl font-bold text-gray-900">{{ t('vlans.title') }}</h1>
-        <Tip :title="t('vlans.title')">{{ t('vlans.tip') }}</Tip>
-      </div>
-      <div class="flex items-center gap-2 text-xs text-gray-400">
-        <span class="bg-gray-100 px-2 py-1 rounded flex items-center gap-1">{{ t('vlans.tagEntries', { used: limits.used, max: limits.max }) }} <Tip>{{ t('vlans.tagTip') }}</Tip></span>
-        <span class="bg-amber-50 text-amber-700 px-2 py-1 rounded flex items-center gap-1">{{ t('vlans.nativeMax') }} <Tip>{{ t('vlans.nativeTip') }}</Tip></span>
+  <div class="space-y-5">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <p class="hint max-w-2xl">{{ t('vlans.tip') }}</p>
+      <div class="flex items-center gap-2 shrink-0">
+        <Badge tone="neutral"><span class="inline-flex items-center gap-1">{{ t('vlans.tagEntries', { used: limits.used, max: limits.max }) }} <Tip :text="t('vlans.tagTip')" /></span></Badge>
+        <Badge tone="warn"><span class="inline-flex items-center gap-1">{{ t('vlans.nativeMax') }} <Tip :text="t('vlans.nativeTip')" /></span></Badge>
       </div>
     </div>
 
-    <!-- Step 1: VLANs -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <h2 class="font-semibold text-gray-900">{{ t('vlans.networks') }}</h2>
-          <p class="text-xs text-gray-400 mt-0.5">{{ t('vlans.networksDesc') }}</p>
+    <div class="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-5 items-start">
+      <!-- VLAN list -->
+      <div class="card">
+        <div class="card-head">
+          <div><h3 class="h2">{{ t('vlans.networks') }}</h3><p class="hint">{{ t('vlans.networksDesc') }}</p></div>
+          <Btn v-if="auth.isAdmin" variant="primary" size="sm" icon="plus" @click="openAdd()">{{ t('vlans.addVlan') }}</Btn>
         </div>
-        <div class="flex gap-2">
-          <button @click="syncVlans" :disabled="syncing"
-            class="px-3.5 py-2 bg-amber-50 text-amber-700 text-sm rounded-lg hover:bg-amber-100 border border-amber-200 transition-all flex items-center gap-1.5"
-            title="Copy these VLAN definitions to all other switches">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            {{ syncing ? t('vlans.syncing') : t('vlans.sync') }}
-          </button>
-          <button @click="showAddVlan = true"
-            class="px-3.5 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-1.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            {{ t('vlans.addVlan') }}
-          </button>
-        </div>
-      </div>
-      <div v-if="vlans.length" class="divide-y divide-gray-50">
-        <div v-for="v in vlans" :key="v.vlan_id" class="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition">
-          <div class="flex items-center gap-3">
-            <span class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-sm font-bold text-indigo-600">{{ v.vlan_id }}</span>
-            <div>
-              <p class="font-medium text-gray-900">{{ v.name }}</p>
-              <p class="text-xs text-gray-400">VLAN {{ v.vlan_id }}</p>
+        <ul v-if="vlans.length" class="divide-y divide-line">
+          <li v-for="v in vlans" :key="v.vlan_id" class="px-4 py-2.5 flex items-center gap-3 group">
+            <span class="w-11 h-9 rounded-md flex items-center justify-center text-sm font-semibold num shrink-0" :class="v.vlan_id <= 63 ? 'bg-accent-soft text-accent-ink' : 'bg-surface-3 text-muted'">{{ v.vlan_id }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate" :class="v.defined ? 'text-ink' : 'text-muted italic'">{{ v.defined ? v.name : t('vlans.unnamed') }}</p>
+              <p class="text-[11px] text-muted flex items-center gap-1.5">
+                <span v-if="v.in_use" class="text-ok-ink">{{ t('vlans.inUse') }}</span>
+                <span v-if="v.vlan_id > 63" :title="t('vlans.vlanIdWarn', { id: v.vlan_id })">· {{ t('vlans.trunkOnly') }}</span>
+              </p>
             </div>
-          </div>
-          <button @click="deleteVlan(v.vlan_id)" class="text-gray-300 hover:text-red-500 transition p-1">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          </button>
+            <div v-if="auth.isAdmin" class="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
+              <Btn variant="ghost" size="xs" icon="pencil" icon-only :aria-label="t('common.edit')" @click="openAdd(v)" />
+              <Btn v-if="v.defined" variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteVlan(v)" />
+            </div>
+          </li>
+        </ul>
+        <EmptyState v-else compact icon="vlans" :title="t('vlans.noVlans')" />
+        <div v-if="auth.isAdmin && vlans.some(v => v.defined)" class="px-4 py-3 border-t border-line">
+          <Btn size="sm" icon="refresh" block :loading="syncing" @click="syncVlans">{{ t('vlans.sync') }}</Btn>
         </div>
       </div>
-      <div v-else class="px-5 py-8 text-center text-gray-400 text-sm">{{ t('vlans.noVlans') }}</div>
-    </div>
 
-    <!-- Step 2: Port Assignment -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-900">{{ t('vlans.portAssign') }}</h2>
-        <p class="text-xs text-gray-400 mt-0.5">{{ t('vlans.portAssignDesc') }}</p>
+      <!-- Port assignment -->
+      <div class="card overflow-hidden">
+        <div class="card-head">
+          <div><h3 class="h2">{{ t('vlans.portAssign') }}</h3><p class="hint">{{ t('vlans.portAssignDesc') }}</p></div>
+          <Badge v-if="dirty" tone="warn" dot>{{ t('vlans.changedPorts', { n: changed.length }) }}</Badge>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('ports.port') }}</th>
+                <th><span class="inline-flex items-center gap-1">{{ t('vlans.mode') }} <Tip :title="t('vlans.mode')" :text="t('vlans.modeTip')" /></span></th>
+                <th><span class="inline-flex items-center gap-1">{{ t('vlans.pvid') }} <Tip :title="t('vlans.pvid')" :text="t('vlans.pvidTip')" /></span></th>
+                <th><span class="inline-flex items-center gap-1">{{ t('vlans.allowed') }} <Tip :title="t('vlans.allowed')" :text="t('vlans.allowedTip')" /></span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in rows" :key="r.port" :class="isChanged(r) ? 'bg-warn-soft/40' : ''">
+                <td>
+                  <div class="flex items-center gap-2">
+                    <span class="font-semibold w-5">{{ r.port }}</span>
+                    <Badge :tone="r.port >= 9 ? 'sfp' : 'rj45'">{{ r.port >= 9 ? 'SFP+' : 'RJ45' }}</Badge>
+                    <Badge v-if="r.port === 1" tone="warn">{{ t('vlans.mgmt') }}</Badge>
+                  </div>
+                </td>
+                <td>
+                  <select v-model="r.mode" @change="onModeChange(r)" :disabled="!editable(r)" class="select select-sm w-28">
+                    <option value="flat">{{ t('vlans.flat') }}</option>
+                    <option value="access">{{ t('vlans.access') }}</option>
+                    <option value="trunk">{{ t('vlans.trunk') }}</option>
+                  </select>
+                </td>
+                <td>
+                  <select v-if="r.mode === 'access'" v-model.number="r.access_vlan" :disabled="!editable(r)" class="select select-sm w-44">
+                    <option v-for="v in pvidVlans" :key="v.vlan_id" :value="v.vlan_id">{{ v.name }} ({{ v.vlan_id }})</option>
+                  </select>
+                  <select v-else-if="r.mode === 'trunk'" v-model.number="r.native_vlan" :disabled="!editable(r)" class="select select-sm w-44">
+                    <option :value="0">{{ t('vlans.defaultBridge') }}</option>
+                    <option v-for="v in pvidVlans" :key="v.vlan_id" :value="v.vlan_id">{{ v.name }} ({{ v.vlan_id }})</option>
+                  </select>
+                  <span v-else class="text-faint">—</span>
+                </td>
+                <td>
+                  <div v-if="r.mode === 'trunk'" class="flex flex-wrap gap-1.5">
+                    <label v-for="v in vlans" :key="v.vlan_id" class="chip cursor-pointer select-none transition border"
+                      :class="[r.trunk_vlans.includes(v.vlan_id) ? 'bg-accent-soft border-accent/40 text-accent-ink' : 'bg-surface-2 border-line text-muted hover:border-line-strong', !editable(r) ? 'opacity-60 cursor-not-allowed' : '']">
+                      <input type="checkbox" :value="v.vlan_id" v-model="r.trunk_vlans" :disabled="!editable(r)" class="sr-only">
+                      {{ v.name }} <span class="opacity-60 num">{{ v.vlan_id }}</span>
+                    </label>
+                    <span v-if="!vlans.length" class="text-faint">—</span>
+                  </div>
+                  <span v-else class="text-faint">—</span>
+                </td>
+              </tr>
+              <tr v-if="!rows.length"><td colspan="4" class="text-center text-muted py-8">{{ loadError || t('common.loading') }}</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50/80">
-          <tr>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('ports.port') }}</th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.mode') }} <Tip :title="t('vlans.mode')">{{ t('vlans.modeTip') }}</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.pvid') }} <Tip :title="t('vlans.pvid')">{{ t('vlans.pvidTip') }}</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('vlans.allowed') }} <Tip :title="t('vlans.allowed')">{{ t('vlans.allowedTip') }}</Tip></span></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          <tr v-for="pa in portAssignments" :key="pa.port" class="hover:bg-gray-50/50 transition"
-            :class="pa.port === 1 ? 'bg-amber-50/30' : ''">
-            <td class="px-5 py-3">
-              <div class="flex items-center gap-2">
-                <span class="font-semibold text-gray-900">{{ pa.port }}</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                  :class="pa.port >= 9 ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'">
-                  {{ pa.port >= 9 ? 'SFP+ 10G' : 'RJ45 2.5G' }}
-                </span>
-                <span v-if="pa.port === 1" class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{{ t('vlans.mgmt') }}</span>
-              </div>
-            </td>
-            <td class="px-5 py-3">
-              <select v-model="pa.mode" :disabled="pa.port === 1"
-                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:opacity-50 transition">
-                <option value="flat">{{ t('vlans.flat') }}</option>
-                <option value="access">{{ t('vlans.access') }}</option>
-                <option value="trunk">{{ t('vlans.trunk') }}</option>
-              </select>
-            </td>
-            <td class="px-5 py-3">
-              <select v-if="pa.mode === 'access'" v-model.number="pa.access_vlan"
-                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
-                <option v-for="v in vlans" :key="v.vlan_id" :value="v.vlan_id"
-                  :disabled="v.vlan_id > 63">
-                  {{ v.name }} ({{ v.vlan_id }}){{ v.vlan_id > 63 ? t('vlans.exceedsPvid') : '' }}
-                </option>
-              </select>
-              <select v-else-if="pa.mode === 'trunk'" v-model.number="pa.native_vlan"
-                class="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition">
-                <option v-for="v in vlans.filter(x => x.vlan_id <= 63)" :key="v.vlan_id" :value="v.vlan_id">
-                  {{ v.name }} ({{ v.vlan_id }})
-                </option>
-              </select>
-              <span v-else class="text-gray-300 text-xs">-</span>
-            </td>
-            <td class="px-5 py-3">
-              <div v-if="pa.mode === 'trunk'" class="flex flex-wrap gap-1.5">
-                <label v-for="v in vlans" :key="v.vlan_id"
-                  class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium cursor-pointer transition-all select-none"
-                  :class="pa.trunk_vlans.includes(v.vlan_id) ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'">
-                  <input type="checkbox" :value="v.vlan_id" v-model="pa.trunk_vlans" class="hidden">
-                  {{ v.name }} <span class="opacity-60">{{ v.vlan_id }}</span>
-                </label>
-              </div>
-              <span v-else class="text-gray-300 text-xs">-</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
-    <!-- Unsaved changes banner -->
+    <!-- Unsaved changes bar -->
     <Teleport to="body">
       <transition name="banner">
-        <div v-if="dirty" class="fixed bottom-0 left-0 right-0 z-50 bg-amber-500 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-          <div class="flex items-center gap-3">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <span class="text-sm font-medium">{{ t('vlans.unsaved') }}</span>
-          </div>
-          <div class="flex gap-2">
-            <button @click="dirty = false" class="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 transition">{{ t('vlans.discard') }}</button>
-            <button @click="applyAll" :disabled="applying" class="px-4 py-1.5 text-sm rounded-lg bg-white text-amber-700 font-medium hover:bg-amber-50 transition disabled:opacity-50">
-              {{ applying ? t('vlans.saving') : t('vlans.applySave') }}
-            </button>
+        <div v-if="dirty" class="fixed bottom-0 inset-x-0 lg:start-60 z-[70] px-4 pb-4 pointer-events-none">
+          <div class="pointer-events-auto mx-auto max-w-3xl rounded-xl bg-side text-side-ink shadow-[var(--shadow-pop)] border border-side-line px-4 py-3 flex items-center gap-3">
+            <Icon name="warning" :size="18" class="text-warn shrink-0" />
+            <span class="text-sm flex-1">{{ t('vlans.unsaved') }} · {{ t('vlans.changedPorts', { n: changed.length }) }}</span>
+            <Btn variant="ghost" size="sm" class="text-side-muted hover:text-white hover:bg-side-2" @click="discard">{{ t('vlans.discard') }}</Btn>
+            <Btn variant="primary" size="sm" :loading="applying" @click="applyAll">{{ t('vlans.applySave') }}</Btn>
           </div>
         </div>
       </transition>
     </Teleport>
 
-    <!-- Add VLAN modal -->
-    <div v-if="showAddVlan" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showAddVlan = false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold text-gray-900 mb-4">{{ t('vlans.createVlan') }}</h2>
-        <form @submit.prevent="addVlan" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('vlans.vlanId') }}</label>
-            <input v-model.number="newVlan.id" type="number" min="1" max="4095" required placeholder="10"
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('vlans.vlanName') }}</label>
-            <input v-model="newVlan.name" required placeholder="e.g. LAN, VoIP, Guest..."
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"/>
-          </div>
-          <p v-if="newVlan.id > 63" class="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-            {{ t('vlans.vlanIdWarn', { id: newVlan.id }) }}
-          </p>
-          <div class="flex gap-3 pt-1">
-            <button type="button" @click="showAddVlan = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">{{ t('common.cancel') }}</button>
-            <button type="submit" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm">{{ t('vlans.create') }}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Add / rename VLAN -->
+    <Modal :open="modal" :title="editVlan ? t('vlans.vlanName') : t('vlans.createVlan')" width="sm" @close="modal = false">
+      <form id="vlan-form" @submit.prevent="saveVlan" class="space-y-3" novalidate>
+        <div>
+          <label class="label">{{ t('vlans.vlanId') }}</label>
+          <input v-model.number="form.id" type="number" min="1" max="4094" required :disabled="!!editVlan" class="input num" placeholder="10" autofocus />
+        </div>
+        <div>
+          <label class="label">{{ t('vlans.vlanName') }}</label>
+          <input v-model.trim="form.name" required maxlength="64" class="input" placeholder="LAN, VoIP, Guest…" />
+        </div>
+        <p v-if="form.id > 63" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg">{{ t('vlans.vlanIdWarn', { id: form.id }) }}</p>
+        <p v-if="formError" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ formError }}</p>
+      </form>
+      <template #footer>
+        <Btn @click="modal = false">{{ t('common.cancel') }}</Btn>
+        <Btn variant="primary" type="submit" form="vlan-form" :disabled="!form.id || !form.name">{{ editVlan ? t('common.save') : t('vlans.create') }}</Btn>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
+import Badge from '../components/ui/Badge.vue'
+import Btn from '../components/ui/Btn.vue'
+import Icon from '../components/ui/Icon.vue'
+import Modal from '../components/ui/Modal.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const props = defineProps({ switchId: Number })
-const toast = useToast()
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
+const auth = useAuthStore()
+
 const vlans = ref([])
-const portAssignments = ref([])
+const rows = ref([])
+const original = ref({})
 const limits = reactive({ used: 0, max: 111 })
-const showAddVlan = ref(false)
-const newVlan = ref({ id: '', name: '' })
+const loadError = ref('')
 const applying = ref(false)
 const syncing = ref(false)
-const dirty = ref(false)
-const msg = ref('')
-const msgOk = ref(true)
+const modal = ref(false)
+const editVlan = ref(null)
+const form = reactive({ id: '', name: '' })
+const formError = ref('')
 
-function markDirty() { dirty.value = true }
+const pvidVlans = computed(() => vlans.value.filter(v => v.vlan_id <= 63))
+function editable(r) { return auth.isAdmin && r.port !== 1 }
+
+function norm(r) {
+  return JSON.stringify({ m: r.mode, a: r.mode === 'access' ? r.access_vlan : null, n: r.mode === 'trunk' ? r.native_vlan : null, t: r.mode === 'trunk' ? [...r.trunk_vlans].sort((a, b) => a - b) : [] })
+}
+function isChanged(r) { return original.value[r.port] !== undefined && norm(r) !== original.value[r.port] }
+const changed = computed(() => rows.value.filter(isChanged))
+const dirty = computed(() => changed.value.length > 0)
+
+function toRow(a) {
+  return { port: a.port, mode: a.mode === 'unknown' ? 'flat' : a.mode, access_vlan: a.mode === 'access' ? a.pvid : null,
+           native_vlan: a.mode === 'trunk' ? a.pvid : null, trunk_vlans: [...(a.trunk_vlans || [])] }
+}
 
 async function load() {
-  vlans.value = await api(`/api/switches/${props.switchId}/vlans`)
-  const assignments = await api(`/api/switches/${props.switchId}/vlans/assignments`)
-  portAssignments.value = assignments.map(a => ({
-    ...a,
-    access_vlan: a.mode === 'access' ? a.pvid : (vlans.value[0]?.vlan_id || 1),
-    native_vlan: a.mode === 'trunk' ? a.pvid : (vlans.value.find(v => v.vlan_id <= 63)?.vlan_id || 1),
-    trunk_vlans: a.trunk_vlans || [],
-  }))
-  const lim = await api(`/api/switches/${props.switchId}/vlans/limits`)
-  limits.used = lim.used_tag_entries
-  limits.max = lim.max_tag_entries
-}
-
-async function addVlan() {
   try {
-    await api(`/api/switches/${props.switchId}/vlans`, {
-      method: 'POST', body: JSON.stringify({ vlan_id: newVlan.value.id, name: newVlan.value.name })
-    })
-    showAddVlan.value = false
-    newVlan.value = { id: '', name: '' }
-    await load()
-  } catch (e) { msg.value = e.message; msgOk.value = false }
+    const [vl, assignments, lim] = await Promise.all([
+      api(`/api/switches/${props.switchId}/vlans`),
+      api(`/api/switches/${props.switchId}/vlans/assignments`),
+      api(`/api/switches/${props.switchId}/vlans/limits`),
+    ])
+    vlans.value = vl
+    rows.value = assignments.map(toRow)
+    original.value = Object.fromEntries(rows.value.map(r => [r.port, norm(r)]))
+    limits.used = lim.used_tag_entries; limits.max = lim.max_tag_entries
+    loadError.value = ''
+  } catch (e) { loadError.value = e.message; toast.error(e.message) }
 }
 
-async function deleteVlan(vid) {
-  if (!confirm(t('vlans.deleteConfirm', { id: vid }))) return
-  await api(`/api/switches/${props.switchId}/vlans/${vid}`, { method: 'DELETE' })
-  await load()
+function onModeChange(r) {
+  if (r.mode === 'access' && !r.access_vlan) r.access_vlan = pvidVlans.value[0]?.vlan_id || 1
+  if (r.mode === 'trunk' && r.native_vlan == null) r.native_vlan = 1
 }
+
+function discard() { rows.value = rows.value.map(r => ({ ...JSON.parse(JSON.stringify(r)) })); load() }
 
 async function applyAll() {
-  applying.value = true; msg.value = ''
+  applying.value = true
   try {
-    const assignments = portAssignments.value.filter(p => p.port !== 1).map(p => ({
-      port: p.port,
-      mode: p.mode,
-      access_vlan: p.mode === 'access' ? p.access_vlan : null,
-      native_vlan: p.mode === 'trunk' ? p.native_vlan : null,
-      trunk_vlans: p.mode === 'trunk' ? p.trunk_vlans : null,
+    const payload = changed.value.map(r => ({
+      port: r.port, mode: r.mode,
+      access_vlan: r.mode === 'access' ? r.access_vlan : null,
+      native_vlan: r.mode === 'trunk' ? r.native_vlan : null,
+      trunk_vlans: r.mode === 'trunk' ? r.trunk_vlans : null,
     }))
-    const res = await api(`/api/switches/${props.switchId}/vlans/apply`, {
-      method: 'POST', body: JSON.stringify(assignments)
-    })
-    dirty.value = false
+    const res = await api(`/api/switches/${props.switchId}/vlans/apply`, { method: 'POST', body: JSON.stringify(payload) })
     toast.success(t('vlans.applied', { ports: res.port_vlans, tags: res.tag_entries }))
+    for (const w of res.warnings || []) toast.error(w)
     await load()
   } catch (e) { toast.error(e.message) }
   finally { applying.value = false }
 }
 
+function openAdd(v = null) {
+  editVlan.value = v
+  form.id = v ? v.vlan_id : ''
+  form.name = v && v.defined ? v.name : ''
+  formError.value = ''
+  modal.value = true
+}
+async function saveVlan() {
+  formError.value = ''
+  try {
+    if (editVlan.value?.defined) await api(`/api/switches/${props.switchId}/vlans/${form.id}`, { method: 'DELETE' })
+    await api(`/api/switches/${props.switchId}/vlans`, { method: 'POST', body: JSON.stringify({ vlan_id: form.id, name: form.name }) })
+    modal.value = false
+    await load()
+  } catch (e) { formError.value = e.message }
+}
+async function deleteVlan(v) {
+  const msg = t('vlans.deleteConfirm', { id: v.vlan_id }) + (v.in_use ? '\n' + t('vlans.deleteInUse', { id: v.vlan_id }) : '')
+  if (!await confirm({ title: t('common.delete'), message: msg, danger: true, confirmText: t('common.delete') })) return
+  try { await api(`/api/switches/${props.switchId}/vlans/${v.vlan_id}`, { method: 'DELETE' }); await load() } catch (e) { toast.error(e.message) }
+}
 async function syncVlans() {
-  if (!confirm('Copy all VLAN definitions from this switch to every other switch?')) return
+  if (!await confirm({ title: t('vlans.sync'), message: t('vlans.syncConfirm') })) return
   syncing.value = true
   try {
     const res = await api(`/api/switches/${props.switchId}/vlans/sync`, { method: 'POST' })
-    msg.value = t('vlans.synced', { targets: res.targets }); msgOk.value = true
-  } catch (e) { msg.value = e.message; msgOk.value = false }
+    toast.success(t('vlans.synced', { targets: res.targets }))
+  } catch (e) { toast.error(e.message) }
   finally { syncing.value = false }
 }
+
+onBeforeRouteLeave(async () => {
+  if (!dirty.value) return true
+  return await confirm({ title: t('vlans.unsaved'), message: t('vlans.leaveConfirm'), danger: true, confirmText: t('vlans.discard') })
+})
 
 onMounted(load)
 </script>

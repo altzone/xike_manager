@@ -8,20 +8,21 @@ const routes = [
     component: () => import('./views/Layout.vue'),
     meta: { auth: true },
     children: [
-      { path: '', name: 'dashboard', component: () => import('./views/Dashboard.vue') },
-      { path: 'users', name: 'users', component: () => import('./views/Users.vue'), meta: { admin: true } },
+      { path: '', name: 'dashboard', component: () => import('./views/Dashboard.vue'), meta: { title: 'dash.title' } },
+      { path: 'users', name: 'users', component: () => import('./views/Users.vue'), meta: { admin: true, title: 'users.title' } },
       { path: 'switch/:id', name: 'switch', component: () => import('./views/SwitchView.vue'),
         children: [
-          { path: '', name: 'switch-dashboard', component: () => import('./views/SwitchDashboard.vue') },
-          { path: 'ports', name: 'switch-ports', component: () => import('./views/Ports.vue') },
-          { path: 'vlans', name: 'switch-vlans', component: () => import('./views/Vlans.vue') },
-          { path: 'lag', name: 'switch-lag', component: () => import('./views/Lag.vue') },
-          { path: 'monitoring', name: 'switch-monitoring', component: () => import('./views/Monitoring.vue') },
-          { path: 'system', name: 'switch-system', component: () => import('./views/System.vue') },
+          { path: '', name: 'switch-dashboard', component: () => import('./views/SwitchDashboard.vue'), meta: { title: 'nav.overview' } },
+          { path: 'ports', name: 'switch-ports', component: () => import('./views/Ports.vue'), meta: { title: 'ports.title' } },
+          { path: 'vlans', name: 'switch-vlans', component: () => import('./views/Vlans.vue'), meta: { title: 'vlans.title' } },
+          { path: 'lag', name: 'switch-lag', component: () => import('./views/Lag.vue'), meta: { title: 'lag.title' } },
+          { path: 'monitoring', name: 'switch-monitoring', component: () => import('./views/Monitoring.vue'), meta: { title: 'mac.title' } },
+          { path: 'system', name: 'switch-system', component: () => import('./views/System.vue'), meta: { title: 'sys.title' } },
         ]
       },
     ]
   },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

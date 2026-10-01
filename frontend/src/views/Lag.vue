@@ -1,259 +1,200 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">{{ t('lag.title') }}</h1><Tip :title="t('lag.title')">{{ t('lag.tip') }}</Tip></div>
-        <p class="text-sm text-gray-400 mt-1">{{ t('lag.desc') }}</p>
-      </div>
-      <button @click="showCreate = true"
-        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition shadow-sm flex items-center gap-1.5">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        {{ t('lag.create') }}
-      </button>
+  <div class="space-y-5">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <p class="hint max-w-2xl">{{ t('lag.tip') }}</p>
+      <Btn v-if="auth.isAdmin" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
     </div>
 
-    <!-- Active LAG Groups -->
-    <div v-if="groups.length" class="space-y-4">
-      <div v-for="g in groups" :key="g.id" class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div class="px-5 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold"
-              :class="g.allUp ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
-              G{{ g.id }}
-            </div>
-            <div>
+    <div v-if="groups.length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div v-for="g in groups" :key="g.id" class="card">
+        <div class="card-head items-center">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="w-11 h-11 rounded-lg flex items-center justify-center font-semibold shrink-0" :class="g.allUp ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn-ink'">G{{ g.id }}</span>
+            <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h3 class="font-semibold text-gray-900">
-                <input v-model="groupNames[g.id]" @blur="renameGroup(g.id)"
-                  class="bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-indigo-500 outline-none font-semibold text-gray-900 px-0 py-0 w-48"
-                  :placeholder="`LAG Group ${g.id}`"/>
-              </h3>
-                <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                  :class="g.mode === 2 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'">
-                  {{ g.mode === 2 ? t('lag.lacp') : t('lag.static') }}
-                </span>
+                <input v-if="auth.isAdmin" v-model="names[g.id]" @blur="rename(g.id)" @keydown.enter="$event.target.blur()" maxlength="64"
+                  class="bg-transparent border-0 border-b border-transparent hover:border-line-strong focus:border-accent outline-none font-semibold text-ink px-0 py-0 w-44 truncate"
+                  :placeholder="`LAG ${g.id}`" />
+                <span v-else class="font-semibold text-ink truncate">{{ names[g.id] || `LAG ${g.id}` }}</span>
+                <Badge :tone="g.mode === 2 ? 'accent' : 'neutral'">{{ g.mode === 2 ? t('lag.lacp') : t('lag.static') }}</Badge>
               </div>
-              <p class="text-xs text-gray-400 mt-0.5">{{ g.ports.length }} ports &mdash; {{ g.ports.length * (g.ports[0]?.speed || 2.5) }}G aggregate</p>
+              <p class="hint">{{ t('lag.members', { n: g.ports.length }) }} · {{ g.ports.reduce((s, p) => s + (p.port >= 9 ? 10 : 2.5), 0) }}G</p>
             </div>
           </div>
-          <button @click="removeGroup(g.id)" class="text-gray-300 hover:text-red-500 transition p-2" title="Remove LAG group">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          </button>
+          <Btn v-if="auth.isAdmin" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g.id)" />
         </div>
-        <div class="px-5 pb-4">
-          <div class="flex gap-2">
-            <div v-for="p in g.ports" :key="p.port"
-              class="flex-1 rounded-lg border-2 p-3 text-center transition"
-              :class="p.state === 1 ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-gray-50'">
-              <div class="text-sm font-bold" :class="p.state === 1 ? 'text-emerald-700' : 'text-gray-400'">
-                {{ p.port >= 9 ? 'SFP+' : 'P' }}{{ p.port }}
-              </div>
-              <div class="text-[10px] mt-1" :class="p.state === 1 ? 'text-emerald-600' : 'text-gray-300'">
-                {{ p.state === 1 ? t('lag.active') : t('ports.down') }}
-              </div>
-              <div v-if="g.mode === 2" class="text-[9px] text-gray-400 mt-1">
-                {{ p.timeout === 0 ? 'Fast' : 'Slow' }}
-              </div>
-            </div>
+        <div class="px-4 py-3 flex gap-2 flex-wrap">
+          <div v-for="p in g.ports" :key="p.port" class="flex-1 min-w-[72px] rounded-lg border p-2.5 text-center" :class="p.state === 1 ? 'border-ok/50 bg-ok-soft' : 'border-line bg-surface-2'">
+            <div class="text-sm font-semibold" :class="p.state === 1 ? 'text-ok-ink' : 'text-muted'">{{ p.port >= 9 ? 'SFP+' : 'P' }}{{ p.port }}</div>
+            <div class="text-[10px] mt-0.5" :class="p.state === 1 ? 'text-ok' : 'text-faint'">{{ p.state === 1 ? t('lag.active') : t('ports.down') }}</div>
+            <div v-if="g.mode === 2" class="text-[10px] text-muted mt-0.5">{{ p.timeout === 0 ? t('lag.fast') : t('lag.slow') }}</div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Empty state -->
-    <div v-else class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-      <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
-        </svg>
-      </div>
-      <p class="text-gray-500 font-medium">{{ t('lag.noGroups') }}</p>
-      <p class="text-gray-400 text-sm mt-1">{{ t('lag.createDesc') }}</p>
+    <div v-else class="card">
+      <EmptyState icon="lag" :title="loadError ? t('common.failedLoad') : t('lag.noGroups')" :text="loadError || t('lag.createDesc')">
+        <Btn v-if="auth.isAdmin && !loadError" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
+      </EmptyState>
     </div>
 
-    <!-- LACP System Priority -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-      <div class="flex items-center gap-4">
+    <div class="card card-body flex items-center gap-4 flex-wrap">
+      <div class="flex-1 min-w-[200px]">
+        <h3 class="h2">{{ t('lag.priority') }}</h3><p class="hint">{{ t('lag.priorityDesc') }}</p>
+      </div>
+      <input v-model.number="systemPriority" type="number" min="1" max="65535" :disabled="!auth.isAdmin" class="input input-sm num w-28" />
+      <Btn v-if="auth.isAdmin" size="sm" @click="applyPriority">{{ t('lag.save') }}</Btn>
+    </div>
+
+    <!-- Create -->
+    <Modal :open="modal" :title="t('lag.create')" @close="modal = false">
+      <div class="space-y-4">
         <div>
-          <h3 class="text-sm font-semibold text-gray-700">{{ t('lag.priority') }}</h3>
-          <p class="text-xs text-gray-400">{{ t('lag.priorityDesc') }}</p>
+          <label class="label">{{ t('lag.name') }}</label>
+          <input v-model.trim="draft.name" maxlength="64" class="input" placeholder="Uplink, Server bond…" autofocus />
         </div>
-        <input v-model.number="systemPriority" type="number" min="0" max="65535"
-          class="w-28 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"/>
-        <button @click="applyPriority" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 transition">{{ t('lag.save') }}</button>
-      </div>
-    </div>
-
-    <!-- Create Modal -->
-    <div v-if="showCreate" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showCreate = false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-        <h2 class="text-lg font-bold text-gray-900 mb-4">{{ t('lag.create') }}</h2>
-        <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('lag.name') }}</label>
-            <input v-model="newGroup.name" placeholder="e.g. Uplink-Switch, Server-Bond..."
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
+            <label class="label">{{ t('lag.groupNum') }}</label>
+            <select v-model.number="draft.id" class="select"><option v-for="n in availableGroupIds" :key="n" :value="n">LAG {{ n }}</option></select>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('lag.groupNum') }}</label>
-            <select v-model.number="newGroup.id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option v-for="n in availableGroupIds" :key="n" :value="n">Group {{ n }}</option>
-            </select>
+          <div v-if="draft.mode === 2">
+            <label class="label">{{ t('lag.timeout') }}</label>
+            <select v-model.number="draft.timeout" class="select"><option :value="0">{{ t('lag.timeoutShort') }}</option><option :value="1">{{ t('lag.timeoutLong') }}</option></select>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('lag.mode') }}</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button @click="newGroup.mode = 1" class="px-4 py-3 rounded-lg border-2 text-sm font-medium transition text-left"
-                :class="newGroup.mode === 1 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-                <div class="font-bold">{{ t('lag.static') }}</div>
-                <div class="text-xs opacity-70 mt-0.5">{{ t('lag.staticDesc') }}</div>
-              </button>
-              <button @click="newGroup.mode = 2" class="px-4 py-3 rounded-lg border-2 text-sm font-medium transition text-left"
-                :class="newGroup.mode === 2 ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-                <div class="font-bold">{{ t('lag.lacp') }}</div>
-                <div class="text-xs opacity-70 mt-0.5">{{ t('lag.lacpDesc') }}</div>
-              </button>
-            </div>
-          </div>
-          <div v-if="newGroup.mode === 2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('lag.timeout') }}</label>
-            <select v-model.number="newGroup.timeout" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option :value="0">{{ t('lag.timeoutShort') }}</option>
-              <option :value="1">{{ t('lag.timeoutLong') }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('lag.selectPorts') }}</label>
-            <div class="grid grid-cols-5 gap-2">
-              <button v-for="p in availablePorts" :key="p.port" @click="togglePort(p.port)"
-                class="rounded-lg border-2 p-2 text-center transition text-xs font-medium"
-                :class="newGroup.ports.includes(p.port) ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300'">
-                {{ p.port >= 9 ? 'SFP+' : 'P' }}{{ p.port }}
-                <div class="text-[9px] opacity-60">{{ p.port >= 9 ? '10G' : '2.5G' }}</div>
-              </button>
-            </div>
-            <p v-if="newGroup.ports.length < 2" class="text-xs text-amber-600 mt-2">{{ t('lag.minPorts') }}</p>
-          </div>
-          <div class="flex gap-3 pt-1">
-            <button @click="showCreate = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">{{ t('common.cancel') }}</button>
-            <button @click="createGroup" :disabled="newGroup.ports.length < 2 || applying"
-              class="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
-              {{ applying ? t('lag.applying') : t('vlans.create') }}
+        </div>
+        <div>
+          <label class="label">{{ t('lag.mode') }}</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button v-for="m in [2, 1]" :key="m" type="button" @click="draft.mode = m" class="rounded-lg border-2 p-3 text-start transition" :class="draft.mode === m ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'">
+              <div class="text-sm font-semibold" :class="draft.mode === m ? 'text-accent-ink' : 'text-ink'">{{ m === 2 ? t('lag.lacp') : t('lag.static') }}</div>
+              <div class="hint mt-0.5">{{ m === 2 ? t('lag.lacpDesc') : t('lag.staticDesc') }}</div>
             </button>
           </div>
         </div>
+        <div>
+          <label class="label">{{ t('lag.selectPorts') }}</label>
+          <div class="grid grid-cols-5 gap-2">
+            <button v-for="p in availablePorts" :key="p.port" type="button" @click="togglePort(p.port)" class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
+              :class="draft.ports.includes(p.port) ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">
+              {{ p.port >= 9 ? 'SFP+' : 'P' }}{{ p.port }}
+              <div class="text-[10px] font-normal opacity-70">{{ p.port >= 9 ? '10G' : '2.5G' }}</div>
+            </button>
+          </div>
+          <p v-if="draft.ports.length < 2" class="hint mt-2">{{ t('lag.minPorts') }}</p>
+          <p v-if="mixedMedia" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg mt-2">{{ t('lag.mixedMedia') }}</p>
+          <p v-if="draft.ports.includes(1)" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg mt-2">{{ t('lag.mgmtWarn') }}</p>
+        </div>
       </div>
-    </div>
-
-    <p v-if="msg" class="text-sm" :class="msgOk ? 'text-emerald-600' : 'text-red-500'">{{ msg }}</p>
+      <template #footer>
+        <Btn @click="modal = false">{{ t('common.cancel') }}</Btn>
+        <Btn variant="primary" :disabled="draft.ports.length < 2" :loading="applying" @click="createGroup">{{ t('vlans.create') }}</Btn>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
 import { useI18n } from '../i18n/index.js'
-import Tip from '../components/Tip.vue'
+import Btn from '../components/ui/Btn.vue'
+import Badge from '../components/ui/Badge.vue'
+import Modal from '../components/ui/Modal.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const props = defineProps({ switchId: Number })
-const toast = useToast()
 const { t } = useI18n()
-const allPorts = ref([])
-const groupNames = ref({})
-const systemPriority = ref(32768)
-const showCreate = ref(false)
-const applying = ref(false)
-const msg = ref('')
-const msgOk = ref(true)
-const newGroup = reactive({ id: 1, name: '', mode: 2, timeout: 0, ports: [] })
+const toast = useToast()
+const { confirm } = useConfirm()
+const auth = useAuthStore()
 
-function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
+const allPorts = ref([])
+const names = ref({})
+const savedNames = ref({})
+const systemPriority = ref(32768)
+const modal = ref(false)
+const applying = ref(false)
+const loadError = ref('')
+const draft = reactive({ id: 1, name: '', mode: 2, timeout: 0, ports: [] })
 
 const groups = computed(() => {
   const map = {}
   allPorts.value.filter(p => p.group > 0 && p.type > 0).forEach(p => {
-    if (!map[p.group]) map[p.group] = { id: p.group, name: groupNames.value[p.group] || '', mode: p.type, ports: [], allUp: true }
+    if (!map[p.group]) map[p.group] = { id: p.group, mode: p.type, ports: [], allUp: true }
     map[p.group].ports.push(p)
     if (p.state !== 1) map[p.group].allUp = false
   })
   return Object.values(map).sort((a, b) => a.id - b.id)
 })
-
 const usedPorts = computed(() => new Set(allPorts.value.filter(p => p.group > 0 && p.type > 0).map(p => p.port)))
-const usedGroupIds = computed(() => new Set(groups.value.map(g => g.id)))
 const availablePorts = computed(() => allPorts.value.filter(p => !usedPorts.value.has(p.port)))
-const availableGroupIds = computed(() => {
-  const ids = []
-  for (let i = 1; i <= 16; i++) { if (!usedGroupIds.value.has(i)) ids.push(i) }
-  return ids
-})
+const availableGroupIds = computed(() => { const used = new Set(groups.value.map(g => g.id)); return Array.from({ length: 15 }, (_, i) => i + 1).filter(i => !used.has(i)) })
+const mixedMedia = computed(() => draft.ports.some(p => p >= 9) && draft.ports.some(p => p < 9))
 
-function togglePort(port) {
-  const idx = newGroup.ports.indexOf(port)
-  if (idx >= 0) newGroup.ports.splice(idx, 1)
-  else newGroup.ports.push(port)
-}
+function togglePort(port) { const i = draft.ports.indexOf(port); i >= 0 ? draft.ports.splice(i, 1) : draft.ports.push(port) }
 
 async function load() {
-  const data = await api(`/api/switches/${props.switchId}/lag`)
-  systemPriority.value = data.system_priority
-  allPorts.value = data.ports
-  groupNames.value = data.group_names || {}
+  try {
+    const data = await api(`/api/switches/${props.switchId}/lag`)
+    systemPriority.value = Number(data.system_priority) || 32768
+    allPorts.value = data.ports
+    names.value = { ...(data.group_names || {}) }
+    savedNames.value = { ...(data.group_names || {}) }
+    loadError.value = ''
+  } catch (e) { loadError.value = e.message }
+}
+
+function openCreate() {
+  Object.assign(draft, { id: availableGroupIds.value[0] || 1, name: '', mode: 2, timeout: 0, ports: [] })
+  modal.value = true
+}
+
+function rowsPayload(mapper) {
+  return allPorts.value.map(p => ({ port: p.port, type: p.type, timeout: p.timeout, priority: p.priority ?? 128, group: p.group, ...(mapper(p) || {}) }))
 }
 
 async function createGroup() {
   applying.value = true
   try {
-    const ports = allPorts.value.map(p => {
-      if (newGroup.ports.includes(p.port)) {
-        return { ...p, type: newGroup.mode, group: newGroup.id, timeout: newGroup.timeout }
-      }
-      return p
-    })
-    const names = { ...groupNames.value, [newGroup.id]: newGroup.name || `Group ${newGroup.id}` }
-    await api(`/api/switches/${props.switchId}/lag`, {
-      method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names: names })
-    })
-    showCreate.value = false
-    newGroup.ports = []; newGroup.name = ''
-    flash(t('lag.created'))
+    const ports = rowsPayload(p => draft.ports.includes(p.port) ? { type: draft.mode, group: draft.id, timeout: draft.timeout } : null)
+    const group_names = { ...savedNames.value, [draft.id]: draft.name || `LAG ${draft.id}` }
+    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names }) })
+    modal.value = false
+    toast.success(t('lag.created'))
     await load()
-    // pick the next free id only once the reloaded state knows the group just created
-    newGroup.id = availableGroupIds.value[0] || 1
-  } catch (e) { flash(e.message, false) }
+  } catch (e) { toast.error(e.message) }
   finally { applying.value = false }
 }
 
-async function removeGroup(groupId) {
-  if (!confirm(t('lag.removeConfirm', { id: groupId }))) return
-  const ports = allPorts.value.map(p => {
-    if (p.group === groupId) return { ...p, type: 0, group: 0, timeout: 0 }
-    return p
-  })
-  await api(`/api/switches/${props.switchId}/lag`, {
-    method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports })
-  })
-  flash(t('lag.removed'))
-  await load()
+async function removeGroup(id) {
+  if (!await confirm({ title: t('common.remove'), message: t('lag.removeConfirm', { id }), danger: true, confirmText: t('common.remove') })) return
+  try {
+    const ports = rowsPayload(p => p.group === id ? { type: 0, group: 0, timeout: 0 } : null)
+    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports }) })
+    toast.success(t('lag.removed'))
+    await load()
+  } catch (e) { toast.error(e.message) }
 }
 
-async function renameGroup(groupId) {
-  await api(`/api/switches/${props.switchId}/lag`, {
-    method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: allPorts.value, group_names: groupNames.value })
-  })
-  flash(t('common.success'))
+async function rename(id) {
+  if ((names.value[id] || '') === (savedNames.value[id] || '')) return
+  try {
+    const res = await api(`/api/switches/${props.switchId}/lag/names`, { method: 'PUT', body: JSON.stringify({ group_names: { [id]: names.value[id] || `LAG ${id}` } }) })
+    savedNames.value = { ...res.group_names }
+    toast.success(t('lag.renamed'))
+  } catch (e) { toast.error(e.message) }
 }
 
 async function applyPriority() {
-  await api(`/api/switches/${props.switchId}/lag`, {
-    method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: allPorts.value })
-  })
-  flash(t('lag.priorityUpdated'))
+  try {
+    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: rowsPayload(() => null) }) })
+    toast.success(t('lag.priorityUpdated'))
+  } catch (e) { toast.error(e.message) }
 }
 
-onMounted(async () => {
-  await load()
-  newGroup.id = availableGroupIds.value[0] || 1
-})
+onMounted(load)
 </script>

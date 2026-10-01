@@ -1,96 +1,141 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">{{ t('nav.mac') }}</h1><Tip :title="t('mac.title')">{{ t('mac.tip') }}</Tip></div>
-
-    <!-- MAC Table -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+  <div class="space-y-5">
+    <div class="card overflow-hidden">
+      <div class="card-head items-center flex-wrap gap-3">
         <div>
-          <h2 class="font-semibold text-gray-900">{{ t('mac.title') }}</h2>
-          <p class="text-xs text-gray-400 mt-0.5">{{ t('mac.entries', { count: total }) }}</p>
+          <h3 class="h2 inline-flex items-center gap-1.5">{{ t('mac.title') }} <Tip :title="t('mac.title')" :text="t('mac.tip')" /></h3>
+          <p class="hint">{{ t('mac.entries', { count: total }) }}</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 flex-wrap">
           <div class="relative">
-            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input v-model="search" @input="doSearch" :placeholder="t('mac.search')"
-              class="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-56 transition"/>
+            <Icon name="search" :size="15" class="absolute start-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+            <input v-model="search" @input="debouncedSearch" :placeholder="t('mac.search')" class="input input-sm ps-9 w-56 mono" maxlength="32" />
           </div>
-          <button @click="refresh" class="p-2 text-gray-400 hover:text-gray-600 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          </button>
-          <button @click="clearMacs" class="text-xs text-red-500 hover:text-red-700 transition">{{ t('mac.clearAll') }}</button>
+          <Btn size="sm" icon="refresh" icon-only :aria-label="t('ui.refresh')" :loading="loading" @click="refresh" />
+          <Btn v-if="auth.isAdmin" size="sm" variant="danger-soft" icon="trash" @click="clearMacs">{{ t('mac.clearAll') }}</Btn>
         </div>
       </div>
-      <table v-if="macs.length" class="w-full text-sm">
-        <thead class="bg-gray-50/80">
-          <tr>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('sys.macAddress') }}</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('mac.vendor') }}</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('mac.port') }}</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('mac.vlanGroup') }}</th>
-            <th class="px-5 py-2.5 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('mac.age') }}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-50">
-          <tr v-for="m in macs" :key="m.idx" class="hover:bg-gray-50/50 transition">
-            <td class="px-5 py-2.5 text-gray-400">{{ m.idx }}</td>
-            <td class="px-5 py-2.5 font-mono text-gray-900 font-medium text-xs">{{ m.mac }}</td>
-            <td class="px-5 py-2.5">
-              <span v-if="m.vendor" class="text-xs text-gray-600">{{ m.vendor }}</span>
-              <span v-else class="text-xs text-gray-300">{{ t('mac.unknown') }}</span>
-            </td>
-            <td class="px-5 py-2.5">
-              <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">{{ t('mac.port') }} {{ m.port }}</span>
-            </td>
-            <td class="px-5 py-2.5 text-gray-500">{{ m.fid }}</td>
-            <td class="px-5 py-2.5 text-gray-500">{{ m.age }}</td>
+      <div class="overflow-x-auto">
+        <table v-if="macs.length" class="table">
+          <thead><tr>
+            <th>#</th><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.vendor') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th class="!text-end">{{ t('mac.age') }}</th>
+          </tr></thead>
+          <tbody>
+            <tr v-for="m in macs" :key="m.idx + m.mac">
+              <td class="text-muted num">{{ m.idx }}</td>
+              <td class="mono text-ink font-medium">{{ m.mac }}</td>
+              <td><span v-if="m.vendor" class="text-ink-2">{{ m.vendor }}</span><span v-else class="text-faint">{{ t('mac.unknown') }}</span></td>
+              <td><Badge :tone="m.port >= 9 ? 'sfp' : 'accent'">{{ t('mac.port') }} {{ m.port }}</Badge></td>
+              <td class="num text-ink-2">{{ m.fid }}</td>
+              <td class="num text-end text-muted">{{ m.age }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <EmptyState v-else compact icon="mac" :title="loadError ? t('common.failedLoad') : (search ? t('mac.noMatch') : t('mac.empty'))" :text="loadError" />
+      </div>
+    </div>
+
+    <!-- Static entries -->
+    <div class="card overflow-hidden">
+      <div class="card-head">
+        <div><h3 class="h2">{{ t('sys.staticMac') }}</h3><p class="hint">{{ t('sys.staticMacTip') }}</p></div>
+      </div>
+      <form v-if="auth.isAdmin" @submit.prevent="addStatic" class="px-5 py-4 grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-3 items-end border-b border-line" novalidate>
+        <div><label class="label">{{ t('sys.macAddress') }}</label><input v-model.trim="draft.mac" class="input input-sm mono" placeholder="AA:BB:CC:DD:EE:FF" pattern="^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$" required /></div>
+        <div><label class="label">{{ t('sys.macPort') }}</label><select v-model.number="draft.port" class="select select-sm"><option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option></select></div>
+        <div><label class="label">{{ t('sys.macVlanGroup') }}</label><input v-model.number="draft.fid" type="number" min="0" max="63" class="input input-sm num" /></div>
+        <Btn type="submit" variant="primary" size="sm" icon="plus" :loading="adding" :disabled="!macValid">{{ t('sys.macAdd') }}</Btn>
+      </form>
+      <table v-if="statics.length" class="table">
+        <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th v-if="auth.isAdmin" class="w-12"></th></tr></thead>
+        <tbody>
+          <tr v-for="m in statics" :key="m.mac + m.port">
+            <td class="mono font-medium">{{ m.mac }}</td>
+            <td><Badge :tone="m.port >= 9 ? 'sfp' : 'accent'">{{ t('mac.port') }} {{ m.port }}</Badge></td>
+            <td class="num text-ink-2">{{ m.fid }}</td>
+            <td v-if="auth.isAdmin" class="text-end"><Btn variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteStatic(m)" /></td>
           </tr>
         </tbody>
       </table>
-      <div v-else class="px-5 py-8 text-center text-gray-400 text-sm">
-        {{ search ? t('mac.noMatch') : t('mac.empty') }}
-      </div>
+      <EmptyState v-else compact icon="lock" :title="t('sys.macNone')" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
+import Btn from '../components/ui/Btn.vue'
+import Badge from '../components/ui/Badge.vue'
+import Icon from '../components/ui/Icon.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const props = defineProps({ switchId: Number })
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
+const auth = useAuthStore()
+
 const macs = ref([])
 const total = ref(0)
 const search = ref('')
-let searchTimeout = null
+const loading = ref(false)
+const loadError = ref('')
+const statics = ref([])
+const draft = reactive({ mac: '', port: 1, fid: 0 })
+const adding = ref(false)
+const macValid = computed(() => /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(draft.mac))
+let timer = null
+let seq = 0
 
 async function loadMacs(query = '') {
-  const url = query
-    ? `/api/switches/${props.switchId}/mac/dynamic?search=${encodeURIComponent(query)}`
-    : `/api/switches/${props.switchId}/mac/dynamic`
-  const res = await api(url)
-  macs.value = res.entries || []
-  total.value = res.total || macs.value.length
+  const my = ++seq
+  loading.value = true
+  try {
+    const res = await api(`/api/switches/${props.switchId}/mac/dynamic${query ? `?search=${encodeURIComponent(query)}` : ''}`)
+    if (my !== seq) return  // a newer request is in flight
+    macs.value = res.entries || []
+    total.value = res.total || macs.value.length
+    loadError.value = ''
+  } catch (e) { if (my === seq) { loadError.value = e.message; macs.value = [] } }
+  finally { if (my === seq) loading.value = false }
 }
-
-function doSearch() {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => loadMacs(search.value), 300)
-}
-
-async function refresh() { await loadMacs(search.value) }
+function debouncedSearch() { clearTimeout(timer); timer = setTimeout(() => loadMacs(search.value), 300) }
+function refresh() { return loadMacs(search.value) }
 
 async function clearMacs() {
-  if (!confirm(t('mac.clearConfirm'))) return
-  await api(`/api/switches/${props.switchId}/mac/clear`, { method: 'POST' })
-  await loadMacs()
+  if (!await confirm({ title: t('mac.clearAll'), message: t('mac.clearConfirm'), danger: true, confirmText: t('mac.clearAll') })) return
+  try { await api(`/api/switches/${props.switchId}/mac/clear`, { method: 'POST' }); await loadMacs() } catch (e) { toast.error(e.message) }
 }
 
-onMounted(() => loadMacs())
+async function loadStatics() {
+  try { statics.value = await api(`/api/switches/${props.switchId}/mac/static`) } catch (e) { statics.value = [] }
+}
+async function addStatic() {
+  if (!macValid.value) return
+  adding.value = true
+  try {
+    await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify({ mac: draft.mac, port: draft.port, fid: draft.fid || 0 }) })
+    toast.success(t('sys.macAdded'))
+    draft.mac = ''
+    await loadStatics()
+  } catch (e) { toast.error(e.message) }
+  finally { adding.value = false }
+}
+async function deleteStatic(m) {
+  if (!await confirm({ title: t('common.delete'), message: t('mac.deleteStatic', { mac: m.mac }), danger: true, confirmText: t('common.delete') })) return
+  try {
+    await api(`/api/switches/${props.switchId}/mac/static/delete`, { method: 'POST', body: JSON.stringify({ mac: m.mac, port: m.port, fid: m.fid }) })
+    toast.success(t('mac.staticDeleted'))
+    await loadStatics()
+  } catch (e) { toast.error(e.message) }
+}
+
+onMounted(() => { loadMacs(); loadStatics() })
+onUnmounted(() => clearTimeout(timer))
 </script>

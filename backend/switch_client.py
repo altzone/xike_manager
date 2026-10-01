@@ -113,7 +113,9 @@ class SwitchClient:
                  swap_sfp: bool = False, transport: httpx.AsyncBaseTransport | None = None):
         self.configure(ip, username, password)
         self.set_port_mapping(swap_sfp)
-        self.client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5), transport=transport)
+        # trust_env=False: a switch on the LAN must never be reached through an HTTP_PROXY
+        # inherited from the container's environment
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5), transport=transport, trust_env=False)
         self.closed = False
         self._login_lock = asyncio.Lock()
 

@@ -1,147 +1,65 @@
 <template>
-  <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <h1 class="text-xl font-bold text-gray-900">{{ t('nav.dashboard') }}</h1>
-      <div class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full" :class="sse.connected.value ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></span>
-        <span class="text-xs" :class="sse.connected.value ? 'text-emerald-600' : 'text-gray-400'">{{ sse.connected.value ? 'Live' : 'Connecting...' }}</span>
-      </div>
+  <div class="space-y-5">
+    <!-- Stats -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <Stat icon="fire" :label="t('swdash.temperature')" :value="temp" unit="°C" :tone="Number(temp) > 60 ? 'danger' : Number(temp) > 50 ? 'warn' : 'ok'" />
+      <Stat icon="bolt" :label="t('swdash.portsUp')" :value="portsUp" unit="/ 10" tone="accent" />
+      <Stat icon="arrow-up" :label="t('swdash.totalTx')" :value="fmt(totalTx)" tone="info" />
+      <Stat icon="arrow-down" :label="t('swdash.totalRx')" :value="fmt(totalRx)" tone="sfp" />
+      <Stat icon="warning" :label="t('swdash.errors')" :value="fmt(totalErrors)" :tone="totalErrors > 0 ? 'warn' : 'neutral'" />
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" :class="Number(temp) > 55 ? 'bg-red-100' : 'bg-emerald-100'">
-          <svg class="w-5 h-5" :class="Number(temp) > 55 ? 'text-red-600' : 'text-emerald-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
+    <!-- Faceplate + details -->
+    <div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
+      <div class="space-y-3 min-w-0">
+        <div class="flex items-center justify-between">
+          <p class="eyebrow">{{ t('swdash.frontPanel') }}</p>
+          <span class="flex items-center gap-1.5 text-xs" :class="sse.connected.value ? 'text-ok' : 'text-muted'">
+            <span class="dot" :class="sse.connected.value ? 'bg-ok live-dot' : 'bg-faint'"></span>{{ sse.connected.value ? t('ui.live') : t('ui.connecting') }}
+          </span>
         </div>
-        <div>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">{{ t('swdash.temperature') }}</p>
-          <p class="text-lg font-bold" :class="Number(temp) > 55 ? 'text-red-600' : 'text-gray-900'">{{ temp }}°C</p>
-        </div>
+        <Faceplate :ports="ports" :settings="settings" :selected="selected" :live="sse.connected.value" :model="model" :firmware="firmware" @select="selected = selected === $event ? null : $event" />
       </div>
 
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-          <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-          </svg>
+      <div class="card">
+        <div class="card-head"><div><h3 class="h2">{{ t('swdash.portDetails') }}</h3></div>
+          <Badge v-if="sel" :tone="sel.port >= 9 ? 'sfp' : 'rj45'">{{ sel.port >= 9 ? 'SFP+' : 'RJ45' }}</Badge>
         </div>
-        <div>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">{{ t('swdash.portsUp') }}</p>
-          <p class="text-lg font-bold text-gray-900">{{ portsUp }} <span class="text-sm font-normal text-gray-400">/ 10</span></p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
-          <svg class="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-          </svg>
-        </div>
-        <div>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Total TX</p>
-          <p class="text-lg font-bold text-gray-900">{{ formatPkts(totalTx) }}</p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
-          <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-          </svg>
-        </div>
-        <div>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Total RX</p>
-          <p class="text-lg font-bold text-gray-900">{{ formatPkts(totalRx) }}</p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-          <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
-          </svg>
-        </div>
-        <div>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">{{ t('swdash.model') }}</p>
-          <p class="text-sm font-bold text-gray-900 truncate">{{ model }}</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Switch Visual -->
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div class="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-3 h-3 rounded-full" :class="sse.connected.value ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'"></div>
-          <span class="text-white font-semibold text-sm">{{ model || 'SKS3200-8E2X' }}</span>
-          <span class="text-slate-400 text-xs">{{ firmware }}</span>
-        </div>
-        <span class="text-slate-400 text-xs">{{ temp }}°C</span>
-      </div>
-
-      <!-- Port strip -->
-      <div class="px-6 py-5 bg-slate-50">
-        <div class="flex gap-2 mb-2">
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider flex-1">RJ45 2.5G</p>
-          <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider" style="width: 176px;">SFP+ 10G</p>
-        </div>
-        <div class="flex gap-2">
-          <!-- RJ45 ports 1-8 -->
-          <div v-for="p in portsByType.rj45" :key="p.port"
-            class="flex-1 rounded-lg border-2 p-2.5 text-center transition-all duration-300 cursor-default relative group"
-            :class="isUp(p) ? 'border-emerald-400 bg-white shadow-sm shadow-emerald-100' : 'border-gray-200 bg-white'">
-            <div class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white"
-              :class="isUp(p) ? 'bg-emerald-500' : 'bg-gray-300'"></div>
-            <div class="text-xs font-bold" :class="isUp(p) ? 'text-gray-900' : 'text-gray-400'">{{ p.port }}</div>
-            <div class="text-[9px] mt-0.5 font-medium" :class="isUp(p) ? 'text-emerald-600' : 'text-gray-300'">
-              {{ isUp(p) ? shortSpeed(p.link) : '—' }}
-            </div>
-            <div v-if="p.rx_pps > 0 || p.tx_pps > 0" class="text-[8px] text-indigo-500 mt-0.5 font-mono">
-              {{ p.rx_pps + p.tx_pps }}/s
-            </div>
-            <!-- Hover detail -->
-            <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 bg-gray-900 text-white text-[10px] rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 w-36 pointer-events-none">
-              <div class="font-bold mb-1">Port {{ p.port }}</div>
-              <div>{{ isUp(p) ? p.link : t('ports.down') }}</div>
-              <div v-if="isUp(p)">TX: {{ p.tx_good?.toLocaleString() }}</div>
-              <div v-if="isUp(p)">RX: {{ p.rx_good?.toLocaleString() }}</div>
-              <div v-if="p.tx_bad + p.rx_bad > 0" class="text-red-300">Errors: {{ p.tx_bad + p.rx_bad }}</div>
-              <span class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></span>
-            </div>
+        <div v-if="sel" class="card-body space-y-3 text-sm">
+          <div class="flex items-baseline justify-between">
+            <span class="text-2xl font-semibold">{{ t('ports.port') }} {{ sel.port }}</span>
+            <Badge :tone="isUp(sel) ? 'ok' : 'neutral'" dot>{{ isUp(sel) ? sel.link : t('ports.down') }}</Badge>
           </div>
-          <!-- Separator -->
-          <div class="w-px bg-gray-200 mx-1"></div>
-          <!-- SFP+ ports 9-10 -->
-          <div v-for="p in portsByType.sfp" :key="p.port"
-            class="w-20 rounded-lg border-2 p-2.5 text-center transition-all duration-300 cursor-default relative group"
-            :class="isUp(p) ? 'border-violet-400 bg-white shadow-sm shadow-violet-100' : 'border-gray-200 bg-white'">
-            <div class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white"
-              :class="isUp(p) ? 'bg-violet-500' : 'bg-gray-300'"></div>
-            <div class="text-[9px] text-violet-500 font-semibold">SFP+</div>
-            <div class="text-xs font-bold" :class="isUp(p) ? 'text-gray-900' : 'text-gray-400'">{{ p.port }}</div>
-            <div class="text-[9px] mt-0.5 font-medium" :class="isUp(p) ? 'text-violet-600' : 'text-gray-300'">
-              {{ isUp(p) ? shortSpeed(p.link) : '—' }}
-            </div>
-            <div v-if="p.rx_pps > 0 || p.tx_pps > 0" class="text-[8px] text-indigo-500 mt-0.5 font-mono">
-              {{ p.rx_pps + p.tx_pps }}/s
-            </div>
-            <!-- Hover detail -->
-            <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 bg-gray-900 text-white text-[10px] rounded-lg px-3 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 w-36 pointer-events-none">
-              <div class="font-bold mb-1">Port {{ p.port }} (SFP+)</div>
-              <div>{{ isUp(p) ? p.link : t('ports.down') }}</div>
-              <div v-if="isUp(p)">TX: {{ p.tx_good?.toLocaleString() }}</div>
-              <div v-if="isUp(p)">RX: {{ p.rx_good?.toLocaleString() }}</div>
-              <span class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></span>
-            </div>
-          </div>
+          <p v-if="selSetting?.description" class="text-ink-2">{{ selSetting.description }}</p>
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+            <dt class="text-muted">{{ t('ports.status') }}</dt><dd class="text-end"><Badge :tone="selSetting?.status === 'Enabled' ? 'ok' : 'danger'">{{ selSetting?.status === 'Enabled' ? t('ports.enabled') : t('ports.disabled') }}</Badge></dd>
+            <dt class="text-muted">{{ t('ports.speed') }}</dt><dd class="text-end mono">{{ selSetting?.speed_config || '—' }}</dd>
+            <dt class="text-muted">{{ t('ports.flow') }}</dt><dd class="text-end mono">{{ selSetting?.flow_ctrl_config || '—' }}</dd>
+            <dt class="text-muted">{{ t('ports.tx') }}</dt><dd class="text-end num">{{ (sel.tx_good || 0).toLocaleString(locale) }} <span class="text-ok" v-if="sel.tx_pps">+{{ sel.tx_pps }}/s</span></dd>
+            <dt class="text-muted">{{ t('ports.rx') }}</dt><dd class="text-end num">{{ (sel.rx_good || 0).toLocaleString(locale) }} <span class="text-ok" v-if="sel.rx_pps">+{{ sel.rx_pps }}/s</span></dd>
+            <dt class="text-muted">{{ t('ports.errors') }}</dt><dd class="text-end num" :class="(sel.tx_bad || 0) + (sel.rx_bad || 0) > 0 ? 'text-danger' : ''">{{ ((sel.tx_bad || 0) + (sel.rx_bad || 0)).toLocaleString(locale) }}</dd>
+          </dl>
+          <Btn tag="router-link" :to="`/switch/${switchId}/ports`" size="sm" icon="ports" block>{{ t('swdash.openPorts') }}</Btn>
         </div>
+        <EmptyState v-else compact icon="ports" :title="t('swdash.selectPort')" />
       </div>
     </div>
 
+    <!-- Recent changes -->
+    <div class="card">
+      <div class="card-head">
+        <div><h3 class="h2">{{ t('swdash.recentChanges') }}</h3><p class="hint">{{ t('sys.changesDesc') }}</p></div>
+        <Btn tag="router-link" :to="`/switch/${switchId}/system#changes`" variant="link" size="sm">{{ t('ui.viewAll') }}</Btn>
+      </div>
+      <ul v-if="changes.length" class="divide-y divide-line">
+        <li v-for="c in changes" :key="c.id" class="px-5 py-2.5 flex items-center gap-3 text-sm">
+          <span class="w-7 h-7 rounded-md bg-surface-3 text-muted flex items-center justify-center shrink-0"><Icon :name="changeIcon(c.action)" :size="15" /></span>
+          <span class="flex-1 min-w-0 truncate"><span class="text-ink">{{ t('changes.' + c.action) }}</span><span class="text-muted"> · {{ c.username || '?' }}</span></span>
+          <span class="text-xs text-muted shrink-0 num">{{ fmtDate(c.created_at) }}</span>
+        </li>
+      </ul>
+      <EmptyState v-else compact icon="history" :title="t('swdash.noChanges')" />
+    </div>
   </div>
 </template>
 
@@ -150,48 +68,53 @@ import { ref, computed, onMounted } from 'vue'
 import { useSSE } from '../composables/useSSE.js'
 import { api } from '../composables/useApi.js'
 import { useI18n } from '../i18n/index.js'
+import { useSwitchesStore } from '../stores/switches.js'
+import Stat from '../components/ui/Stat.vue'
+import Badge from '../components/ui/Badge.vue'
+import Btn from '../components/ui/Btn.vue'
+import Icon from '../components/ui/Icon.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import Faceplate from '../components/Faceplate.vue'
 
-const { t } = useI18n()
 const props = defineProps({ switchId: Number })
+const { t, locale } = useI18n()
+const sw = useSwitchesStore()
 const sse = useSSE(props.switchId)
 const status = ref({})
-const model = ref('')
-const firmware = ref('')
 const initialStats = ref([])
+const initialSettings = ref([])
+const changes = ref([])
+const selected = ref(null)
 
-const temp = computed(() => sse.data.value?.temperature || status.value?.temperature || '?')
+const temp = computed(() => sse.data.value?.temperature || status.value?.temperature || '—')
 const ports = computed(() => sse.data.value?.ports || initialStats.value)
-const portsUp = computed(() => ports.value.filter(p => isUp(p)).length)
+const settings = computed(() => sse.data.value?.port_settings || initialSettings.value)
+const model = computed(() => status.value?.modle || sw.current?.model || '')
+const firmware = computed(() => status.value?.fw_ver || sw.current?.firmware || '')
+const portsUp = computed(() => ports.value.filter(isUp).length)
 const totalTx = computed(() => ports.value.reduce((s, p) => s + (p.tx_good || 0), 0))
 const totalRx = computed(() => ports.value.reduce((s, p) => s + (p.rx_good || 0), 0))
+const totalErrors = computed(() => ports.value.reduce((s, p) => s + (p.tx_bad || 0) + (p.rx_bad || 0), 0))
+const sel = computed(() => ports.value.find(p => p.port === selected.value) || (selected.value ? { port: selected.value, link: '' } : null))
+const selSetting = computed(() => settings.value.find(p => p.port === selected.value))
 
-const portsByType = computed(() => ({
-  rj45: ports.value.filter(p => p.port < 9),
-  sfp: ports.value.filter(p => p.port >= 9),
-}))
-
-function isUp(p) { return p.link && p.link !== 'Link Down' }
-
-function shortSpeed(link) {
-  if (!link) return ''
-  return link.replace('MbpsFull', 'M').replace('MbpsHalf', 'M/H').replace('GbpsFull', 'G')
-}
-
-function formatPkts(n) {
+function isUp(p) { return !!p.link && p.link !== 'Link Down' }
+function fmt(n) {
   if (!n) return '0'
-  if (n >= 1000000000) return (n / 1000000000).toFixed(1) + 'G'
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
-  return n.toString()
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'G'
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'
+  return String(n)
 }
+function fmtDate(d) { return d ? new Date(d + 'Z').toLocaleString(locale.value, { dateStyle: 'short', timeStyle: 'short' }) : '' }
+const ICONS = { ports: 'ports', vlans: 'vlans', lag: 'lag', mirror: 'mirror', loop: 'loop', stp: 'shield', storm: 'bolt', igmp: 'activity', eee: 'bolt', time: 'clock', sntp: 'clock', network: 'network', reboot: 'power', static_mac_add: 'mac', static_mac_delete: 'mac', port_mapping: 'ports' }
+function changeIcon(a) { return ICONS[a] || 'history' }
 
 onMounted(async () => {
-  sse.connect()  // first: live stats must not depend on the status call succeeding
-  try {
-    status.value = await api(`/api/switches/${props.switchId}/status`)
-    model.value = status.value?.modle || status.value?.des || ''
-    firmware.value = status.value?.fw_ver || ''
-  } catch (e) {}
-  try { initialStats.value = await api(`/api/switches/${props.switchId}/ports/stats`) } catch(e) {}
+  sse.connect()
+  try { status.value = await api(`/api/switches/${props.switchId}/status`) } catch (e) {}
+  try { initialStats.value = await api(`/api/switches/${props.switchId}/ports/stats`) } catch (e) {}
+  try { initialSettings.value = await api(`/api/switches/${props.switchId}/ports`) } catch (e) {}
+  try { changes.value = await api(`/api/switches/${props.switchId}/changes?limit=6`) } catch (e) {}
 })
 </script>

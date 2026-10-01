@@ -1,127 +1,165 @@
 <template>
-  <div class="max-w-6xl mx-auto p-6">
-    <div class="flex items-center justify-between mb-8">
-      <h1 class="text-2xl font-bold text-gray-900">{{ t('dash.title') }}</h1>
-      <div class="flex gap-2">
-        <router-link to="/users" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          {{ t('nav.users') }}
+  <div class="space-y-6">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h2 class="text-xl font-semibold tracking-tight">{{ t('dash.title') }}</h2>
+        <p class="hint mt-0.5">{{ t('dash.subtitle') }}</p>
+      </div>
+      <Btn v-if="auth.isAdmin" variant="primary" icon="plus" @click="openAdd">{{ t('dash.addSwitch') }}</Btn>
+    </div>
+
+    <div v-if="sw.list.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div v-for="s in sw.list" :key="s.id" class="card flex flex-col group hover:border-accent/50 transition-colors">
+        <router-link :to="`/switch/${s.id}`" class="p-5 flex-1 block focus-visible:outline-accent rounded-t-[var(--radius-card)]">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h3 class="font-semibold text-ink truncate group-hover:text-accent transition-colors">{{ s.name }}</h3>
+              <p class="mono text-muted mt-0.5">{{ s.ip }}</p>
+            </div>
+            <span class="w-10 h-10 rounded-lg bg-accent-soft text-accent flex items-center justify-center shrink-0"><Icon name="switch" :size="20" /></span>
+          </div>
+          <div class="mt-4 flex items-center gap-2 flex-wrap">
+            <Badge v-if="ping[s.id]" :tone="ping[s.id].online ? 'ok' : 'danger'" dot>{{ ping[s.id].online ? t('sw.online') : t('sw.offline') }}</Badge>
+            <Badge v-else tone="neutral" dot>{{ t('common.loading') }}</Badge>
+            <Badge v-if="ping[s.id]?.online && ping[s.id].temperature" tone="neutral">{{ ping[s.id].temperature }}°C</Badge>
+            <Badge v-if="s.swap_sfp_9_10" tone="sfp" :title="t('sys.portMapSwap')">SFP+ 9⇄10</Badge>
+          </div>
+          <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+            <dt class="text-muted">{{ t('swdash.model') }}</dt><dd class="text-ink-2 truncate text-end">{{ s.model || '—' }}</dd>
+            <dt class="text-muted">{{ t('dash.firmware') }}</dt><dd class="text-ink-2 mono text-end">{{ s.firmware || '—' }}</dd>
+            <dt class="text-muted">MAC</dt><dd class="text-ink-2 mono text-end truncate">{{ s.mac_address || '—' }}</dd>
+          </dl>
         </router-link>
-        <button @click="showAdd = true"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          {{ t('dash.addSwitch') }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Switch cards -->
-    <div v-if="switches.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <router-link v-for="sw in switches" :key="sw.id" :to="`/switch/${sw.id}`"
-        class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg hover:border-indigo-300 transition group">
-        <div class="flex items-start justify-between">
-          <div>
-            <h3 class="font-semibold text-gray-900 group-hover:text-indigo-600 transition">{{ sw.name }}</h3>
-            <p class="text-sm text-gray-500 mt-1">{{ sw.ip }}</p>
-          </div>
-          <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
-            </svg>
+        <div class="px-3 py-2 border-t border-line flex items-center justify-between">
+          <Btn tag="router-link" :to="`/switch/${s.id}`" variant="link" size="sm" icon="chevron-right">{{ t('dash.open') }}</Btn>
+          <div v-if="auth.isAdmin" class="flex gap-1">
+            <Btn variant="ghost" size="sm" icon="pencil" icon-only :aria-label="t('common.edit')" @click="openEdit(s)" />
+            <Btn variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="remove(s)" />
           </div>
         </div>
-        <div class="mt-4 flex gap-3 text-xs text-gray-400">
-          <span>{{ sw.model }}</span>
-          <span>FW {{ sw.firmware }}</span>
+      </div>
+    </div>
+
+    <div v-else-if="sw.loaded" class="card">
+      <EmptyState icon="switch" :title="t('dash.noSwitches')" :text="t('dash.addFirstHint')">
+        <Btn v-if="auth.isAdmin" variant="primary" icon="plus" @click="openAdd">{{ t('dash.addFirst') }}</Btn>
+      </EmptyState>
+    </div>
+
+    <!-- Add / edit modal -->
+    <Modal :open="modal" :title="editing ? t('dash.editSwitch') : t('dash.addSwitch')" @close="modal = false">
+      <form @submit.prevent="save" class="space-y-3" novalidate id="switch-form">
+        <div>
+          <label class="label">{{ t('dash.name') }}</label>
+          <input v-model.trim="form.name" required class="input" placeholder="Core switch" autofocus />
         </div>
-      </router-link>
-    </div>
-
-    <div v-else class="text-center py-20">
-      <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-      </div>
-      <p class="text-gray-500">{{ t('dash.noSwitches') }}</p>
-      <button @click="showAdd = true" class="mt-3 text-indigo-600 text-sm font-medium hover:underline">{{ t('dash.addFirst') }}</button>
-    </div>
-
-    <!-- Add modal -->
-    <div v-if="showAdd" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAdd = false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">{{ t('dash.addSwitch') }}</h2>
-        <form @submit.prevent="doAdd" class="space-y-3">
+        <div>
+          <label class="label">{{ t('dash.ip') }}</label>
+          <input v-model.trim="form.ip" required class="input mono" placeholder="192.168.1.10" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.name') }}</label>
-            <input v-model="form.name" required placeholder="e.g. SW-Bureau"
-              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
+            <label class="label">{{ t('dash.username') }}</label>
+            <input v-model.trim="form.username" required class="input" autocomplete="off" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.ip') }}</label>
-            <input v-model="form.ip" required placeholder="10.1.10.40"
-              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
+            <label class="label">{{ t('dash.password') }}</label>
+            <input v-model="form.password" type="password" :required="!editing" class="input" autocomplete="new-password" :placeholder="editing ? t('dash.passwordKeep') : ''" />
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.username') }}</label>
-              <input v-model="form.username" required
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('dash.password') }}</label>
-              <input v-model="form.password" type="password" required
-                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
-            </div>
-          </div>
-          <label class="flex items-start gap-2 text-sm text-gray-600 cursor-pointer pt-1">
-            <input type="checkbox" v-model="form.swap_sfp_9_10" class="mt-0.5 rounded border-gray-300 text-indigo-600">
-            <span>{{ t('dash.swapSfp') }}<span class="block text-xs text-gray-400">{{ t('dash.swapSfpHint') }}</span></span>
-          </label>
-          <p v-if="addError" class="text-red-500 text-sm">{{ addError }}</p>
-          <div class="flex gap-3 pt-2">
-            <button type="button" @click="showAdd = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('dash.cancel') }}</button>
-            <button type="submit" :disabled="adding" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-              {{ adding ? t('dash.testing') : t('dash.add') }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <label v-if="!editing" class="flex items-start gap-2.5 text-sm cursor-pointer pt-1">
+          <input type="checkbox" v-model="form.swap_sfp_9_10" class="mt-1 accent-accent">
+          <span><span class="text-ink-2">{{ t('dash.swapSfp') }}</span><span class="block hint">{{ t('dash.swapSfpHint') }}</span></span>
+        </label>
+        <p v-if="formError" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ formError }}</p>
+      </form>
+      <template #footer>
+        <Btn @click="modal = false">{{ t('common.cancel') }}</Btn>
+        <Btn variant="primary" type="submit" form="switch-form" :loading="saving">{{ saving ? t('dash.testing') : (editing ? t('common.save') : t('dash.add')) }}</Btn>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { api } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
+import Btn from '../components/ui/Btn.vue'
+import Badge from '../components/ui/Badge.vue'
+import Icon from '../components/ui/Icon.vue'
+import Modal from '../components/ui/Modal.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
+const auth = useAuthStore()
+const sw = useSwitchesStore()
 
-const switches = ref([])
-const showAdd = ref(false)
-const adding = ref(false)
-const addError = ref('')
-const emptyForm = () => ({ name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
-const form = ref(emptyForm())
+const ping = ref({})
+const modal = ref(false)
+const editing = ref(null)
+const saving = ref(false)
+const formError = ref('')
+const form = reactive({ name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
 
 async function load() {
-  switches.value = await api('/api/switches')
+  try {
+    await sw.load()
+    await Promise.all(sw.list.map(async (s) => {
+      try { ping.value[s.id] = await api(`/api/switches/${s.id}/ping`) } catch (e) { ping.value[s.id] = { online: false } }
+    }))
+  } catch (e) { toast.error(e.message) }
 }
 
-async function doAdd() {
-  adding.value = true
-  addError.value = ''
+function openAdd() {
+  editing.value = null
+  Object.assign(form, { name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
+  formError.value = ''
+  modal.value = true
+}
+function openEdit(s) {
+  editing.value = s
+  Object.assign(form, { name: s.name, ip: s.ip, username: s.username || 'admin', password: '', swap_sfp_9_10: !!s.swap_sfp_9_10 })
+  formError.value = ''
+  modal.value = true
+}
+
+async function save() {
+  saving.value = true
+  formError.value = ''
   try {
-    await api('/api/switches', { method: 'POST', body: JSON.stringify(form.value) })
-    showAdd.value = false
-    form.value = emptyForm()
+    if (editing.value) {
+      const body = { name: form.name, ip: form.ip, username: form.username }
+      if (form.password) body.password = form.password
+      const updated = await api(`/api/switches/${editing.value.id}`, { method: 'PUT', body: JSON.stringify(body) })
+      sw.patch(editing.value.id, updated)
+      toast.success(t('dash.updated'))
+    } else {
+      await api('/api/switches', { method: 'POST', body: JSON.stringify(form) })
+      toast.success(t('dash.added'))
+    }
+    modal.value = false
     await load()
   } catch (e) {
-    addError.value = e.message
+    formError.value = e.message
   } finally {
-    adding.value = false
+    saving.value = false
   }
+}
+
+async function remove(s) {
+  if (!await confirm({ title: t('common.remove'), message: t('dash.deleteConfirm', { name: s.name }), danger: true, confirmText: t('common.remove') })) return
+  try {
+    await api(`/api/switches/${s.id}`, { method: 'DELETE' })
+    toast.success(t('dash.deleted'))
+    await load()
+  } catch (e) { toast.error(e.message) }
 }
 
 onMounted(load)

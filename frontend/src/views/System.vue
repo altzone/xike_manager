@@ -1,501 +1,418 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center gap-2"><h1 class="text-xl font-bold text-gray-900">{{ t('sys.title') }}</h1><Tip :title="t('sys.title')">{{ t('sys.tip') }}</Tip></div>
-    <div v-if="loadError" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{{ t('common.failedLoad') }} {{ loadError }}</div>
+  <div class="space-y-5">
+    <p class="hint max-w-3xl">{{ t('sys.tip') }}</p>
 
-    <template v-if="loaded">
-      <!-- System Info + Network -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{{ t('sys.system') }}</h3>
-          <div v-for="(v, k) in sysInfo" :key="k" class="flex justify-between items-center text-sm py-1">
-            <span class="text-gray-500">{{ k }}</span><span class="font-medium text-gray-900">{{ v }}</span>
-          </div>
-        </div>
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <span class="flex items-center gap-2 mb-3"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.mgmtIface') }}</h3><Tip :title="t('sys.mgmtIface')">{{ t('sys.mgmtTip') }}</Tip></span>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-500">{{ t('sys.dhcp') }}</span>
-              <button @click="net.dhcp = !net.dhcp" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="net.dhcp ? 'bg-emerald-500' : 'bg-gray-300'">
-                <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="net.dhcp ? 'translate-x-5' : ''"></span>
-              </button>
-            </div>
-            <template v-if="!net.dhcp">
-              <div><label class="text-xs text-gray-500">{{ t('sys.ipAddress') }}</label><input v-model="net.ip" class="inp w-full"/></div>
-              <div><label class="text-xs text-gray-500">{{ t('sys.netmask') }}</label><input v-model="net.netmask" class="inp w-full"/></div>
-              <div><label class="text-xs text-gray-500">{{ t('sys.gateway') }}</label><input v-model="net.gateway" class="inp w-full"/></div>
-            </template>
-            <p v-else class="text-xs text-gray-400">{{ t('sys.dhcpAuto') }}</p>
-            <button @click="applyNetwork" class="w-full px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition">
-              {{ net.dhcp ? t('sys.applyDhcp') : t('sys.applyStatic') }}
-            </button>
-            <p class="text-[10px] text-red-400">{{ t('sys.ipWarning') }}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- SFP+ port numbering: the 9/10 order differs between units (issue #3) -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <!-- Device + network -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <Section :title="t('sys.device')" icon="chip" :state="st.status">
+        <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+          <dt class="text-muted">{{ t('swdash.model') }}</dt><dd class="text-ink text-end">{{ info.modle || '—' }}</dd>
+          <dt class="text-muted">{{ t('dash.firmware') }}</dt><dd class="text-ink text-end mono">{{ info.fw_ver || '—' }}</dd>
+          <dt class="text-muted">{{ t('sys.hardware') }}</dt><dd class="text-ink text-end mono">{{ info.hw_ver || '—' }}</dd>
+          <dt class="text-muted">{{ t('sys.macAddress') }}</dt><dd class="text-ink text-end mono">{{ info.sys_macaddr || '—' }}</dd>
+          <dt class="text-muted">{{ t('swdash.temperature') }}</dt><dd class="text-ink text-end num">{{ info.temperature ? info.temperature + ' °C' : '—' }}</dd>
+        </dl>
+        <div class="divider my-4"></div>
         <div class="flex items-start justify-between gap-4">
           <div>
-            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.portMap') }}</h3><Tip :title="t('sys.portMap')">{{ t('sys.portMapTip') }}</Tip></span>
-            <p class="text-xs text-gray-400 mt-1">{{ t('sys.portMapDesc') }}</p>
-            <p class="text-xs text-gray-600 mt-2 font-mono">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
+            <p class="text-sm font-medium text-ink inline-flex items-center gap-1.5">{{ t('sys.portMap') }} <Tip :title="t('sys.portMap')" :text="t('sys.portMapTip')" /></p>
+            <p class="hint mt-0.5">{{ t('sys.portMapDesc') }}</p>
+            <p class="mono text-ink-2 mt-1.5">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
+            <label class="flex items-center gap-2 hint mt-2 cursor-pointer"><input type="checkbox" v-model="moveDescriptions" class="accent-accent"> {{ t('sys.portMapMoveDesc') }}</label>
           </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <span class="text-sm text-gray-600">{{ t('sys.portMapSwap') }}</span>
-            <button @click="togglePortMap" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="swapSfp ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="swapSfp ? 'translate-x-5' : ''"></span>
-            </button>
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            <Toggle :model-value="swapSfp" :disabled="!auth.isAdmin" :label="t('sys.portMapSwap')" @update:model-value="togglePortMap" />
+            <span class="text-[11px] text-muted text-end max-w-[140px]">{{ t('sys.portMapSwap') }}</span>
           </div>
         </div>
-        <label class="flex items-center gap-2 text-xs text-gray-500 mt-3 cursor-pointer">
-          <input type="checkbox" v-model="moveDescriptions" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.portMapMoveDesc') }}
-        </label>
-      </div>
+      </Section>
 
-      <!-- Time -->
-      <div v-if="timeSupported" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center justify-between mb-4">
-          <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.clock') }}</h3><Tip :title="t('sys.clock')">{{ t('sys.clockTip') }}</Tip></span>
-          <div class="flex items-center gap-3 text-sm">
-            <span class="text-gray-500">{{ t('sys.current') }}</span>
-            <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.timeVal || '--:--:--' }}</span>
-            <span class="font-mono font-medium text-gray-900 bg-gray-50 px-3 py-1 rounded-lg">{{ timeData.dateVal || '--/--/----' }}</span>
-            <span class="text-xs text-gray-400">{{ timeData.timezoneOffsetVal || '' }}</span>
+      <Section :title="t('sys.mgmtIface')" icon="network" :state="st.status" :tip="t('sys.mgmtTip')">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-ink-2">{{ t('sys.dhcp') }}</span>
+            <Toggle v-model="net.dhcp" :disabled="!auth.isAdmin" :label="t('sys.dhcp')" />
           </div>
-        </div>
-        <!-- Mode selector -->
-        <div class="flex gap-2 mb-4">
-          <button @click="timeMode = 'sntp'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
-            :class="timeMode === 'sntp' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-            {{ t('sys.sntpAuto') }}
-          </button>
-          <button @click="timeMode = 'manual'" class="px-4 py-2 rounded-lg text-sm font-medium border-2 transition"
-            :class="timeMode === 'manual' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'">
-            {{ t('sys.manual') }}
-          </button>
-        </div>
-        <!-- SNTP mode -->
-        <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.ntpServer') }}</label>
-            <input v-model="sntp.server" class="inp w-full" placeholder="pool.ntp.org"/>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.pollInterval') }}</label>
-            <input v-model.number="sntp.poll" type="number" min="30" max="99999" class="inp w-full" placeholder="64"/>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.timezone') }}</label>
-            <select v-model="setTime.timezone" @change="applyTimezone" class="inp w-full">
-              <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
-              <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
-            </select>
-          </div>
-          <div class="flex items-end gap-2">
-            <button @click="sntp.enabled = true; applySntp(); applyTimezone()" class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</button>
-            <button @click="checkSntp" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition">{{ t('sys.check') }}</button>
-          </div>
-          <div v-if="sntpStatus" class="col-span-3 text-xs flex items-center gap-2 p-2 rounded-lg" :class="sntpStatus.synced ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">
-            <span class="w-2 h-2 rounded-full" :class="sntpStatus.synced ? 'bg-emerald-500' : 'bg-amber-500'"></span>
-            <span v-if="sntpStatus.synced">{{ t('sys.sntpSynced') }} &mdash; Server: {{ sntpStatus.server_ip }} &mdash; Time: {{ sntpStatus.time }} {{ sntpStatus.date }}</span>
-            <span v-else>{{ t('sys.sntpNotSynced') }} &mdash; Check server IP: {{ sntpStatus.server_ip }}</span>
-          </div>
-          <p v-if="sntpResolved" class="col-span-3 text-xs text-gray-500">
-            {{ t('sys.resolved') }} <span class="font-mono font-medium">{{ sntpResolved }}</span>
-          </p>
-        </div>
-        <!-- Manual mode -->
-        <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.time') }}</label>
-            <input v-model="setTime.time" class="inp w-full" placeholder="14:30:00"/>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.date') }}</label>
-            <input v-model="setTime.date" class="inp w-full" placeholder="09/04/2026"/>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.timezone') }}</label>
-            <select v-model="setTime.timezone" class="inp w-full">
-              <option value="-05:00">UTC -05 (EST)</option><option value="+00:00">UTC +00 (GMT)</option>
-              <option value="+01:00">UTC +01 (CET)</option><option value="+02:00">UTC +02 (CEST)</option><option value="+08:00">UTC +08</option>
-            </select>
-          </div>
-          <div class="flex items-end">
-            <button @click="sntp.enabled = false; applySntp(); applyTime()" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.setTime') }}</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feature toggles -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- STP -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.stp') }}</h3><Tip :title="t('sys.stp')">{{ t('sys.stpTip') }}</Tip></span>
-            <button @click="stp.enabled = !stp.enabled; applyStp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="stp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="stp.enabled ? 'translate-x-5' : ''"></span>
-            </button>
-          </div>
-          <p class="text-xs text-gray-400">{{ t('sys.stpTip') }}</p>
-          <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" class="inp w-full mt-2">
-            <option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option>
-          </select>
-        </div>
-        <!-- Storm -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.storm') }}</h3><Tip :title="t('sys.storm')">{{ t('sys.stormTip') }}</Tip></span>
-            <button @click="storm.enabled = !storm.enabled; applyStorm()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="storm.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="storm.enabled ? 'translate-x-5' : ''"></span>
-            </button>
-          </div>
-          <p class="text-xs text-gray-400">{{ t('sys.stormTip') }}</p>
-          <div v-if="storm.enabled" class="mt-2">
-            <label class="text-xs text-gray-500">{{ t('sys.stormRate') }}</label>
-            <input v-model.number="storm.rate" type="number" min="1" max="1000" @blur="applyStorm" class="inp w-full"/>
-          </div>
-        </div>
-        <!-- IGMP -->
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.igmp') }}</h3><Tip :title="t('sys.igmp')">{{ t('sys.igmpTip') }}</Tip></span>
-            <button @click="igmp.enabled = !igmp.enabled; applyIgmp()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="igmp.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="igmp.enabled ? 'translate-x-5' : ''"></span>
-            </button>
-          </div>
-          <p class="text-xs text-gray-400">{{ t('sys.igmpTip') }}</p>
-          <div v-if="igmp.enabled" class="mt-2 space-y-1">
-            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.fastLeave') }}
-            </label>
-            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input type="checkbox" v-model="igmp.querier" @change="applyIgmp" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.querier') }}
-            </label>
-          </div>
-        </div>
-        <!-- EEE -->
-        <div v-if="eeeSupported" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-2">
-            <span class="flex items-center gap-1"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.eee') }}</h3><Tip :title="t('sys.eee')">{{ t('sys.eeeTip') }}</Tip></span>
-            <button @click="eee.enabled = !eee.enabled; applyEee()" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="eee.enabled ? 'bg-emerald-500' : 'bg-gray-300'">
-              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="eee.enabled ? 'translate-x-5' : ''"></span>
-            </button>
-          </div>
-          <p class="text-xs text-gray-400">{{ t('sys.eeeTip') }}</p>
-        </div>
-      </div>
-
-      <!-- Port Mirror - redesigned -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center gap-2 mb-1"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.mirror') }}</h3><Tip :title="t('sys.mirror')">{{ t('sys.mirrorTip') }}</Tip></div>
-        <p class="text-xs text-gray-400 mb-4">{{ t('sys.mirrorTip') }}</p>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <!-- Step 1: Destination -->
-          <div>
-            <div class="flex items-center gap-2 mb-2">
-              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">1</span>
-              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorDest') }}</span>
+          <template v-if="!net.dhcp">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div><label class="label">{{ t('sys.ipAddress') }}</label><input v-model.trim="net.ip" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label">{{ t('sys.netmask') }}</label><input v-model.trim="net.netmask" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label">{{ t('sys.gateway') }}</label><input v-model.trim="net.gateway" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
             </div>
-            <select v-model.number="mirror.monitoring_port" class="inp w-full">
+          </template>
+          <p v-else class="hint">{{ t('sys.dhcpAuto') }}</p>
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-[11px] text-danger-ink flex items-center gap-1"><Icon name="warning" :size="13" />{{ t('sys.ipWarning') }}</p>
+            <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.net" @click="applyNetwork">{{ net.dhcp ? t('sys.applyDhcp') : t('sys.applyStatic') }}</Btn>
+          </div>
+        </div>
+      </Section>
+    </div>
+
+    <!-- Clock -->
+    <Section :title="t('sys.clock')" icon="clock" :state="st.time" :tip="t('sys.clockTip')" :unsupported="st.time === 'unsupported'">
+      <template #actions>
+        <span class="num text-sm text-ink bg-surface-2 border border-line rounded-lg px-2.5 py-1">{{ timeData.timeVal || '--:--:--' }}</span>
+        <span class="num text-sm text-ink bg-surface-2 border border-line rounded-lg px-2.5 py-1">{{ timeData.dateVal || '--/--/----' }}</span>
+        <Badge tone="neutral">UTC {{ timeData.timezoneOffsetVal || '' }}</Badge>
+      </template>
+      <div class="flex gap-2 mb-4">
+        <button v-for="m in ['sntp', 'manual']" :key="m" type="button" @click="timeMode = m" class="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition" :class="timeMode === m ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">{{ m === 'sntp' ? t('sys.sntpAuto') : t('sys.manual') }}</button>
+      </div>
+      <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div><label class="label">{{ t('sys.ntpServer') }}</label><input v-model.trim="sntp.server" class="input input-sm mono" placeholder="pool.ntp.org" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label">{{ t('sys.pollInterval') }}</label><input v-model.number="sntp.poll" type="number" min="16" max="99999" class="input input-sm num" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label">{{ t('sys.timezone') }}</label><select v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in TZ" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <div class="flex gap-2">
+          <Btn v-if="auth.isAdmin" size="sm" variant="primary" class="flex-1" :loading="busy.sntp" @click="applySntp(true)">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</Btn>
+          <Btn size="sm" @click="checkSntp">{{ t('sys.check') }}</Btn>
+        </div>
+        <div v-if="sntpStatus" class="md:col-span-4 text-xs flex items-center gap-2 px-3 py-2 rounded-lg" :class="sntpStatus.synced ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn-ink'">
+          <span class="dot" :class="sntpStatus.synced ? 'bg-ok' : 'bg-warn'"></span>
+          <span>{{ sntpStatus.synced ? t('sys.sntpSynced') : t('sys.sntpNotSynced') }} · {{ sntpStatus.server_ip || '—' }} · {{ sntpStatus.time }} {{ sntpStatus.date }}</span>
+        </div>
+        <p v-if="sntpResolved" class="md:col-span-4 hint">{{ t('sys.resolved') }} <span class="mono text-ink">{{ sntpResolved }}</span></p>
+      </div>
+      <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div><label class="label">{{ t('sys.time') }}</label><input v-model.trim="tz.time" class="input input-sm mono" placeholder="14:30:00" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label">{{ t('sys.date') }}</label><input v-model.trim="tz.date" class="input input-sm mono" placeholder="01/10/2026" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label">{{ t('sys.timezone') }}</label><select v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in TZ" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.time" @click="applyTime">{{ t('sys.setTime') }}</Btn>
+        <label class="md:col-span-4 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="tz.daylight" class="accent-accent" :disabled="!auth.isAdmin"> {{ t('sys.timezoneDst') }}</label>
+      </div>
+    </Section>
+
+    <!-- Features -->
+    <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5">
+      <Section :title="t('sys.stp')" icon="shield" :state="st.stp" :tip="t('sys.stpTip')" compact>
+        <template #actions><Toggle v-model="stp.enabled" :disabled="!auth.isAdmin" :label="t('sys.stp')" @update:model-value="applyStp" /></template>
+        <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!auth.isAdmin" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
+        <p v-else class="hint">{{ t('common.off') }}</p>
+      </Section>
+      <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="t('sys.stormTip')" compact>
+        <template #actions><Toggle v-model="storm.enabled" :disabled="!auth.isAdmin" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
+        <div v-if="storm.enabled"><label class="label">{{ t('sys.stormRate') }}</label><input v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!auth.isAdmin" class="input input-sm num" /></div>
+        <p v-else class="hint">{{ t('common.off') }}</p>
+      </Section>
+      <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="t('sys.igmpTip')" compact>
+        <template #actions><Toggle v-model="igmp.enabled" :disabled="!auth.isAdmin" :label="t('sys.igmp')" @update:model-value="applyIgmp" /></template>
+        <div v-if="igmp.enabled" class="space-y-1.5">
+          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.fastLeave') }}</label>
+          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.querier" @change="applyIgmp" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.querier') }}</label>
+        </div>
+        <p v-else class="hint">{{ t('common.off') }}</p>
+      </Section>
+      <Section :title="t('sys.eee')" icon="bolt" :state="st.eee" :tip="t('sys.eeeTip')" :unsupported="st.eee === 'unsupported'" compact>
+        <template #actions><Toggle v-if="st.eee === 'ok'" v-model="eee.enabled" :disabled="!auth.isAdmin" :label="t('sys.eee')" @update:model-value="applyEee" /></template>
+        <p class="hint">{{ eee.enabled ? t('common.on') : t('common.off') }}</p>
+      </Section>
+    </div>
+
+    <!-- Mirror + loop -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <Section :title="t('sys.mirror')" icon="mirror" :state="st.mirror" :tip="t('sys.mirrorTip')">
+        <template #actions><Badge :tone="mirror.enabled ? 'ok' : 'neutral'" dot>{{ mirror.enabled ? t('common.on') : t('sys.mirrorDisabled') }}</Badge></template>
+        <div class="space-y-4">
+          <div>
+            <label class="label">1 · {{ t('sys.mirrorDest') }}</label>
+            <select v-model.number="mirror.monitoring_port" :disabled="!auth.isAdmin" class="select select-sm">
               <option :value="0">{{ t('sys.mirrorDisabled') }}</option>
-              <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }} {{ p >= 9 ? '(SFP+)' : '' }}</option>
-            </select>
-            <p class="text-[10px] text-gray-400 mt-1">{{ t('sys.mirrorDestDesc') }}</p>
-          </div>
-          <!-- Step 2: Sources -->
-          <div>
-            <div class="flex items-center gap-2 mb-2">
-              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">2</span>
-              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorSrc') }}</span>
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-              <button v-for="p in 10" :key="p" v-show="p !== mirror.monitoring_port" @click="toggleMirrorPort(p)"
-                class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition"
-                :class="mirror.mirrored_ports.includes(p) ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'">
-                P{{ p }}
-              </button>
-            </div>
-            <p class="text-[10px] text-gray-400 mt-1">{{ t('sys.mirrorSrcDesc') }}</p>
-          </div>
-          <!-- Step 3: Direction -->
-          <div>
-            <div class="flex items-center gap-2 mb-2">
-              <span class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold flex items-center justify-center">3</span>
-              <span class="text-sm font-medium text-gray-700">{{ t('sys.mirrorDir') }}</span>
-            </div>
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.ingress === '1' ? 'text-indigo-700' : 'text-gray-400'">
-                <input type="checkbox" :checked="mirror.ingress === '1'" @change="mirror.ingress = mirror.ingress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
-                {{ t('sys.mirrorIngress') }}
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer" :class="mirror.egress === '1' ? 'text-indigo-700' : 'text-gray-400'">
-                <input type="checkbox" :checked="mirror.egress === '1'" @change="mirror.egress = mirror.egress === '1' ? '0' : '1'" class="rounded border-gray-300 text-indigo-600">
-                {{ t('sys.mirrorEgress') }}
-              </label>
-            </div>
-            <button @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.mirrorApply') }}</button>
-          </div>
-        </div>
-        <!-- Visual summary -->
-        <div v-if="mirror.monitoring_port > 0 && mirror.mirrored_ports.length" class="mt-4 pt-4 border-t border-gray-100">
-          <div class="flex items-center gap-3 text-sm text-gray-500">
-            <div class="flex gap-1">
-              <span v-for="p in mirror.mirrored_ports" :key="p" class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded text-xs font-medium">P{{ p }}</span>
-            </div>
-            <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-            <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">P{{ mirror.monitoring_port }}</span>
-            <span class="text-xs text-gray-400">({{ mirror.ingress === '1' ? 'in' : '' }}{{ mirror.ingress === '1' && mirror.egress === '1' ? '+' : '' }}{{ mirror.egress === '1' ? 'out' : '' }})</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Loop Detection -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center gap-2 mb-2"><h3 class="text-sm font-semibold text-gray-700">{{ t('sys.loop') }}</h3><Tip :title="t('sys.loop')">{{ t('sys.loopTip') }}</Tip></div>
-        <p class="text-xs text-gray-400 mb-3">{{ t('sys.loopDesc') }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button v-for="lp in loop" :key="lp.port" @click="toggleLoop(lp.port)"
-            class="px-3 py-2 rounded-lg text-xs font-medium border transition-all"
-            :class="lp.enabled ? (lp.violation ? 'bg-red-50 border-red-300 text-red-700' : 'bg-emerald-50 border-emerald-300 text-emerald-700') : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'">
-            {{ t('mac.port') }} {{ lp.port }} <span v-if="lp.violation" class="ml-1 animate-pulse">LOOP!</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Static MAC - redesigned -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">{{ t('sys.staticMac') }}</h3>
-        <p class="text-xs text-gray-400 mb-4">{{ t('sys.staticMacTip') }}</p>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macAddress') }}</label>
-            <input v-model="staticMac.mac" class="inp w-full" placeholder="AA:BB:CC:DD:EE:FF"/>
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macPort') }}</label>
-            <select v-model.number="staticMac.port" class="inp w-full">
               <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
             </select>
+            <p class="hint mt-1">{{ t('sys.mirrorDestDesc') }}</p>
           </div>
           <div>
-            <label class="text-xs font-medium text-gray-500 mb-1 block">{{ t('sys.macVlanGroup') }}</label>
-            <input v-model.number="staticMac.fid" type="number" min="0" max="63" class="inp w-full" placeholder="0"/>
-            <p class="text-[10px] text-gray-400 mt-0.5">{{ t('sys.macVlanGroupDesc') }}</p>
-          </div>
-          <div class="flex items-end">
-            <button @click="addStaticMac" class="w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.macAdd') }}</button>
-          </div>
-        </div>
-        <div v-if="staticMacs.length" class="border border-gray-100 rounded-lg overflow-hidden">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50"><tr>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('sys.macAddress') }}</th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('mac.port') }}</th>
-              <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">{{ t('mac.vlanGroup') }}</th>
-            </tr></thead>
-            <tbody class="divide-y divide-gray-50">
-              <tr v-for="(m, i) in staticMacs" :key="i" class="hover:bg-gray-50">
-                <td class="px-3 py-2 font-mono text-gray-700">{{ m.mac }}</td>
-                <td class="px-3 py-2"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs">{{ t('mac.port') }} {{ m.port }}</span></td>
-                <td class="px-3 py-2 text-gray-500">{{ m.fid }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p v-else class="text-xs text-gray-400 mt-2">{{ t('sys.macNone') }}</p>
-      </div>
-
-      <!-- Config Snapshots -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.snapshots') }}</h3><Tip :title="t('sys.snapshots')">{{ t('sys.snapshotsTip') }}</Tip></span>
-            <p class="text-xs text-gray-400">{{ t('sys.snapshotsTip') }}</p>
-          </div>
-          <div class="flex gap-2">
-            <label class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-gray-200 cursor-pointer">{{ t('sys.snapshotImport') }} <input type="file" accept=".json" @change="importFile" class="hidden"/></label>
-            <button @click="showSaveSnapshot = true" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">{{ t('sys.snapshotSave') }}</button>
-          </div>
-        </div>
-        <div v-if="snapshots.length" class="divide-y divide-gray-50">
-          <div v-for="s in snapshots" :key="s.id" class="flex items-center justify-between py-2 group">
-            <div><p class="text-sm font-medium text-gray-900">{{ s.name }}</p><p class="text-xs text-gray-400">{{ formatDate(s.created_at) }}</p></div>
-            <div class="flex gap-1.5 opacity-0 group-hover:opacity-100 transition">
-              <button @click="viewSnapshot(s)" class="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200">{{ t('sys.snapshotView') }}</button>
-              <button @click="downloadSnapshot(s)" class="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100">{{ t('sys.snapshotDownload') }}</button>
-              <button @click="deleteSnapshot(s.id)" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">{{ t('sys.snapshotDelete') }}</button>
+            <label class="label">2 · {{ t('sys.mirrorSrc') }}</label>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="p in 10" :key="p" type="button" v-show="p !== mirror.monitoring_port" :disabled="!auth.isAdmin" @click="toggleMirrorPort(p)"
+                class="chip border transition" :class="mirror.mirrored_ports.includes(p) ? 'bg-accent-soft border-accent/40 text-accent-ink' : 'bg-surface-2 border-line text-muted hover:border-line-strong'">P{{ p }}</button>
             </div>
+            <p class="hint mt-1">{{ t('sys.mirrorSrcDesc') }}</p>
+          </div>
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.ingress" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.mirrorIngress') }}</label>
+              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.egress" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.mirrorEgress') }}</label>
+            </div>
+            <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.mirror" @click="applyMirror">{{ t('sys.mirrorApply') }}</Btn>
           </div>
         </div>
-        <p v-else class="text-xs text-gray-400">{{ t('sys.snapshotNone') }}</p>
-      </div>
+      </Section>
 
-      <!-- Danger -->
-      <div class="bg-white rounded-xl border border-red-200 shadow-sm p-5">
-        <h3 class="font-semibold text-red-600 mb-2">{{ t('sys.danger') }}</h3>
-        <button @click="doReboot" class="px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 border border-red-200">{{ t('sys.reboot') }}</button>
-      </div>
-    </template>
-
-    <!-- Modals -->
-    <div v-if="showSaveSnapshot" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showSaveSnapshot = false">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h2 class="text-lg font-bold mb-4">{{ t('sys.snapshotSave') }}</h2>
-        <form @submit.prevent="saveSnapshot" class="space-y-4">
-          <input v-model="snapshotName" required :placeholder="t('sys.snapshotName')" autofocus class="w-full inp"/>
-          <div class="flex gap-3">
-            <button type="button" @click="showSaveSnapshot = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('common.cancel') }}</button>
-            <button type="submit" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('common.save') }}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-    <div v-if="viewing" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="viewing = null">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[80vh] overflow-auto">
-        <div class="flex justify-between mb-4"><h2 class="text-lg font-bold">{{ viewing.name }}</h2>
-          <button @click="viewing = null" class="text-gray-400 hover:text-gray-600">X</button></div>
-        <pre class="text-xs bg-gray-50 rounded-lg p-4 overflow-auto max-h-[60vh] font-mono">{{ JSON.stringify(viewing.config, null, 2) }}</pre>
-      </div>
+      <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="t('sys.loopTip')">
+        <p class="hint mb-3">{{ t('sys.loopDesc') }}</p>
+        <div class="grid grid-cols-5 gap-2">
+          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!auth.isAdmin" @click="toggleLoop(lp)"
+            class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
+            :class="lp.enabled ? (lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : 'border-ok/60 bg-ok-soft text-ok-ink') : 'border-line text-muted hover:border-line-strong'">
+            {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
+            <div class="text-[10px] font-normal">{{ lp.violation ? t('sys.loopViolation') : (lp.enabled ? t('common.on') : t('common.off')) }}</div>
+          </button>
+        </div>
+      </Section>
     </div>
 
-    <p v-if="msg" class="text-sm mt-4" :class="msgOk ? 'text-emerald-600' : 'text-red-500'">{{ msg }}</p>
+    <!-- Snapshots + change log -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <Section :title="t('sys.snapshots')" icon="snapshot" :state="st.snapshots" :tip="t('sys.snapshotsTip')">
+        <template #actions>
+          <label v-if="auth.isAdmin" class="inline-flex"><input type="file" accept=".json" class="hidden" @change="importFile"><Btn size="sm" icon="upload" tag="span" class="cursor-pointer">{{ t('sys.snapshotImport') }}</Btn></label>
+          <Btn v-if="auth.isAdmin" size="sm" variant="primary" icon="plus" @click="showSave = true">{{ t('sys.snapshotSave') }}</Btn>
+        </template>
+        <ul v-if="snapshots.length" class="divide-y divide-line -mx-5">
+          <li v-for="s in snapshots" :key="s.id" class="px-5 py-2.5 flex items-center gap-3 group">
+            <Icon name="snapshot" :size="16" class="text-muted shrink-0" />
+            <div class="min-w-0 flex-1"><p class="text-sm font-medium text-ink truncate">{{ s.name }}</p><p class="text-[11px] text-muted num">{{ fmtDate(s.created_at) }}</p></div>
+            <div class="flex gap-0.5">
+              <Btn variant="ghost" size="xs" icon="eye" icon-only :aria-label="t('sys.snapshotView')" @click="viewSnapshot(s)" />
+              <Btn variant="ghost" size="xs" icon="download" icon-only :aria-label="t('sys.snapshotDownload')" @click="downloadSnapshot(s)" />
+              <Btn v-if="auth.isAdmin" variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('sys.snapshotDelete')" class="hover:text-danger" @click="deleteSnapshot(s)" />
+            </div>
+          </li>
+        </ul>
+        <EmptyState v-else compact icon="snapshot" :title="t('sys.snapshotNone')" />
+      </Section>
+
+      <Section id="changes" :title="t('sys.changes')" icon="history" :state="st.changes" :tip="t('sys.changesDesc')">
+        <ul v-if="changes.length" class="divide-y divide-line -mx-5 max-h-80 overflow-auto">
+          <li v-for="c in changes" :key="c.id" class="px-5 py-2 flex items-start gap-3 text-sm">
+            <span class="w-6 h-6 rounded bg-surface-3 text-muted flex items-center justify-center shrink-0 mt-0.5"><Icon name="history" :size="13" /></span>
+            <div class="min-w-0 flex-1">
+              <p class="text-ink">{{ t('changes.' + c.action) }} <span class="text-muted">· {{ c.username || '?' }}</span></p>
+              <p v-if="c.details" class="text-[11px] text-muted mono truncate" :title="JSON.stringify(c.details)">{{ JSON.stringify(c.details) }}</p>
+            </div>
+            <span class="text-[11px] text-muted num shrink-0">{{ fmtDate(c.created_at) }}</span>
+          </li>
+        </ul>
+        <EmptyState v-else compact icon="history" :title="t('swdash.noChanges')" />
+      </Section>
+    </div>
+
+    <!-- Danger zone -->
+    <div v-if="auth.isAdmin" class="card border-danger/40">
+      <div class="card-head items-center">
+        <div><h3 class="h2 text-danger-ink">{{ t('sys.danger') }}</h3><p class="hint">{{ t('sys.rebootConfirm') }}</p></div>
+        <Btn variant="danger-soft" icon="power" @click="doReboot">{{ t('sys.reboot') }}</Btn>
+      </div>
+    </div>
+
+    <Modal :open="showSave" :title="t('sys.snapshotSave')" width="sm" @close="showSave = false">
+      <form id="snap-form" @submit.prevent="saveSnapshot"><input v-model.trim="snapshotName" required maxlength="64" :placeholder="t('sys.snapshotName')" class="input" autofocus /></form>
+      <template #footer><Btn @click="showSave = false">{{ t('common.cancel') }}</Btn><Btn variant="primary" type="submit" form="snap-form" :disabled="!snapshotName" :loading="busy.snapshot">{{ t('common.save') }}</Btn></template>
+    </Modal>
+    <Modal :open="!!viewing" :title="viewing?.name || ''" :subtitle="viewing ? fmtDate(viewing.created_at) : ''" width="lg" @close="viewing = null">
+      <pre class="text-xs bg-surface-2 border border-line rounded-lg p-4 overflow-auto max-h-[60vh] mono text-ink-2">{{ JSON.stringify(viewing?.config, null, 2) }}</pre>
+    </Modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, defineComponent, h } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
+import Btn from '../components/ui/Btn.vue'
+import Badge from '../components/ui/Badge.vue'
+import Toggle from '../components/ui/Toggle.vue'
+import Icon from '../components/ui/Icon.vue'
+import Modal from '../components/ui/Modal.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 
 const props = defineProps({ switchId: Number })
+const { t, locale } = useI18n()
 const toast = useToast()
-const { t } = useI18n()
-const loaded = ref(false)
-const loadError = ref('')
-const sysInfo = ref({})
-const netInfo = ref({})
+const { confirm } = useConfirm()
+const auth = useAuthStore()
+const sw = useSwitchesStore()
+const base = `/api/switches/${props.switchId}`
+
+// per-section load state: loading | ok | unsupported | error
+const st = reactive({ status: 'loading', time: 'loading', stp: 'loading', storm: 'loading', igmp: 'loading', eee: 'loading', mirror: 'loading', loop: 'loading', snapshots: 'loading', changes: 'loading' })
+const busy = reactive({ net: false, sntp: false, time: false, mirror: false, snapshot: false })
+
+const info = ref({})
+const net = reactive({ dhcp: false, ip: '', netmask: '', gateway: '' })
+const swapSfp = ref(false)
+const moveDescriptions = ref(true)
 const timeData = ref({})
-const timeSupported = ref(true)
-const eeeSupported = ref(true)
 const timeMode = ref('sntp')
-const setTime = reactive({ time: '', date: '', timezone: '+01:00' })
 const sntp = reactive({ enabled: false, server: 'pool.ntp.org', poll: 64 })
+const tz = reactive({ time: '', date: '', timezone: '+00:00', daylight: false })
+const sntpStatus = ref(null)
+const sntpResolved = ref('')
 const stp = reactive({ enabled: false, mode: 'stp' })
 const storm = reactive({ enabled: false, rate: 100 })
 const igmp = reactive({ enabled: false, fast_leave: true, querier: false })
 const eee = reactive({ enabled: false })
+const mirror = reactive({ monitoring_port: 0, enabled: false, ingress: true, egress: true, mirrored_ports: [] })
 const loop = ref([])
-const mirror = reactive({ monitoring_port: 0, ingress: '1', egress: '1', mirrored_ports: [] })
-const swapSfp = ref(false)
-const moveDescriptions = ref(true)
-const staticMacs = ref([])
-const staticMac = reactive({ mac: '', port: 1, fid: 0 })
 const snapshots = ref([])
-const showSaveSnapshot = ref(false)
+const changes = ref([])
+const showSave = ref(false)
 const snapshotName = ref('')
 const viewing = ref(null)
-const net = reactive({ dhcp: true, ip: '', netmask: '', gateway: '' })
-const sntpStatus = ref(null)
-const sntpResolved = ref('')
-const msg = ref('')
-const msgOk = ref(true)
 
-function flash(m, ok = true) { ok ? toast.success(m) : toast.error(m) }
-function formatDate(d) { return d ? new Date(d + 'Z').toLocaleString() : '' }
-function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 0 ? mirror.mirrored_ports.splice(i, 1) : mirror.mirrored_ports.push(p) }
+const TZ = ['-12:00', '-11:00', '-10:00', '-09:30', '-09:00', '-08:00', '-07:00', '-06:00', '-05:00', '-04:00', '-03:30', '-03:00', '-02:00', '-01:00', '+00:00', '+01:00', '+02:00', '+03:00', '+03:30', '+04:00', '+04:30', '+05:00', '+05:30', '+05:45', '+06:00', '+06:30', '+07:00', '+08:00', '+08:45', '+09:00', '+09:30', '+10:00', '+10:30', '+11:00', '+12:00', '+12:45', '+13:00', '+14:00']
 
-async function load() {
-  try {
-    const info = await api(`/api/switches/${props.switchId}/info`)
-    swapSfp.value = !!info.swap_sfp_9_10
-    const s = await api(`/api/switches/${props.switchId}/status`)
-    sysInfo.value = { Model: s.modle, Firmware: s.fw_ver, Hardware: s.hw_ver, MAC: s.sys_macaddr, Temperature: `${s.temperature}C` }
-    netInfo.value = { IPv4: s.ipAddress, Netmask: s.netmask, Gateway: s.gateway, DHCP: s.dhcpEnabled === '1' ? 'On' : 'Off' }
-    net.dhcp = s.dhcpEnabled === '1'; net.ip = s.ipAddress; net.netmask = s.netmask; net.gateway = s.gateway
-    const t = await api(`/api/switches/${props.switchId}/time`)
-    timeSupported.value = t.supported !== false
-    timeData.value = t; sntp.enabled = t.sntp_state === '1'; sntp.server = t.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(t.sntp_poll) || 64
-    timeMode.value = sntp.enabled ? 'sntp' : 'manual'
-    setTime.timezone = t.timezoneOffsetVal || '+01:00'
-    const st = await api(`/api/switches/${props.switchId}/stp`); stp.enabled = st.enabled; stp.mode = st.mode
-    const sc = await api(`/api/switches/${props.switchId}/storm`); storm.enabled = sc.sctrl_state === '1'; storm.rate = parseInt(sc.sctrl_rate)
-    const ig = await api(`/api/switches/${props.switchId}/igmp`); igmp.enabled = ig.config.igmp === 'on'; igmp.fast_leave = ig.config.fast_leave === 'on'; igmp.querier = ig.config.snoop_querier === 'on'
-    const ee = await api(`/api/switches/${props.switchId}/eee`); eeeSupported.value = ee.supported !== false; eee.enabled = ee.eee === 'on'
-    loop.value = await api(`/api/switches/${props.switchId}/loop`)
-    const mi = await api(`/api/switches/${props.switchId}/mirror`)
-    const mirrored = mi.ports.filter(p => p.ingress || p.egress)
-    mirror.monitoring_port = mi.enabled ? mi.monitoring_port : 0
-    mirror.mirrored_ports = mirrored.map(p => p.port)
-    mirror.ingress = mirrored.length === 0 || mirrored.some(p => p.ingress) ? '1' : '0'
-    mirror.egress = mirrored.length === 0 || mirrored.some(p => p.egress) ? '1' : '0'
-    try { staticMacs.value = await api(`/api/switches/${props.switchId}/mac/static`) } catch(e) {}
-    snapshots.value = await api(`/api/switches/${props.switchId}/snapshots`)
-    loaded.value = true
-  } catch (e) { loadError.value = e.message }
+function fmtDate(d) { return d ? new Date(d + 'Z').toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' }) : '' }
+function ok(m) { toast.success(m) }
+function fail(e) { toast.error(e.message || String(e)) }
+
+// A card whose body reflects the section's own load state
+const Section = defineComponent({
+  props: { title: String, icon: String, state: String, tip: String, unsupported: Boolean, compact: Boolean, id: String },
+  setup(p, { slots }) {
+    return () => h('section', { class: 'card flex flex-col', id: p.id }, [
+      h('div', { class: 'card-head items-center' }, [
+        h('div', { class: 'flex items-center gap-2.5 min-w-0' }, [
+          h('span', { class: 'w-8 h-8 rounded-lg bg-surface-3 text-muted flex items-center justify-center shrink-0' }, [h(Icon, { name: p.icon || 'info', size: 16 })]),
+          h('div', { class: 'min-w-0' }, [
+            h('h3', { class: 'h2 inline-flex items-center gap-1.5' }, [p.title, p.tip ? h(Tip, { title: p.title, text: p.tip }) : null]),
+          ]),
+        ]),
+        slots.actions && p.state === 'ok' ? h('div', { class: 'flex items-center gap-2 shrink-0' }, slots.actions()) : null,
+      ]),
+      h('div', { class: p.compact ? 'px-5 py-4 flex-1' : 'card-body flex-1' },
+        p.state === 'loading' ? [h('div', { class: 'space-y-2 animate-pulse' }, [h('div', { class: 'h-3 rounded bg-surface-3 w-2/3' }), h('div', { class: 'h-3 rounded bg-surface-3 w-1/2' })])]
+        : p.state === 'unsupported' ? [h('p', { class: 'text-sm text-muted flex items-center gap-2' }, [h(Icon, { name: 'info', size: 15 }), t('sys.unsupported')])]
+        : p.state === 'error' ? [h('p', { class: 'text-sm text-danger-ink flex items-center gap-2' }, [h(Icon, { name: 'x-circle', size: 15 }), t('sys.sectionError')])]
+        : slots.default?.()),
+    ])
+  },
+})
+
+async function section(key, fn) {
+  st[key] = 'loading'
+  try { st[key] = (await fn()) === 'unsupported' ? 'unsupported' : 'ok' }
+  catch (e) { st[key] = 'error' }
 }
 
+async function loadStatus() {
+  const i = await api(`${base}/info`)
+  swapSfp.value = !!i.swap_sfp_9_10
+  const s = await api(`${base}/status`)
+  info.value = s
+  net.dhcp = s.dhcpEnabled === '1'; net.ip = s.ipAddress || ''; net.netmask = s.netmask || ''; net.gateway = s.gateway || ''
+}
+async function loadTime() {
+  const d = await api(`${base}/time`)
+  if (d.supported === false) return 'unsupported'
+  timeData.value = d
+  sntp.enabled = d.sntp_state === '1'; sntp.server = d.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(d.sntp_poll) || 64
+  timeMode.value = sntp.enabled ? 'sntp' : 'manual'
+  tz.timezone = TZ.includes(d.timezoneOffsetVal) ? d.timezoneOffsetVal : '+00:00'
+  const dl = Object.entries(d).find(([k]) => k.toLowerCase().includes('daylight'))
+  tz.daylight = dl ? ['1', 'on', 'true'].includes(String(dl[1])) : false
+}
+async function loadStp() { const d = await api(`${base}/stp`); stp.enabled = !!d.enabled; stp.mode = d.mode || 'stp' }
+async function loadStorm() { const d = await api(`${base}/storm`); storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100 }
+async function loadIgmp() { const d = await api(`${base}/igmp`); igmp.enabled = d.config?.igmp === 'on'; igmp.fast_leave = d.config?.fast_leave === 'on'; igmp.querier = d.config?.snoop_querier === 'on' }
+async function loadEee() { const d = await api(`${base}/eee`); if (d.supported === false) return 'unsupported'; eee.enabled = d.eee === 'on' }
+async function loadMirror() {
+  const d = await api(`${base}/mirror`)
+  const active = d.ports.filter(p => p.ingress || p.egress)
+  mirror.enabled = !!d.enabled
+  mirror.monitoring_port = d.enabled ? d.monitoring_port : 0
+  mirror.mirrored_ports = active.map(p => p.port)
+  mirror.ingress = active.length === 0 || active.some(p => p.ingress)
+  mirror.egress = active.length === 0 || active.some(p => p.egress)
+}
+async function loadLoop() { loop.value = await api(`${base}/loop`) }
+async function loadSnapshots() { snapshots.value = await api(`${base}/snapshots`) }
+async function loadChanges() { changes.value = await api(`${base}/changes?limit=50`) }
+
+function loadAll() {
+  section('status', loadStatus); section('time', loadTime); section('stp', loadStp); section('storm', loadStorm)
+  section('igmp', loadIgmp); section('eee', loadEee); section('mirror', loadMirror); section('loop', loadLoop)
+  section('snapshots', loadSnapshots); section('changes', loadChanges)
+}
+
+// ── Actions ──
+async function togglePortMap(value) {
+  try {
+    await api(`${base}/port-mapping`, { method: 'PUT', body: JSON.stringify({ swap_sfp_9_10: value, move_descriptions: moveDescriptions.value }) })
+    ok(t('sys.portMapUpdated')); sw.patch(props.switchId, { swap_sfp_9_10: value }); section('status', loadStatus)
+  } catch (e) { fail(e) }
+}
 async function applyNetwork() {
-  if (!net.dhcp && !confirm(t('sys.ipWarning'))) return
+  const msg = net.dhcp ? t('sys.dhcpConfirm') : t('sys.staticConfirm', { ip: net.ip })
+  if (!await confirm({ title: t('sys.mgmtIface'), message: msg + '\n' + t('sys.ipWarning'), danger: true })) return
+  busy.net = true
   try {
-    await api(`/api/switches/${props.switchId}/network`, { method: 'POST', body: JSON.stringify(net) })
-    flash(t('sys.networkApplied'))
-    await load()
-  } catch(e) { flash(e.message, false) }
+    const res = await api(`${base}/network`, { method: 'POST', body: JSON.stringify({ dhcp: net.dhcp, ip: net.ip, netmask: net.netmask, gateway: net.gateway }) })
+    ok(t('sys.networkApplied')); if (res.note) toast.error(res.note)
+    if (res.ip) sw.patch(props.switchId, { ip: res.ip })
+    section('status', loadStatus)
+  } catch (e) { fail(e) } finally { busy.net = false }
 }
-async function applyTime() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify(setTime) }); flash(t('sys.timeSet')); await load() } catch(e) { flash(e.message, false) } }
-async function applyTimezone() { try { await api(`/api/switches/${props.switchId}/time`, { method: 'POST', body: JSON.stringify({ timezone: setTime.timezone }) }); flash(t('sys.timezoneSet')); await load() } catch(e) { flash(e.message, false) } }
-async function applySntp() {
+async function applySntp(enable) {
+  busy.sntp = true
   try {
-    const res = await api(`/api/switches/${props.switchId}/sntp`, { method: 'POST', body: JSON.stringify(sntp) })
+    const res = await api(`${base}/sntp`, { method: 'POST', body: JSON.stringify({ enabled: enable, server: sntp.server, poll: sntp.poll }) })
     sntpResolved.value = res.resolved_ip !== sntp.server ? res.resolved_ip : ''
-    flash(t('sys.sntpUpdated') + (sntpResolved.value ? ` (${t('sys.resolved')} ${sntpResolved.value})` : ''))
-  } catch(e) { flash(e.message, false) }
+    await api(`${base}/time`, { method: 'POST', body: JSON.stringify({ timezone: tz.timezone, daylight: tz.daylight ? '1' : '0' }) })
+    ok(t('sys.sntpUpdated')); section('time', loadTime)
+  } catch (e) { fail(e) } finally { busy.sntp = false }
 }
-async function checkSntp() {
+async function checkSntp() { try { sntpStatus.value = await api(`${base}/sntp/check`) } catch (e) { fail(e) } }
+async function applyTime() {
+  busy.time = true
   try {
-    sntpStatus.value = await api(`/api/switches/${props.switchId}/sntp/check`)
-  } catch(e) { flash(e.message, false) }
+    if (sntp.enabled) await api(`${base}/sntp`, { method: 'POST', body: JSON.stringify({ enabled: false, server: sntp.server, poll: sntp.poll }) })
+    await api(`${base}/time`, { method: 'POST', body: JSON.stringify({ time: tz.time || null, date: tz.date || null, timezone: tz.timezone, daylight: tz.daylight ? '1' : '0' }) })
+    ok(t('sys.timeSet')); section('time', loadTime)
+  } catch (e) { fail(e) } finally { busy.time = false }
 }
-async function applyStp() { await api(`/api/switches/${props.switchId}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); flash(t('sys.stpUpdated')) }
-async function applyStorm() { await api(`/api/switches/${props.switchId}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate }) }); flash(t('sys.stormUpdated')) }
-async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); flash(t('sys.igmpUpdated')) }
-async function applyEee() { await api(`/api/switches/${props.switchId}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); flash(t('sys.eeeUpdated')) }
-async function toggleLoop(port) { const lp = loop.value.find(l => l.port === port); lp.enabled = !lp.enabled; const ports = {}; loop.value.forEach(l => ports[l.port] = l.enabled); await api(`/api/switches/${props.switchId}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); flash(t('sys.loopToggle', { port, state: lp.enabled ? t('common.on') : t('common.off') })) }
+async function applyStp() { try { await api(`${base}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); ok(t('sys.stpUpdated')) } catch (e) { fail(e); section('stp', loadStp) } }
+async function applyStorm() { try { await api(`${base}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate || 100 }) }); ok(t('sys.stormUpdated')) } catch (e) { fail(e); section('storm', loadStorm) } }
+async function applyIgmp() { try { await api(`${base}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); ok(t('sys.igmpUpdated')) } catch (e) { fail(e); section('igmp', loadIgmp) } }
+async function applyEee() { try { await api(`${base}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); ok(t('sys.eeeUpdated')) } catch (e) { fail(e); section('eee', loadEee) } }
+function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 0 ? mirror.mirrored_ports.splice(i, 1) : mirror.mirrored_ports.push(p) }
 async function applyMirror() {
+  busy.mirror = true
   try {
-    await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify({
-      monitoring_port: mirror.monitoring_port, mirrored_ports: mirror.mirrored_ports,
-      ingress: mirror.ingress === '1', egress: mirror.egress === '1',
-    }) })
-    flash(t('sys.mirrorUpdated'))
-    await load()
-  } catch(e) { flash(e.message, false) }
+    await api(`${base}/mirror`, { method: 'POST', body: JSON.stringify({ monitoring_port: mirror.monitoring_port, mirrored_ports: mirror.mirrored_ports, ingress: mirror.ingress, egress: mirror.egress }) })
+    ok(t('sys.mirrorUpdated')); section('mirror', loadMirror)
+  } catch (e) { fail(e) } finally { busy.mirror = false }
 }
-async function togglePortMap() {
+async function toggleLoop(lp) {
+  const ports = Object.fromEntries(loop.value.map(l => [l.port, l.port === lp.port ? !l.enabled : l.enabled]))
+  try { await api(`${base}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); ok(t('sys.loopToggle', { port: lp.port, state: !lp.enabled ? t('common.on') : t('common.off') })) } catch (e) { fail(e) }
+  section('loop', loadLoop)
+}
+async function saveSnapshot() {
+  busy.snapshot = true
+  try { await api(`${base}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSave.value = false; snapshotName.value = ''; ok(t('sys.snapshotSaved')); section('snapshots', loadSnapshots) }
+  catch (e) { fail(e) } finally { busy.snapshot = false }
+}
+async function viewSnapshot(s) { try { viewing.value = await api(`${base}/snapshots/${s.id}`) } catch (e) { fail(e) } }
+async function downloadSnapshot(s) {
   try {
-    await api(`/api/switches/${props.switchId}/port-mapping`, { method: 'PUT', body: JSON.stringify({ swap_sfp_9_10: !swapSfp.value, move_descriptions: moveDescriptions.value }) })
-    flash(t('sys.portMapUpdated'))
-    await load()
-  } catch(e) { flash(e.message, false) }
+    const full = await api(`${base}/snapshots/${s.id}`)
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(full, null, 2)], { type: 'application/json' })); a.download = `${s.name}.json`; a.click(); URL.revokeObjectURL(a.href)
+  } catch (e) { fail(e) }
 }
-async function addStaticMac() { if (!staticMac.mac) return; await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash(t('sys.macAdded')); staticMac.mac = ''; await load() }
-async function doReboot() { if (!confirm(t('sys.rebootConfirm'))) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash(t('sys.rebooting')) }
-async function saveSnapshot() { await api(`/api/switches/${props.switchId}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSaveSnapshot.value = false; snapshotName.value = ''; flash(t('sys.snapshotSaved')); await load() }
-async function viewSnapshot(s) { viewing.value = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`) }
-async function downloadSnapshot(s) { const full = await api(`/api/switches/${props.switchId}/snapshots/${s.id}`); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(full, null, 2)])); a.download = `${s.name}.json`; a.click() }
-async function deleteSnapshot(id) { if (!confirm(t('sys.snapshotDelete') + '?')) return; await api(`/api/switches/${props.switchId}/snapshots/${id}`, { method: 'DELETE' }); flash(t('sys.snapshotDeleted')); await load() }
-async function importFile(e) { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); await api(`/api/switches/${props.switchId}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: `Import: ${f.name}`, config: d.config || d }) }); flash(t('sys.snapshotImported')); await load() } catch(err) { flash(t('common.error'), false) }; e.target.value = '' }
+async function deleteSnapshot(s) {
+  if (!await confirm({ title: t('sys.snapshotDelete'), message: t('sys.snapshotDeleteConfirm', { name: s.name }), danger: true, confirmText: t('common.delete') })) return
+  try { await api(`${base}/snapshots/${s.id}`, { method: 'DELETE' }); ok(t('sys.snapshotDeleted')); section('snapshots', loadSnapshots) } catch (e) { fail(e) }
+}
+async function importFile(e) {
+  const f = e.target.files[0]; e.target.value = ''
+  if (!f) return
+  try {
+    const d = JSON.parse(await f.text())
+    await api(`${base}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: `Import: ${f.name}`.slice(0, 128), config: d.config || d }) })
+    ok(t('sys.snapshotImported')); section('snapshots', loadSnapshots)
+  } catch (err) { fail(err) }
+}
+async function doReboot() {
+  if (!await confirm({ title: t('sys.reboot'), message: t('sys.rebootConfirm'), danger: true, confirmText: t('sys.reboot') })) return
+  try { await api(`${base}/reboot`, { method: 'POST' }); ok(t('sys.rebooting')) } catch (e) { fail(e) }
+}
 
-onMounted(load)
+onMounted(loadAll)
 </script>
-
-<style scoped>
-.inp { padding: 0.375rem 0.75rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 0.5rem; font-size: 0.875rem; outline: none; transition: all 0.15s; }
-.inp:focus { box-shadow: 0 0 0 2px rgba(99,102,241,0.3); border-color: #6366f1; }
-</style>

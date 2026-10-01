@@ -23,7 +23,7 @@ export function useSSE(switchId) {
     cleanup()
     let token
     try {
-      token = (await api('/api/auth/stream-token')).token
+      token = (await api('/api/auth/stream-token', { method: 'POST' })).token
     } catch (e) {
       if (active) startFallback()
       return
