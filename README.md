@@ -51,8 +51,15 @@ The stock Xikestor web UI is:
 | Model | Chipset | Ports |
 |-------|---------|-------|
 | **Xikestor SKS3200-8E2X** | MaxLinear MxL86282S | 8x 2.5G RJ45 + 2x 10G SFP+ |
+| **Xikestor SKS3200-8E2X-P** | MaxLinear MxL86282S | 8x 2.5G RJ45 + 2x 10G SFP+ |
 
 Other Xikestor models using the same web API should also work.
+
+**Firmware:** SwitchPilot targets the **1.0.0.x** firmware line (V1). Xikestor also ships a
+**2.0.0.x** line (V2) with a different web API for VLANs, STP, loop detection, storm control and
+EEE. V2 support is **coming soon**; until then, on a V2 switch the dashboard, ports and port
+statistics work but the VLAN and System pages will not. The two lines cannot be flashed over
+each other, so check `fw_ver` on the switch's status page before updating.
 
 ## Quick Start
 
