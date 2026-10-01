@@ -120,10 +120,14 @@ def test_every_write_path_translates_port_9(api, swap, expected_internal):
 
     assert api.post(f"/api/switches/{sid}/mirror", json={
         "monitoring_port": 9, "ingress": "1", "egress": "0", "mirrored_ports": [1, 9]}).status_code == 200
-    mirror = m.posted("port_mirror.json")[-1]
-    assert mirror["mirroring_port_selection"] == expected_internal
-    assert mirror["mirrored_port_selection"] == ["1"]  # the monitor port is never also a source
-    assert mirror["Ingress_Status"] == "1" and mirror["Egress_Status"] == "0"
+    select, clear = m.posted("port_mirror.json")[-2:]
+    assert select["mirroring_port_selection"] == expected_internal
+    assert select["mirrored_port_selection"] == ["1"]  # the monitor port is never also a source
+    assert select["Ingress_Status"] == "1" and select["Egress_Status"] == "0"
+    # second request, like the native UI: every other port switched off on the same destination
+    assert clear["mirroring_port_selection"] == expected_internal
+    assert clear["mirrored_port_selection"] == sorted({str(i) for i in range(2, 11)} - {expected_internal}, key=int)
+    assert clear["Ingress_Status"] == "0" and clear["Egress_Status"] == "0"
 
     assert api.post(f"/api/switches/{sid}/mac/static/add",
                     json={"mac": "AA:BB:CC:00:00:03", "port": 9, "fid": 3}).status_code == 200
@@ -157,8 +161,17 @@ def test_invalid_ports_are_rejected_before_any_write(api):
 
 def test_mirror_can_be_disabled(api):
     sid = add_switch(api)
+    assert api.get(f"/api/switches/{sid}/mirror").json()["enabled"] is True  # port 1 -> 9 in the fixture
     assert api.post(f"/api/switches/{sid}/mirror", json={"monitoring_port": 0, "mirrored_ports": []}).status_code == 200
-    assert api.mock.posted("port_mirror.json")[-1]["mirroring_port_selection"] == "0"
+    posts = api.mock.posted("port_mirror.json")
+    assert len(posts) == 1  # the firmware keeps the destination: off = all sources cleared on it
+    assert posts[0]["mirroring_port_selection"] == "9"
+    assert posts[0]["mirrored_port_selection"] == [str(i) for i in range(1, 11) if i != 9]
+    assert posts[0]["Ingress_Status"] == "0" and posts[0]["Egress_Status"] == "0"
+
+    api.mock.state["port_mirror.json"]["MonitoringPortId"] = "0"
+    assert api.post(f"/api/switches/{sid}/mirror", json={"monitoring_port": 0}).status_code == 200
+    assert len(api.mock.posted("port_mirror.json")) == 1  # nothing was ever configured: nothing sent
 
 
 def test_dynamic_mac_search_is_url_encoded(api):

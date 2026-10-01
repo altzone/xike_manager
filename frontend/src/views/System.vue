@@ -427,7 +427,7 @@ async function load() {
     loop.value = await api(`/api/switches/${props.switchId}/loop`)
     const mi = await api(`/api/switches/${props.switchId}/mirror`)
     const mirrored = mi.ports.filter(p => p.ingress || p.egress)
-    mirror.monitoring_port = mi.monitoring_port
+    mirror.monitoring_port = mi.enabled ? mi.monitoring_port : 0
     mirror.mirrored_ports = mirrored.map(p => p.port)
     mirror.ingress = mirrored.length === 0 || mirrored.some(p => p.ingress) ? '1' : '0'
     mirror.egress = mirrored.length === 0 || mirrored.some(p => p.egress) ? '1' : '0'
@@ -471,6 +471,7 @@ async function applyMirror() {
       ingress: mirror.ingress === '1', egress: mirror.egress === '1',
     }) })
     flash(t('sys.mirrorUpdated'))
+    await load()
   } catch(e) { flash(e.message, false) }
 }
 async function togglePortMap() {

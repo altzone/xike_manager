@@ -14,7 +14,13 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   previous behaviour after upgrade; new switches default to the firmware's own numbering.
 - Port mirroring could not be applied from the UI: two routes were registered on
   `POST /api/switches/{id}/mirror` and the first one rejected the UI's payload with HTTP 422.
-  Mirroring can also be disabled from the UI now.
+  Applying now also clears previously selected sources (second request, as the native UI does),
+  and mirroring can be disabled from the UI.
+- Login succeeded only when the switch answered with `setup.html`; 2.0.0.x firmware redirects to
+  `index.html` and was reported as "cannot connect".
+- MAC tables streamed as `data:` lines (newer firmware) crashed the JSON parser; a dropped
+  connection right after login made the next request fail instead of being retried once.
+- The model name was read from `modle` only; `des` (newer firmware) is used as fallback.
 - The static MAC table on the System page was always empty (the API returned the raw payload).
 - Adding a static MAC with an invalid or string port silently bound it to port 1 (management).
   Invalid port numbers now return HTTP 400 everywhere instead of 500 or a silent fallback.

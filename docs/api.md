@@ -87,8 +87,8 @@ Body: {"username": "admin", "password": "yourpass"}
 | POST | `/api/switches/{id}/igmp` | Set IGMP `{"enabled","fast_leave","querier"}` |
 | GET | `/api/switches/{id}/eee` | EEE status |
 | POST | `/api/switches/{id}/eee` | Set EEE `{"enabled"}` |
-| GET | `/api/switches/{id}/mirror` | Port mirror config |
-| POST | `/api/switches/{id}/mirror` | Set mirror `{"monitoring_port","ingress","egress","mirrored_ports"}` |
+| GET | `/api/switches/{id}/mirror` | Port mirror config `{"monitoring_port","enabled","ports":[{"port","ingress","egress"}]}` |
+| POST | `/api/switches/{id}/mirror` | Set mirror `{"monitoring_port","ingress","egress","mirrored_ports"}`; `monitoring_port: 0` turns mirroring off |
 | GET | `/api/switches/{id}/loop` | Loop detection status |
 | POST | `/api/switches/{id}/loop` | Set loop `{"ports": {1: true, 2: false}}` |
 | POST | `/api/switches/{id}/reboot` | Reboot switch |

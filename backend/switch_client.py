@@ -1,5 +1,6 @@
 """Xikestor SKS3200-8E2X API Client"""
 import hashlib
+import json
 import httpx
 
 # Hardware limits
@@ -28,14 +29,37 @@ def build_port_map(swap_sfp: bool) -> dict[int, int]:
     return mapping
 
 
+def decode_payload(text: str):
+    """Parse a switch response body: plain JSON, or the SSE-style `data: ...` lines that
+    newer firmware uses for the MAC tables (one JSON list or object per line)."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        chunks = [line[5:].strip() for line in text.splitlines() if line.startswith("data:")]
+        parts = [json.loads(c) for c in chunks if c]
+        if not parts:
+            raise
+        if all(isinstance(p, list) for p in parts):
+            return [item for p in parts for item in p]
+        if all(isinstance(p, dict) for p in parts):
+            merged = {}
+            for p in parts:
+                merged.update(p)
+            return merged
+        return parts
+
+
 def _parse_mac_entries(raw, port_to_user) -> list[dict]:
     """Normalise a MAC table payload to [{idx, mac, port, fid, age}].
 
     The dynamic table is {"total_entries": n, "Idx_0": {"Dynamic_idx", "Dynamic_mac_addr",
     "Dynamic_portid", "Dynamic_fid", "Dynamic_age_timer"}, ...}. The static table uses the
-    same layout with a different prefix, so fields are matched by suffix.
+    same layout with a different prefix, and newer firmware returns a flat list with
+    `*_vlan_id` instead of `*_fid`, so fields are matched by suffix.
     """
-    if isinstance(raw, dict):
+    if isinstance(raw, dict) and "batch" in raw:
+        items = [v for v in raw["batch"] if isinstance(v, dict)]
+    elif isinstance(raw, dict):
         items = [v for k, v in raw.items() if k.startswith("Idx_") and isinstance(v, dict)]
     elif isinstance(raw, list):
         items = [v for v in raw if isinstance(v, dict)]
@@ -60,11 +84,11 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
         except (TypeError, ValueError):
             port = port_raw
         entries.append({
-            "idx": field(e, "_idx", default=""),
+            "idx": str(field(e, "_idx", default="")),
             "mac": mac,
             "port": port,
-            "fid": field(e, "_fid", default="0"),
-            "age": field(e, "age_timer", default=""),
+            "fid": str(field(e, "_fid", "vlan_id", default="0")),
+            "age": str(field(e, "age_timer", default="")),
         })
     return entries
 
@@ -120,20 +144,30 @@ class SwitchClient:
         r = await self.client.get(f"{self.base}/authorize", params={
             "loginusr": usr_md5, "loginpwd": pwd_md5
         })
-        self._logged_in = "setup.html" in r.text
+        # Success is a redirect to setup.html (1.0.0.x) or index.html?page= (2.0.0.x);
+        # a bad password is a 200 that redirects to login.html.
+        self._logged_in = r.status_code == 200 and "login.html" not in r.text
         return self._logged_in
 
     async def _ensure_login(self):
         if not self._logged_in:
             await self.login()
 
+    async def _raw_get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
+        try:
+            return await self.client.get(f"{self.base}/{endpoint}", params=params)
+        except httpx.TransportError:
+            # the switch drops the pooled connection after /authorize on some firmware;
+            # a GET is safe to send again on a fresh connection (a POST never is)
+            return await self.client.get(f"{self.base}/{endpoint}", params=params)
+
     async def _get(self, endpoint: str, params: dict | None = None):
         await self._ensure_login()
-        r = await self.client.get(f"{self.base}/{endpoint}", params=params)
+        r = await self._raw_get(endpoint, params)
         if "login.html" in r.text:
             await self.login()
-            r = await self.client.get(f"{self.base}/{endpoint}", params=params)
-        return r.json()
+            r = await self._raw_get(endpoint, params)
+        return decode_payload(r.text)
 
     async def _post(self, endpoint: str, data: dict):
         await self._ensure_login()
@@ -347,6 +381,7 @@ class SwitchClient:
                 "port": self.to_user(i),
                 "type": int(p[f"portTypeId_{i}"]),
                 "timeout": int(p[f"lacpTimeoutId_{i}"]),
+                "priority": int(p.get(f"portPriorityId_{i}", 128)),
                 "group": int(p[f"Port_{i}_grpInd"]),
                 "state": int(p[f"Port_{i}_state"]),
             })
@@ -354,11 +389,12 @@ class SwitchClient:
         return {"system_priority": raw["system_priority"], "ports": ports}
 
     async def set_lag(self, system_priority: int, ports: list[dict]):
-        """ports: [{"port": 9, "type": 1, "timeout": 0, "group": 1}, ...] (user-facing ports)"""
+        """ports: [{"port": 9, "type": 1, "timeout": 0, "priority": 128, "group": 1}, ...] (user-facing ports)"""
         post = {"system_priority": str(system_priority)}
         for p in ports:
             internal = self.to_internal(p["port"])
             post[f"portTypeId_{internal}"] = str(p["type"])
+            post[f"portPriorityId_{internal}"] = str(p.get("priority", 128))
             post[f"lacpTimeoutId_{internal}"] = str(p["timeout"])
             post[f"Port_{internal}_grpInd"] = str(p["group"])
         return await self._post("port_trunk_cfg.json", post)
@@ -453,19 +489,45 @@ class SwitchClient:
                 "egress": p.get("Egress_Status") == "Enabled",
             })
         ports.sort(key=lambda x: x["port"])
-        return {"monitoring_port": self.to_user(monitoring) if monitoring else 0, "ports": ports}
+        # the firmware keeps the last destination after mirroring is switched off,
+        # so "enabled" means at least one source still copies traffic
+        enabled = bool(monitoring) and any(p["ingress"] or p["egress"] for p in ports)
+        return {"monitoring_port": self.to_user(monitoring) if monitoring else 0,
+                "enabled": enabled, "ports": ports}
+
+    async def _post_mirror(self, dest: int, sources: list[int], ingress: bool, egress: bool):
+        return await self._post("port_mirror.json", {
+            "mirroring_port_selection": str(dest),
+            "mirrored_port_selection": [str(i) for i in sorted(sources)],
+            "Ingress_Status": "1" if ingress else "0",
+            "Egress_Status": "0" if not egress else "1",
+        })
 
     async def set_mirror(self, monitoring_port: int, mirrored_ports: list[int],
                          ingress: bool = True, egress: bool = True):
-        """monitoring_port 0 disables mirroring. Ports are user-facing."""
-        dest = self.to_internal(monitoring_port) if monitoring_port else 0
-        sources = [str(self.to_internal(p)) for p in mirrored_ports if int(p) != int(monitoring_port)]
-        return await self._post("port_mirror.json", {
-            "mirroring_port_selection": str(dest),
-            "Ingress_Status": "1" if ingress else "0",
-            "Egress_Status": "1" if egress else "0",
-            "mirrored_port_selection": sources,
-        })
+        """Ports are user-facing. monitoring_port 0 turns mirroring off.
+
+        Like the native UI, this sends two requests: the selected sources with the
+        requested directions, then every other port with both directions off, so
+        sources from a previous session are cleared. Turning off = all ports off on
+        the current destination (the firmware keeps the destination itself).
+        """
+        if monitoring_port:
+            dest = self.to_internal(monitoring_port)
+            selected = {self.to_internal(p) for p in mirrored_ports if int(p) != int(monitoring_port)}
+        else:
+            raw = await self.get_mirror_raw()
+            dest = int(raw.get("MonitoringPortId", 0) or 0)
+            selected = set()
+            if not dest:
+                return ""  # never configured: nothing to clear
+        others = [i for i in range(1, NUM_PORTS + 1) if i != dest and i not in selected]
+        result = ""
+        if selected:
+            result = await self._post_mirror(dest, selected, ingress, egress)
+        if others:
+            await self._post_mirror(dest, others, False, False)
+        return result
 
     # ── EEE ──
     async def get_eee(self):

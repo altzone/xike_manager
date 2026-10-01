@@ -112,6 +112,7 @@ class LagPort(BaseModel):
     port: int
     type: int
     timeout: int = 0
+    priority: int = 128
     group: int = 0
 
 class LagConfig(BaseModel):
@@ -183,13 +184,16 @@ async def _probe_switch(ip: str, username: str, password: str) -> dict:
     try:
         if not await probe.login():
             raise HTTPException(400, f"Cannot connect to switch at {ip}")
-        return await probe.get_status()
+        status = await probe.get_status()
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(400, f"Switch connection failed: {e}")
     finally:
         await probe.close()
+    # 1.0.0.x firmware spells the model "modle"; 2.0.0.x puts it in "des"
+    status["modle"] = status.get("modle") or status.get("des", "")
+    return status
 
 @app.get("/api/switches")
 async def list_switches(user=Depends(get_current_user)):
