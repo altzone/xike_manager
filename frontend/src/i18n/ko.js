@@ -281,7 +281,7 @@ export default {
   'common.on': '켜짐',
   'common.off': '꺼짐',
   'common.loading': '로딩 중...',
-  'common.failedLoad': '로드 실패:',
+  'common.failedLoad': '로드 실패',
 
   // Switch Dashboard
   'swdash.temperature': '온도',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '학습된 항목 1개',
   'ui.switchCountOne': '스위치 1대',
   'ui.offline': '스위치에 연결할 수 없음',
+  'sys.portMapToggle': '포트 9와 10 바꾸기',
+  'sys.dangerDesc': '스위치를 재시작합니다. 관리 접속이 약 1분간 끊깁니다.',
 }

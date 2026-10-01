@@ -281,7 +281,7 @@ export default {
   'common.on': 'AÇIK',
   'common.off': 'KAPALI',
   'common.loading': 'Yükleniyor...',
-  'common.failedLoad': 'Yükleme başarısız:',
+  'common.failedLoad': 'Yükleme başarısız',
 
   // Switch Dashboard
   'swdash.temperature': 'Sıcaklık',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 kayıt öğrenildi',
   'ui.switchCountOne': '1 switch',
   'ui.offline': 'Switch\'e ulaşılamıyor',
+  'sys.portMapToggle': '9 ve 10 numaralı portları değiştir',
+  'sys.dangerDesc': 'Switch\'i yeniden başlatır. Yönetim erişimi yaklaşık bir dakika kesilir.',
 }

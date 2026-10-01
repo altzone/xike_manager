@@ -281,7 +281,7 @@ export default {
   'common.on': 'ON',
   'common.off': 'OFF',
   'common.loading': 'Carregando...',
-  'common.failedLoad': 'Falha ao carregar:',
+  'common.failedLoad': 'Falha ao carregar',
 
   // Switch Dashboard
   'swdash.temperature': 'Temperatura',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 entrada aprendida',
   'ui.switchCountOne': '1 switch',
   'ui.offline': 'Switch inacessível',
+  'sys.portMapToggle': 'Trocar as portas 9 e 10',
+  'sys.dangerDesc': 'Reinicia o switch. O acesso de gestão fica indisponível durante cerca de um minuto.',
 }

@@ -12,13 +12,13 @@
             <span class="w-11 h-11 rounded-lg flex items-center justify-center font-semibold shrink-0" :class="g.allUp ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn-ink'">G{{ g.id }}</span>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <input v-if="auth.isAdmin" v-model="names[g.id]" @blur="rename(g.id)" @keydown.enter="$event.target.blur()" maxlength="64"
+                <input v-if="auth.isAdmin" v-model="names[g.id]" @blur="rename(g.id)" @keydown.enter="$event.target.blur()" maxlength="64" :aria-label="`${t('lag.name')} – LAG ${g.id}`"
                   class="bg-transparent border-0 border-b border-transparent hover:border-line-strong focus:border-accent outline-none font-semibold text-ink px-0 py-0 w-44 truncate"
                   :placeholder="`LAG ${g.id}`" />
                 <span v-else class="font-semibold text-ink truncate">{{ names[g.id] || `LAG ${g.id}` }}</span>
                 <Badge :tone="g.mode === 2 ? 'accent' : 'neutral'">{{ g.mode === 2 ? t('lag.lacp') : t('lag.static') }}</Badge>
               </div>
-              <p class="hint">{{ t('lag.members', { n: g.ports.length }) }} · {{ g.ports.reduce((s, p) => s + (p.port >= 9 ? 10 : 2.5), 0) }}G</p>
+              <p class="hint">{{ g.ports.length === 1 ? t('lag.memberOne') : t('lag.members', { n: g.ports.length }) }} · {{ g.ports.reduce((s, p) => s + (p.port >= 9 ? 10 : 2.5), 0) }}G</p>
             </div>
           </div>
           <Btn v-if="auth.isAdmin" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g.id)" />
@@ -34,7 +34,8 @@
     </div>
     <div v-else class="card">
       <EmptyState icon="lag" :title="loadError ? t('common.failedLoad') : t('lag.noGroups')" :text="loadError || t('lag.createDesc')">
-        <Btn v-if="auth.isAdmin && !loadError" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
+        <Btn v-if="loadError" size="sm" icon="refresh" @click="load">{{ t('ui.retry') }}</Btn>
+        <Btn v-else-if="auth.isAdmin" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
       </EmptyState>
     </div>
 
@@ -50,32 +51,32 @@
     <Modal :open="modal" :title="t('lag.create')" @close="modal = false">
       <div class="space-y-4">
         <div>
-          <label class="label">{{ t('lag.name') }}</label>
-          <input v-model.trim="draft.name" maxlength="64" class="input" placeholder="Uplink, Server bond…" autofocus />
+          <label class="label" for="lag-name">{{ t('lag.name') }}</label>
+          <input id="lag-name" v-model.trim="draft.name" maxlength="64" class="input" :placeholder="t('lag.namePlaceholder')" autofocus />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">{{ t('lag.groupNum') }}</label>
-            <select v-model.number="draft.id" class="select"><option v-for="n in availableGroupIds" :key="n" :value="n">LAG {{ n }}</option></select>
+            <label class="label" for="lag-group">{{ t('lag.groupNum') }}</label>
+            <select id="lag-group" v-model.number="draft.id" class="select"><option v-for="n in availableGroupIds" :key="n" :value="n">LAG {{ n }}</option></select>
           </div>
           <div v-if="draft.mode === 2">
-            <label class="label">{{ t('lag.timeout') }}</label>
-            <select v-model.number="draft.timeout" class="select"><option :value="0">{{ t('lag.timeoutShort') }}</option><option :value="1">{{ t('lag.timeoutLong') }}</option></select>
+            <label class="label" for="lag-timeout">{{ t('lag.timeout') }}</label>
+            <select id="lag-timeout" v-model.number="draft.timeout" class="select"><option :value="0">{{ t('lag.timeoutShort') }}</option><option :value="1">{{ t('lag.timeoutLong') }}</option></select>
           </div>
         </div>
-        <div>
-          <label class="label">{{ t('lag.mode') }}</label>
+        <div role="group" aria-labelledby="lag-mode-label">
+          <span id="lag-mode-label" class="label">{{ t('lag.mode') }}</span>
           <div class="grid grid-cols-2 gap-2">
-            <button v-for="m in [2, 1]" :key="m" type="button" @click="draft.mode = m" class="rounded-lg border-2 p-3 text-start transition" :class="draft.mode === m ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'">
+            <button v-for="m in [2, 1]" :key="m" type="button" @click="draft.mode = m" :aria-pressed="draft.mode === m" class="rounded-lg border-2 p-3 text-start transition" :class="draft.mode === m ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'">
               <div class="text-sm font-semibold" :class="draft.mode === m ? 'text-accent-ink' : 'text-ink'">{{ m === 2 ? t('lag.lacp') : t('lag.static') }}</div>
               <div class="hint mt-0.5">{{ m === 2 ? t('lag.lacpDesc') : t('lag.staticDesc') }}</div>
             </button>
           </div>
         </div>
-        <div>
-          <label class="label">{{ t('lag.selectPorts') }}</label>
+        <div role="group" aria-labelledby="lag-ports-label">
+          <span id="lag-ports-label" class="label">{{ t('lag.selectPorts') }}</span>
           <div class="grid grid-cols-5 gap-2">
-            <button v-for="p in availablePorts" :key="p.port" type="button" @click="togglePort(p.port)" class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
+            <button v-for="p in availablePorts" :key="p.port" type="button" @click="togglePort(p.port)" :aria-pressed="draft.ports.includes(p.port)" class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
               :class="draft.ports.includes(p.port) ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">
               {{ p.port >= 9 ? 'SFP+' : 'P' }}{{ p.port }}
               <div class="text-[10px] font-normal opacity-70">{{ p.port >= 9 ? '10G' : '2.5G' }}</div>

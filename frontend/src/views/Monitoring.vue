@@ -4,12 +4,12 @@
       <div class="card-head items-center flex-wrap gap-3">
         <div>
           <h3 class="h2 inline-flex items-center gap-1.5">{{ t('mac.title') }} <Tip :title="t('mac.title')" :text="t('mac.tip')" /></h3>
-          <p class="hint">{{ t('mac.entries', { count: total }) }}</p>
+          <p class="hint">{{ total === 1 ? t('mac.entriesOne') : t('mac.entries', { count: total }) }}</p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <div class="relative">
             <Icon name="search" :size="15" class="absolute start-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
-            <input v-model="search" @input="debouncedSearch" :placeholder="t('mac.search')" class="input input-sm ps-9 w-56 mono" maxlength="32" />
+            <input v-model="search" @input="debouncedSearch" :placeholder="t('mac.search')" class="input input-sm ps-9 w-56" maxlength="32" />
           </div>
           <Btn size="sm" icon="refresh" icon-only :aria-label="t('ui.refresh')" :loading="loading" @click="refresh" />
           <Btn v-if="auth.isAdmin" size="sm" variant="danger-soft" icon="trash" @click="clearMacs">{{ t('mac.clearAll') }}</Btn>
@@ -41,23 +41,28 @@
         <div><h3 class="h2">{{ t('sys.staticMac') }}</h3><p class="hint">{{ t('sys.staticMacTip') }}</p></div>
       </div>
       <form v-if="auth.isAdmin" @submit.prevent="addStatic" class="px-5 py-4 grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-3 items-end border-b border-line" novalidate>
-        <div><label class="label">{{ t('sys.macAddress') }}</label><input v-model.trim="draft.mac" class="input input-sm mono" placeholder="AA:BB:CC:DD:EE:FF" pattern="^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$" required /></div>
-        <div><label class="label">{{ t('sys.macPort') }}</label><select v-model.number="draft.port" class="select select-sm"><option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option></select></div>
-        <div><label class="label">{{ t('sys.macVlanGroup') }}</label><input v-model.number="draft.fid" type="number" min="0" max="63" class="input input-sm num" /></div>
+        <div><label class="label" for="static-mac">{{ t('sys.macAddress') }}</label><input id="static-mac" v-model.trim="draft.mac" class="input input-sm mono" placeholder="AA:BB:CC:DD:EE:FF" pattern="^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$" required /></div>
+        <div><label class="label" for="static-port">{{ t('sys.macPort') }}</label><select id="static-port" v-model.number="draft.port" class="select select-sm"><option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option></select></div>
+        <div><label class="label" for="static-fid">{{ t('sys.macVlanGroup') }}</label><input id="static-fid" v-model.number="draft.fid" type="number" min="0" max="63" class="input input-sm num" /></div>
         <Btn type="submit" variant="primary" size="sm" icon="plus" :loading="adding" :disabled="!macValid">{{ t('sys.macAdd') }}</Btn>
       </form>
-      <table v-if="statics.length" class="table">
-        <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th v-if="auth.isAdmin" class="w-12"></th></tr></thead>
-        <tbody>
-          <tr v-for="m in statics" :key="m.mac + m.port">
-            <td class="mono font-medium">{{ m.mac }}</td>
-            <td><Badge :tone="m.port >= 9 ? 'sfp' : 'accent'">{{ t('mac.port') }} {{ m.port }}</Badge></td>
-            <td class="num text-ink-2">{{ m.fid }}</td>
-            <td v-if="auth.isAdmin" class="text-end"><Btn variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteStatic(m)" /></td>
-          </tr>
-        </tbody>
-      </table>
-      <EmptyState v-else compact icon="lock" :title="t('sys.macNone')" />
+      <div class="overflow-x-auto">
+        <table v-if="statics.length" class="table">
+          <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th v-if="auth.isAdmin" class="w-12"></th></tr></thead>
+          <tbody>
+            <tr v-for="m in statics" :key="m.mac + m.port">
+              <td class="mono font-medium">{{ m.mac }}</td>
+              <td><Badge :tone="m.port >= 9 ? 'sfp' : 'accent'">{{ t('mac.port') }} {{ m.port }}</Badge></td>
+              <td class="num text-ink-2">{{ m.fid }}</td>
+              <td v-if="auth.isAdmin" class="text-end"><Btn variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteStatic(m)" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <EmptyState v-else-if="staticsError" compact icon="x-circle" :title="t('common.failedLoad')" :text="staticsError">
+          <Btn size="sm" icon="refresh" @click="loadStatics">{{ t('ui.retry') }}</Btn>
+        </EmptyState>
+        <EmptyState v-else compact icon="lock" :title="t('sys.macNone')" />
+      </div>
     </div>
   </div>
 </template>
@@ -87,6 +92,7 @@ const search = ref('')
 const loading = ref(false)
 const loadError = ref('')
 const statics = ref([])
+const staticsError = ref('')
 const draft = reactive({ mac: '', port: 1, fid: 0 })
 const adding = ref(false)
 const macValid = computed(() => /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(draft.mac))
@@ -114,7 +120,10 @@ async function clearMacs() {
 }
 
 async function loadStatics() {
-  try { statics.value = await api(`/api/switches/${props.switchId}/mac/static`) } catch (e) { statics.value = [] }
+  try {
+    statics.value = await api(`/api/switches/${props.switchId}/mac/static`)
+    staticsError.value = ''
+  } catch (e) { statics.value = []; staticsError.value = e.message }
 }
 async function addStatic() {
   if (!macValid.value) return

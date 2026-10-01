@@ -1,5 +1,6 @@
 <template>
-  <Modal :open="state.open" :title="state.title || t('common.confirm')" width="sm" @close="settle(false)">
+  <!-- layer 95: above page modals (90), below toasts (100) -->
+  <Modal :open="state.open" :title="state.title || t('common.confirm')" width="sm" :layer="95" @close="settle(false)">
     <div class="flex gap-3">
       <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0" :class="state.danger ? 'bg-danger-soft text-danger' : 'bg-accent-soft text-accent'">
         <Icon :name="state.danger ? 'warning' : 'question'" :size="18" />

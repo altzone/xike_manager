@@ -6,6 +6,7 @@
     </div>
 
     <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
       <table class="table">
         <thead><tr><th>{{ t('users.username') }}</th><th>{{ t('users.role') }}</th><th>{{ t('users.created') }}</th><th class="!text-end">{{ t('users.actions') }}</th></tr></thead>
         <tbody>
@@ -18,7 +19,7 @@
               </div>
             </td>
             <td>
-              <select :value="u.role" @change="changeRole(u, $event)" :disabled="u.id === me || (u.role === 'admin' && adminCount <= 1)" class="select select-sm w-40"
+              <select :value="u.role" @change="changeRole(u, $event)" :disabled="u.id === me || (u.role === 'admin' && adminCount <= 1)" class="select select-sm w-40" :aria-label="`${t('users.role')} – ${u.username}`"
                 :title="u.id === me ? t('users.ownRole') : (u.role === 'admin' && adminCount <= 1 ? t('users.lastAdmin') : '')">
                 <option value="admin">{{ t('users.roleAdmin') }}</option>
                 <option value="viewer">{{ t('users.roleViewer') }}</option>
@@ -34,6 +35,7 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <div class="card card-body grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -45,9 +47,9 @@
 
     <Modal :open="showAdd" :title="t('users.addUser')" width="sm" @close="showAdd = false">
       <form id="user-form" @submit.prevent="addUser" class="space-y-3" novalidate>
-        <div><label class="label">{{ t('users.username') }}</label><input v-model.trim="form.username" required maxlength="64" class="input" autofocus autocomplete="off" /></div>
-        <div><label class="label">{{ t('login.password') }}</label><input v-model="form.password" type="password" required class="input" autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
-        <div><label class="label">{{ t('users.role') }}</label><select v-model="form.role" class="select"><option value="viewer">{{ t('users.roleViewer') }}</option><option value="admin">{{ t('users.roleAdmin') }}</option></select></div>
+        <div><label class="label" for="user-username">{{ t('users.username') }}</label><input id="user-username" v-model.trim="form.username" required maxlength="64" class="input" autofocus autocomplete="off" /></div>
+        <div><label class="label" for="user-password">{{ t('login.password') }}</label><input id="user-password" v-model="form.password" type="password" required class="input" autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
+        <div><label class="label" for="user-role">{{ t('users.role') }}</label><select id="user-role" v-model="form.role" class="select"><option value="viewer">{{ t('users.roleViewer') }}</option><option value="admin">{{ t('users.roleAdmin') }}</option></select></div>
         <p v-if="error" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ error }}</p>
       </form>
       <template #footer>
@@ -58,7 +60,7 @@
 
     <Modal :open="!!resetUser" :title="t('users.resetPw')" :subtitle="resetUser?.username" width="sm" @close="resetUser = null">
       <form id="reset-form" @submit.prevent="doReset" class="space-y-3" novalidate>
-        <div><label class="label">{{ t('users.newPw') }}</label><input v-model="newPassword" type="password" required class="input" autofocus autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
+        <div><label class="label" for="reset-password">{{ t('users.newPw') }}</label><input id="reset-password" v-model="newPassword" type="password" required class="input" autofocus autocomplete="new-password" /><p class="hint mt-1">{{ t('setup.passwordHint') }}</p></div>
         <p v-if="error" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ error }}</p>
       </form>
       <template #footer>

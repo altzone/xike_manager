@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { storageGet } from './composables/useApi.js'
+import { useAuthStore } from './stores/auth.js'
 
 const routes = [
   { path: '/login', name: 'login', component: () => import('./views/Login.vue') },
@@ -25,13 +27,36 @@ const routes = [
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
-const router = createRouter({ history: createWebHistory(), routes })
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+  // in-page anchors (e.g. /system#changes) scroll to their section; back/forward restores the position
+  scrollBehavior(to, from, saved) {
+    if (to.hash) {
+      // the target section may render after its data loads: wait for it (up to ~2 s); 72px clears the sticky header
+      return new Promise((resolve) => {
+        let tries = 0
+        const tick = () => {
+          if (document.querySelector(to.hash) || ++tries > 20) resolve({ el: to.hash, behavior: 'smooth', top: 72 })
+          else setTimeout(tick, 100)
+        }
+        tick()
+      })
+    }
+    return saved || { top: 0 }
+  },
+})
 
 router.beforeEach(async (to) => {
-  const token = localStorage.getItem('token')
+  const token = storageGet('token')
   if (to.meta.auth && !token) return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
-  if (to.name === 'login' && token) return { name: 'dashboard' }
-  if (to.meta.admin && localStorage.getItem('role') !== 'admin') return { name: 'dashboard' }
+  if (to.name === 'login' && token) {
+    // /login?logout=1: the session is cleared here, i.e. only once every leave guard (unsaved VLAN
+    // changes…) has let the navigation through; a cancelled logout keeps the user logged in
+    if (to.query.logout) { useAuthStore().logout(); return { name: 'login', query: {}, replace: true } }
+    return { name: 'dashboard' }
+  }
+  if (to.meta.admin && storageGet('role') !== 'admin') return { name: 'dashboard' }
 })
 
 export default router

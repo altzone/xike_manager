@@ -76,10 +76,38 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   message no longer echoes the transport error.
 - The old interface requested the stream token with GET (the route is POST-only), so live
   stats always fell back to polling.
+- Deleting a static MAC entry forwarded the UI's `{mac, port, fid}` body to the firmware as is
+  (only `port` was translated), while the add form uses `mac-input`/`port-input`/`fid-input`.
+  The body is now validated and the firmware payload built exactly like the add path (the
+  firmware's delete form was never captured: this mirrors the add form, to be confirmed on
+  hardware).
+- Renaming a VLAN was a DELETE followed by a POST, so a failure in between lost the name:
+  `PUT /api/switches/{id}/vlans/{vid}` renames it in place.
 - Ports page: changing the speed or flow control of port 1 while it was already disabled asked
   the "disable the management port?" question (and reverted the change on Cancel); the question
   is only asked when the change itself disables the port. Live stats go back to the stream
   after a failed stream-token request instead of polling for good.
+- Rebuilt interface, after an adversarial review of the new code: Arabic layout no longer
+  reorders numeric tokens ("+37/s", "41 °C", "3 / 10", "SFP+"); the Users and static MAC tables
+  scroll on phones instead of hiding their action columns; System section headers wrap on
+  phones; dialogs focus their first field (not the close button), trap Tab, restore focus on
+  close and only the topmost one reacts to Escape; every form label is tied to its field; the
+  remaining hard-coded English strings (placeholders, API errors, login footer, imported
+  snapshot name) are translated; plural forms ("1 port", "1 switch"); port descriptions no
+  longer vanish from the Overview when live stats arrive; a slow ping of the previous switch
+  can no longer mark the current one unreachable; the Overview and the static MAC card show a
+  load error (with Retry) instead of zeros or "no entries"; VLAN page: creating, renaming or
+  deleting a VLAN keeps unsaved port edits, Discard is instant and local, leaving or reloading
+  with unsaved changes asks, ports in the switch's "unknown" mode are shown as such and can be
+  changed, the trunk native VLAN defaults to a value the select can show, chips show keyboard
+  focus; LAG and VLAN load failures offer Retry; a deleted switch id goes back to the dashboard
+  instead of polling forever; the live indicator says "Switch unreachable" rather than
+  "Connecting…" when the stream is fine but the switch is not, and packet rates survive the
+  polling fallback; "Update SNTP" no longer rewrites a timezone the user did not touch (an
+  offset outside the list is kept as is); logging out with unsaved VLAN changes asks first;
+  the tab title follows the page; language menus and toggle-style buttons carry ARIA state;
+  localStorage being blocked (private mode) no longer breaks the app; text/background contrast
+  of muted text, buttons and the front-panel labels meets WCAG AA in both themes.
 - An admin could demote themselves or the last admin and lock everyone out; roles are
   validated, passwords need 6 characters, duplicate usernames return 409.
 - SNTP hostname resolution blocked the whole server; "synced" was reported with SNTP off;

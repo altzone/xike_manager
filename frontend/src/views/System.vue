@@ -10,19 +10,19 @@
           <dt class="text-muted">{{ t('dash.firmware') }}</dt><dd class="text-ink text-end mono">{{ info.fw_ver || '—' }}</dd>
           <dt class="text-muted">{{ t('sys.hardware') }}</dt><dd class="text-ink text-end mono">{{ info.hw_ver || '—' }}</dd>
           <dt class="text-muted">{{ t('sys.macAddress') }}</dt><dd class="text-ink text-end mono">{{ info.sys_macaddr || '—' }}</dd>
-          <dt class="text-muted">{{ t('swdash.temperature') }}</dt><dd class="text-ink text-end num">{{ info.temperature ? info.temperature + ' °C' : '—' }}</dd>
+          <dt class="text-muted">{{ t('swdash.temperature') }}</dt><dd class="text-ink text-end num"><bdi v-if="info.temperature" dir="ltr">{{ info.temperature }} °C</bdi><template v-else>—</template></dd>
         </dl>
         <div class="divider my-4"></div>
         <div class="flex items-start justify-between gap-4">
           <div>
             <p class="text-sm font-medium text-ink inline-flex items-center gap-1.5">{{ t('sys.portMap') }} <Tip :title="t('sys.portMap')" :text="t('sys.portMapTip')" /></p>
             <p class="hint mt-0.5">{{ t('sys.portMapDesc') }}</p>
-            <p class="mono text-ink-2 mt-1.5">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
+            <p class="text-sm text-ink-2 mt-1.5">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
             <label class="flex items-center gap-2 hint mt-2 cursor-pointer"><input type="checkbox" v-model="moveDescriptions" class="accent-accent"> {{ t('sys.portMapMoveDesc') }}</label>
           </div>
           <div class="flex flex-col items-end gap-1 shrink-0">
-            <Toggle :model-value="swapSfp" :disabled="!auth.isAdmin" :label="t('sys.portMapSwap')" @update:model-value="togglePortMap" />
-            <span class="text-[11px] text-muted text-end max-w-[140px]">{{ t('sys.portMapSwap') }}</span>
+            <Toggle :model-value="swapSfp" :disabled="!auth.isAdmin" :label="t('sys.portMapToggle')" @update:model-value="togglePortMap" />
+            <span class="text-[11px] text-muted text-end max-w-[140px]">{{ t('sys.portMapToggle') }}</span>
           </div>
         </div>
       </Section>
@@ -35,9 +35,9 @@
           </div>
           <template v-if="!net.dhcp">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div><label class="label">{{ t('sys.ipAddress') }}</label><input v-model.trim="net.ip" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
-              <div><label class="label">{{ t('sys.netmask') }}</label><input v-model.trim="net.netmask" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
-              <div><label class="label">{{ t('sys.gateway') }}</label><input v-model.trim="net.gateway" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label" for="sys-net-ip">{{ t('sys.ipAddress') }}</label><input id="sys-net-ip" v-model.trim="net.ip" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label" for="sys-net-mask">{{ t('sys.netmask') }}</label><input id="sys-net-mask" v-model.trim="net.netmask" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label" for="sys-net-gw">{{ t('sys.gateway') }}</label><input id="sys-net-gw" v-model.trim="net.gateway" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
             </div>
           </template>
           <p v-else class="hint">{{ t('sys.dhcpAuto') }}</p>
@@ -56,13 +56,13 @@
         <span class="num text-sm text-ink bg-surface-2 border border-line rounded-lg px-2.5 py-1">{{ timeData.dateVal || '--/--/----' }}</span>
         <Badge tone="neutral">UTC {{ timeData.timezoneOffsetVal || '' }}</Badge>
       </template>
-      <div class="flex gap-2 mb-4">
-        <button v-for="m in ['sntp', 'manual']" :key="m" type="button" @click="timeMode = m" class="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition" :class="timeMode === m ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">{{ m === 'sntp' ? t('sys.sntpAuto') : t('sys.manual') }}</button>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button v-for="m in ['sntp', 'manual']" :key="m" type="button" :aria-pressed="timeMode === m" @click="timeMode = m" class="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition" :class="timeMode === m ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">{{ m === 'sntp' ? t('sys.sntpAuto') : t('sys.manual') }}</button>
       </div>
       <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-        <div><label class="label">{{ t('sys.ntpServer') }}</label><input v-model.trim="sntp.server" class="input input-sm mono" placeholder="pool.ntp.org" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label">{{ t('sys.pollInterval') }}</label><input v-model.number="sntp.poll" type="number" min="16" max="99999" class="input input-sm num" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label">{{ t('sys.timezone') }}</label><select v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in TZ" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <div><label class="label" for="sys-ntp-server">{{ t('sys.ntpServer') }}</label><input id="sys-ntp-server" v-model.trim="sntp.server" class="input input-sm mono" placeholder="pool.ntp.org" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label" for="sys-ntp-poll">{{ t('sys.pollInterval') }}</label><input id="sys-ntp-poll" v-model.number="sntp.poll" type="number" min="16" max="99999" class="input input-sm num" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label" for="sys-tz-sntp">{{ t('sys.timezone') }}</label><select id="sys-tz-sntp" v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
         <div class="flex gap-2">
           <Btn v-if="auth.isAdmin" size="sm" variant="primary" class="flex-1" :loading="busy.sntp" @click="applySntp(true)">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</Btn>
           <Btn size="sm" @click="checkSntp">{{ t('sys.check') }}</Btn>
@@ -74,9 +74,9 @@
         <p v-if="sntpResolved" class="md:col-span-4 hint">{{ t('sys.resolved') }} <span class="mono text-ink">{{ sntpResolved }}</span></p>
       </div>
       <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-        <div><label class="label">{{ t('sys.time') }}</label><input v-model.trim="tz.time" class="input input-sm mono" placeholder="14:30:00" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label">{{ t('sys.date') }}</label><input v-model.trim="tz.date" class="input input-sm mono" placeholder="01/10/2026" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label">{{ t('sys.timezone') }}</label><select v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in TZ" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <div><label class="label" for="sys-time">{{ t('sys.time') }}</label><input id="sys-time" v-model.trim="tz.time" class="input input-sm mono" placeholder="14:30:00" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label" for="sys-date">{{ t('sys.date') }}</label><input id="sys-date" v-model.trim="tz.date" class="input input-sm mono" placeholder="01/10/2026" :disabled="!auth.isAdmin" /></div>
+        <div><label class="label" for="sys-tz-manual">{{ t('sys.timezone') }}</label><select id="sys-tz-manual" v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
         <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.time" @click="applyTime">{{ t('sys.setTime') }}</Btn>
         <label class="md:col-span-4 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="tz.daylight" class="accent-accent" :disabled="!auth.isAdmin"> {{ t('sys.timezoneDst') }}</label>
       </div>
@@ -86,12 +86,12 @@
     <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5">
       <Section :title="t('sys.stp')" icon="shield" :state="st.stp" :tip="t('sys.stpTip')" compact>
         <template #actions><Toggle v-model="stp.enabled" :disabled="!auth.isAdmin" :label="t('sys.stp')" @update:model-value="applyStp" /></template>
-        <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!auth.isAdmin" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
+        <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!auth.isAdmin" :aria-label="t('sys.stp')" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
       <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="t('sys.stormTip')" compact>
         <template #actions><Toggle v-model="storm.enabled" :disabled="!auth.isAdmin" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
-        <div v-if="storm.enabled"><label class="label">{{ t('sys.stormRate') }}</label><input v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!auth.isAdmin" class="input input-sm num" /></div>
+        <div v-if="storm.enabled"><label class="label" for="sys-storm-rate">{{ t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!auth.isAdmin" class="input input-sm num" /></div>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
       <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="t('sys.igmpTip')" compact>
@@ -114,17 +114,17 @@
         <template #actions><Badge :tone="mirror.enabled ? 'ok' : 'neutral'" dot>{{ mirror.enabled ? t('common.on') : t('sys.mirrorDisabled') }}</Badge></template>
         <div class="space-y-4">
           <div>
-            <label class="label">1 · {{ t('sys.mirrorDest') }}</label>
-            <select v-model.number="mirror.monitoring_port" :disabled="!auth.isAdmin" class="select select-sm">
+            <label class="label" for="sys-mirror-dest">1 · {{ t('sys.mirrorDest') }}</label>
+            <select id="sys-mirror-dest" v-model.number="mirror.monitoring_port" :disabled="!auth.isAdmin" class="select select-sm">
               <option :value="0">{{ t('sys.mirrorDisabled') }}</option>
               <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
             </select>
             <p class="hint mt-1">{{ t('sys.mirrorDestDesc') }}</p>
           </div>
           <div>
-            <label class="label">2 · {{ t('sys.mirrorSrc') }}</label>
-            <div class="flex flex-wrap gap-1.5">
-              <button v-for="p in 10" :key="p" type="button" v-show="p !== mirror.monitoring_port" :disabled="!auth.isAdmin" @click="toggleMirrorPort(p)"
+            <p id="sys-mirror-src-label" class="label">2 · {{ t('sys.mirrorSrc') }}</p>
+            <div class="flex flex-wrap gap-1.5" role="group" aria-labelledby="sys-mirror-src-label">
+              <button v-for="p in 10" :key="p" type="button" v-show="p !== mirror.monitoring_port" :disabled="!auth.isAdmin" :aria-pressed="mirror.mirrored_ports.includes(p)" @click="toggleMirrorPort(p)"
                 class="chip border transition" :class="mirror.mirrored_ports.includes(p) ? 'bg-accent-soft border-accent/40 text-accent-ink' : 'bg-surface-2 border-line text-muted hover:border-line-strong'">P{{ p }}</button>
             </div>
             <p class="hint mt-1">{{ t('sys.mirrorSrcDesc') }}</p>
@@ -142,7 +142,7 @@
       <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="t('sys.loopTip')">
         <p class="hint mb-3">{{ t('sys.loopDesc') }}</p>
         <div class="grid grid-cols-5 gap-2">
-          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!auth.isAdmin" @click="toggleLoop(lp)"
+          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!auth.isAdmin" :aria-pressed="!!lp.enabled" @click="toggleLoop(lp)"
             class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
             :class="lp.enabled ? (lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : 'border-ok/60 bg-ok-soft text-ok-ink') : 'border-line text-muted hover:border-line-strong'">
             {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
@@ -190,14 +190,14 @@
 
     <!-- Danger zone -->
     <div v-if="auth.isAdmin" class="card border-danger/40">
-      <div class="card-head items-center">
-        <div><h3 class="h2 text-danger-ink">{{ t('sys.danger') }}</h3><p class="hint">{{ t('sys.rebootConfirm') }}</p></div>
+      <div class="card-head items-center flex-wrap">
+        <div class="min-w-0"><h3 class="h2 text-danger-ink">{{ t('sys.danger') }}</h3><p class="hint">{{ t('sys.dangerDesc') }}</p></div>
         <Btn variant="danger-soft" icon="power" @click="doReboot">{{ t('sys.reboot') }}</Btn>
       </div>
     </div>
 
     <Modal :open="showSave" :title="t('sys.snapshotSave')" width="sm" @close="showSave = false">
-      <form id="snap-form" @submit.prevent="saveSnapshot"><input v-model.trim="snapshotName" required maxlength="64" :placeholder="t('sys.snapshotName')" class="input" autofocus /></form>
+      <form id="snap-form" @submit.prevent="saveSnapshot"><input v-model.trim="snapshotName" required maxlength="64" :placeholder="t('sys.snapshotName')" :aria-label="t('sys.snapshotSave')" class="input" autofocus /></form>
       <template #footer><Btn @click="showSave = false">{{ t('common.cancel') }}</Btn><Btn variant="primary" type="submit" form="snap-form" :disabled="!snapshotName" :loading="busy.snapshot">{{ t('common.save') }}</Btn></template>
     </Modal>
     <Modal :open="!!viewing" :title="viewing?.name || ''" :subtitle="viewing ? fmtDate(viewing.created_at) : ''" width="lg" @close="viewing = null">
@@ -207,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, defineComponent, h } from 'vue'
+import { ref, reactive, computed, onMounted, defineComponent, h } from 'vue'
 import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useConfirm } from '../composables/useConfirm.js'
@@ -242,6 +242,8 @@ const timeData = ref({})
 const timeMode = ref('sntp')
 const sntp = reactive({ enabled: false, server: 'pool.ntp.org', poll: 64 })
 const tz = reactive({ time: '', date: '', timezone: '+00:00', daylight: false })
+// timezone/daylight as read from the switch; only fields the user changed are posted back
+const tzLoaded = reactive({ timezone: '+00:00', daylight: false })
 const sntpStatus = ref(null)
 const sntpResolved = ref('')
 const stp = reactive({ enabled: false, mode: 'stp' })
@@ -257,6 +259,15 @@ const snapshotName = ref('')
 const viewing = ref(null)
 
 const TZ = ['-12:00', '-11:00', '-10:00', '-09:30', '-09:00', '-08:00', '-07:00', '-06:00', '-05:00', '-04:00', '-03:30', '-03:00', '-02:00', '-01:00', '+00:00', '+01:00', '+02:00', '+03:00', '+03:30', '+04:00', '+04:30', '+05:00', '+05:30', '+05:45', '+06:00', '+06:30', '+07:00', '+08:00', '+08:45', '+09:00', '+09:30', '+10:00', '+10:30', '+11:00', '+12:00', '+12:45', '+13:00', '+14:00']
+// The switch may report an offset outside the list: keep it selectable instead of silently falling back to +00:00
+const tzOptions = computed(() => tz.timezone && !TZ.includes(tz.timezone) ? [...TZ, tz.timezone] : TZ)
+// Only the timezone/daylight fields the user actually changed; the backend keeps the switch's current values for omitted ones
+function tzChanges() {
+  const body = {}
+  if (tz.timezone !== tzLoaded.timezone) body.timezone = tz.timezone
+  if (tz.daylight !== tzLoaded.daylight) body.daylight = tz.daylight ? '1' : '0'
+  return body
+}
 
 function fmtDate(d) { return d ? new Date(d + 'Z').toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' }) : '' }
 function ok(m) { toast.success(m) }
@@ -267,14 +278,15 @@ const Section = defineComponent({
   props: { title: String, icon: String, state: String, tip: String, unsupported: Boolean, compact: Boolean, id: String },
   setup(p, { slots }) {
     return () => h('section', { class: 'card flex flex-col', id: p.id }, [
-      h('div', { class: 'card-head items-center' }, [
+      // flex-wrap: on narrow screens the actions drop under the title instead of squeezing it out
+      h('div', { class: 'card-head items-center flex-wrap' }, [
         h('div', { class: 'flex items-center gap-2.5 min-w-0' }, [
           h('span', { class: 'w-8 h-8 rounded-lg bg-surface-3 text-muted flex items-center justify-center shrink-0' }, [h(Icon, { name: p.icon || 'info', size: 16 })]),
           h('div', { class: 'min-w-0' }, [
             h('h3', { class: 'h2 inline-flex items-center gap-1.5' }, [p.title, p.tip ? h(Tip, { title: p.title, text: p.tip }) : null]),
           ]),
         ]),
-        slots.actions && p.state === 'ok' ? h('div', { class: 'flex items-center gap-2 shrink-0' }, slots.actions()) : null,
+        slots.actions && p.state === 'ok' ? h('div', { class: 'flex items-center flex-wrap gap-2 ms-auto' }, slots.actions()) : null,
       ]),
       h('div', { class: p.compact ? 'px-5 py-4 flex-1' : 'card-body flex-1' },
         p.state === 'loading' ? [h('div', { class: 'space-y-2 animate-pulse' }, [h('div', { class: 'h-3 rounded bg-surface-3 w-2/3' }), h('div', { class: 'h-3 rounded bg-surface-3 w-1/2' })])]
@@ -304,9 +316,10 @@ async function loadTime() {
   timeData.value = d
   sntp.enabled = d.sntp_state === '1'; sntp.server = d.sntp_server_ip || 'pool.ntp.org'; sntp.poll = parseInt(d.sntp_poll) || 64
   timeMode.value = sntp.enabled ? 'sntp' : 'manual'
-  tz.timezone = TZ.includes(d.timezoneOffsetVal) ? d.timezoneOffsetVal : '+00:00'
+  tz.timezone = d.timezoneOffsetVal || '+00:00'
   const dl = Object.entries(d).find(([k]) => k.toLowerCase().includes('daylight'))
   tz.daylight = dl ? ['1', 'on', 'true'].includes(String(dl[1])) : false
+  tzLoaded.timezone = tz.timezone; tzLoaded.daylight = tz.daylight
 }
 async function loadStp() { const d = await api(`${base}/stp`); stp.enabled = !!d.enabled; stp.mode = d.mode || 'stp' }
 async function loadStorm() { const d = await api(`${base}/storm`); storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100 }
@@ -344,7 +357,8 @@ async function applyNetwork() {
   busy.net = true
   try {
     const res = await api(`${base}/network`, { method: 'POST', body: JSON.stringify({ dhcp: net.dhcp, ip: net.ip, netmask: net.netmask, gateway: net.gateway }) })
-    ok(t('sys.networkApplied')); if (res.note) toast.error(res.note)
+    // res.note is informational (new reachable address / DHCP hint), not an error
+    ok(res.note ? `${t('sys.networkApplied')} · ${res.note}` : t('sys.networkApplied'))
     if (res.ip) sw.patch(props.switchId, { ip: res.ip })
     section('status', loadStatus)
   } catch (e) { fail(e) } finally { busy.net = false }
@@ -354,7 +368,8 @@ async function applySntp(enable) {
   try {
     const res = await api(`${base}/sntp`, { method: 'POST', body: JSON.stringify({ enabled: enable, server: sntp.server, poll: sntp.poll }) })
     sntpResolved.value = res.resolved_ip !== sntp.server ? res.resolved_ip : ''
-    await api(`${base}/time`, { method: 'POST', body: JSON.stringify({ timezone: tz.timezone, daylight: tz.daylight ? '1' : '0' }) })
+    const changes = tzChanges()
+    if (Object.keys(changes).length) await api(`${base}/time`, { method: 'POST', body: JSON.stringify(changes) })
     ok(t('sys.sntpUpdated')); section('time', loadTime)
   } catch (e) { fail(e) } finally { busy.sntp = false }
 }
@@ -363,7 +378,7 @@ async function applyTime() {
   busy.time = true
   try {
     if (sntp.enabled) await api(`${base}/sntp`, { method: 'POST', body: JSON.stringify({ enabled: false, server: sntp.server, poll: sntp.poll }) })
-    await api(`${base}/time`, { method: 'POST', body: JSON.stringify({ time: tz.time || null, date: tz.date || null, timezone: tz.timezone, daylight: tz.daylight ? '1' : '0' }) })
+    await api(`${base}/time`, { method: 'POST', body: JSON.stringify({ time: tz.time || null, date: tz.date || null, ...tzChanges() }) })
     ok(t('sys.timeSet')); section('time', loadTime)
   } catch (e) { fail(e) } finally { busy.time = false }
 }
@@ -405,7 +420,7 @@ async function importFile(e) {
   if (!f) return
   try {
     const d = JSON.parse(await f.text())
-    await api(`${base}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: `Import: ${f.name}`.slice(0, 128), config: d.config || d }) })
+    await api(`${base}/snapshots/import`, { method: 'POST', body: JSON.stringify({ name: t('sys.snapshotImportName', { name: f.name }).slice(0, 128), config: d.config || d }) })
     ok(t('sys.snapshotImported')); section('snapshots', loadSnapshots)
   } catch (err) { fail(err) }
 }

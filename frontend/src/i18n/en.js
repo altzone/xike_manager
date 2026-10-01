@@ -286,7 +286,7 @@ export default {
   'common.on': 'ON',
   'common.off': 'OFF',
   'common.loading': 'Loading...',
-  'common.failedLoad': 'Failed to load:',
+  'common.failedLoad': 'Failed to load',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+ Port Numbering',
   'sys.portMapTip': 'On some SKS3200 units the two SFP+ cages are wired the other way round from the firmware\'s own numbering: the switch\'s index 9 is the cage labelled 10 on the front panel. Turn this on if SwitchPilot shows the link on port 9 while your cable is in the cage labelled 10 (or the reverse). Nothing is written to the switch, only the labels move.',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 entry learned',
   'ui.switchCountOne': '1 switch',
   'ui.offline': 'Switch unreachable',
+  'sys.portMapToggle': 'Swap ports 9 and 10',
+  'sys.dangerDesc': 'Restart the switch. Management access drops for about a minute.',
 }

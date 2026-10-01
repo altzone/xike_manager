@@ -31,11 +31,11 @@ const props = defineProps({
 
 const base = 'inline-flex items-center justify-center gap-1.5 font-medium rounded-lg border transition-colors duration-150 select-none whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2'
 const variants = {
-  primary: 'bg-accent border-accent text-white hover:bg-accent-hover hover:border-accent-hover shadow-sm',
+  primary: 'bg-accent border-accent text-on-accent hover:bg-accent-hover hover:border-accent-hover shadow-sm',
   secondary: 'bg-surface border-line-strong text-ink-2 hover:bg-surface-2 hover:text-ink',
   ghost: 'bg-transparent border-transparent text-muted hover:bg-surface-3 hover:text-ink',
-  danger: 'bg-danger border-danger text-white hover:opacity-90',
-  'danger-soft': 'bg-danger-soft border-transparent text-danger-ink hover:bg-danger hover:text-white',
+  danger: 'bg-danger border-danger text-on-danger hover:opacity-90',
+  'danger-soft': 'bg-danger-soft border-transparent text-danger-ink hover:bg-danger hover:text-on-danger',
   link: 'bg-transparent border-transparent text-accent hover:underline px-0',
 }
 const sizes = { xs: 'text-[11.5px] h-7 px-2', sm: 'text-xs h-8 px-2.5', md: 'text-[13px] h-9 px-3.5', lg: 'text-sm h-10 px-4' }

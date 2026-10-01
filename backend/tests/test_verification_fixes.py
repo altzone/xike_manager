@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
 import auth
 import sse
@@ -263,6 +264,68 @@ def test_static_mac_save_timeout_is_reported_not_fatal(api):
     r = api.post(f"/api/switches/{sid}/mac/static/add", json={"mac": "aa:bb:cc:dd:ee:01", "port": 2, "fid": 0})
     assert r.status_code == 200 and r.json()["warnings"]
     assert api.mock.posted("mac_add_static_mac_entries.json")[-1]["mac-input"] == "AA:BB:CC:DD:EE:01"
+
+
+@pytest.mark.parametrize("swap,expected_internal", [(False, "9"), (True, "10")])
+def test_static_mac_delete_posts_the_add_form_keys(api, swap, expected_internal):
+    """The delete body is built by the backend with the same field names as the add form
+    (the firmware's delete form keys are not captured anywhere else), never forwarded raw."""
+    sid = add_switch(api, swap=swap)
+    r = api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "aa-bb-cc-00-00-02", "port": 9, "fid": 0})
+    assert r.status_code == 200 and r.json() == {"ok": True, "warnings": []}
+    assert api.mock.posted("mac_delete_static_mac_entries.json")[-1] == {
+        "mac-input": "AA:BB:CC:00:00:02", "port-input": expected_internal, "fid-input": "0"}
+    assert api.mock.posted("mac_save_static_mac_entries.json")
+    changes = api.get(f"/api/switches/{sid}/changes").json()
+    assert changes[0]["action"] == "static_mac_delete"
+    assert changes[0]["details"] == {"mac": "aa-bb-cc-00-00-02", "port": 9, "fid": 0}
+
+
+def test_static_mac_delete_validates_its_body(api):
+    sid = add_switch(api)
+    m = api.mock
+    assert api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "not-a-mac", "port": 9}).status_code == 422
+    assert api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "AA:BB:CC:00:00:02", "port": 9, "fid": 64}).status_code == 422
+    assert api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "AA:BB:CC:00:00:02", "port": 11}).status_code == 400
+    assert api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "AA:BB:CC:00:00:02"}).status_code == 422
+    assert not m.posted("mac_delete_static_mac_entries.json") and not m.posted("mac_save_static_mac_entries.json")
+    r = api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "AA:BB:CC:00:00:02", "port": 9})
+    assert r.status_code == 200 and m.posted("mac_delete_static_mac_entries.json")[-1]["fid-input"] == "0"  # fid defaults to 0
+
+
+def test_static_mac_delete_save_timeout_is_a_warning(api):
+    sid = add_switch(api)
+    api.mock.fail_once("mac_save_static_mac_entries.json", httpx.ReadTimeout("slow flash"))
+    r = api.post(f"/api/switches/{sid}/mac/static/delete", json={"mac": "AA:BB:CC:00:00:02", "port": 9, "fid": 0})
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["warnings"]
+
+
+def test_vlan_rename_updates_the_row_in_place(api):
+    sid = add_switch(api)
+    assert api.post(f"/api/switches/{sid}/vlans", json={"vlan_id": 20, "name": "old"}).status_code == 200
+    r = api.put(f"/api/switches/{sid}/vlans/20", json={"name": "  Servers  "})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    vlans = {v["vlan_id"]: v for v in api.get(f"/api/switches/{sid}/vlans").json()}
+    assert vlans[20]["name"] == "Servers" and vlans[20]["defined"] is True
+    assert vlans[20]["in_use"] is True  # port 9 carries PVID 20 in the fixture: untouched by the rename
+    changes = api.get(f"/api/switches/{sid}/changes").json()
+    assert changes[0]["action"] == "vlans" and changes[0]["details"]["name"] == "Servers"
+
+
+def test_vlan_rename_rejects_undefined_or_blank(api):
+    sid = add_switch(api)
+    assert api.put(f"/api/switches/{sid}/vlans/20", json={"name": "x"}).status_code == 404  # in use but not defined
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={"name": "x"}).status_code == 404
+    assert api.put("/api/switches/999/vlans/30", json={"name": "x"}).status_code == 404
+    api.post(f"/api/switches/{sid}/vlans", json={"vlan_id": 30, "name": "keep"})
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={"name": "   "}).status_code == 422
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={"name": ""}).status_code == 422
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={"name": "n" * 65}).status_code == 422
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={}).status_code == 422
+    assert {v["vlan_id"]: v["name"] for v in api.get(f"/api/switches/{sid}/vlans").json()}[30] == "keep"
+    api.post("/api/users", json={"username": "ro", "password": "viewerpass1", "role": "viewer"})
+    assert api.put(f"/api/switches/{sid}/vlans/30", json={"name": "nope"}, headers=login_as(api, "ro", "viewerpass1")).status_code == 403
+    assert {v["vlan_id"]: v["name"] for v in api.get(f"/api/switches/{sid}/vlans").json()}[30] == "keep"
 
 
 def test_snapshots_of_an_unknown_switch_are_404(api):

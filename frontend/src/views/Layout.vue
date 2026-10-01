@@ -34,15 +34,15 @@
         <Btn variant="ghost" :icon="themeIcon" icon-only :aria-label="t('ui.theme')" :title="t('ui.theme') + ': ' + t('ui.theme_' + theme)" @click="cycle" />
 
         <!-- Language -->
-        <div class="relative" ref="langRef">
-          <Btn variant="ghost" size="md" :aria-label="t('ui.language')" @click="showLang = !showLang">
+        <div class="relative" ref="langRef" @keydown.escape="showLang = false">
+          <Btn variant="ghost" size="md" :aria-label="t('ui.language')" aria-haspopup="menu" :aria-expanded="showLang" @click="showLang = !showLang">
             <span class="text-base leading-none">{{ currentLang?.flag }}</span>
             <span class="hidden md:inline text-xs">{{ currentLang?.name }}</span>
             <Icon name="chevron-down" :size="14" />
           </Btn>
           <transition name="pop">
-            <div v-if="showLang" class="absolute end-0 top-full mt-1 w-48 card py-1 max-h-80 overflow-auto z-50 shadow-[var(--shadow-pop)]">
-              <button v-for="lang in i18n.LANGUAGES" :key="lang.code" @click="i18n.setLocale(lang.code); showLang = false"
+            <div v-if="showLang" role="menu" :aria-label="t('ui.language')" class="absolute end-0 top-full mt-1 w-48 card py-1 max-h-80 overflow-auto z-50 shadow-[var(--shadow-pop)]">
+              <button v-for="lang in i18n.LANGUAGES" :key="lang.code" role="menuitemradio" :aria-checked="lang.code === i18n.locale.value" @click="i18n.setLocale(lang.code); showLang = false"
                 class="w-full px-3 py-2 text-start text-sm flex items-center gap-2.5 hover:bg-surface-2 transition"
                 :class="lang.code === i18n.locale.value ? 'text-accent font-medium' : 'text-ink-2'">
                 <span class="text-base leading-none">{{ lang.flag }}</span>
@@ -81,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, defineComponent, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, watchEffect, defineComponent, h } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { useSwitchesStore } from '../stores/switches.js'
@@ -108,10 +108,12 @@ const langRef = ref(null)
 const currentLang = computed(() => i18n.LANGUAGES.find(l => l.code === i18n.locale.value))
 const themeIcon = computed(() => ({ light: 'sun', dark: 'moon', system: 'monitor' }[theme.value]))
 const pageTitle = computed(() => route.meta.title ? t(route.meta.title) : 'SwitchPilot')
+// browser tab title follows the page and the language
+watchEffect(() => { document.title = route.meta.title ? `${pageTitle.value} · SwitchPilot` : 'SwitchPilot' })
 
 function onDocClick(e) { if (langRef.value && !langRef.value.contains(e.target)) showLang.value = false }
 onMounted(() => { document.addEventListener('click', onDocClick); auth.refresh(); sw.load().catch(() => {}) })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+onUnmounted(() => { document.removeEventListener('click', onDocClick); document.title = 'SwitchPilot' })
 watch(() => route.fullPath, () => { drawer.value = false })
 
 // ── Sidebar (shared between desktop and the mobile drawer) ──
@@ -133,7 +135,17 @@ const SidebarContent = defineComponent({
     onMounted(() => document.addEventListener('click', onDoc))
     onUnmounted(() => document.removeEventListener('click', onDoc))
     function go(to) { picker.value = false; emit('navigate'); router.push(to) }
-    function doLogout() { auth.logout(); router.push('/login') }
+    // navigate first: the router guard clears the session only once the leave guards (unsaved VLAN
+    // changes…) have let the navigation through, so a cancelled logout leaves the user logged in
+    function doLogout() { router.push({ name: 'login', query: { logout: 1 } }) }
+    // plain links that still honour Ctrl/Cmd/Shift/middle clicks (navigate() handles those and preventDefault)
+    const navLink = (to, name, icon, label) => h(RouterLink, { to, custom: true }, {
+      default: ({ navigate }) => h('a', {
+        href: to, class: [linkBase, route.name === name ? linkActive : linkIdle],
+        'aria-current': route.name === name ? 'page' : undefined,
+        onClick: (e) => { emit('navigate'); navigate(e) },
+      }, [h(Icon, { name: icon, size: 17 }), t(label)]),
+    })
 
     const linkBase = 'flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-colors'
     const linkIdle = 'text-side-muted hover:text-side-ink hover:bg-side-2'
@@ -155,7 +167,7 @@ const SidebarContent = defineComponent({
             h('span', { class: 'dot ' + (sw.current ? (sw.status.online === false ? 'bg-danger' : sw.status.online ? 'bg-ok live-dot' : 'bg-faint') : 'bg-faint') }),
             h('span', { class: 'min-w-0 flex-1' }, [
               h('span', { class: 'block text-[13px] font-medium text-white truncate' }, sw.current ? sw.current.name : t('ui.pickSwitch')),
-              h('span', { class: 'block text-[11px] text-side-muted truncate mono' }, sw.current ? sw.current.ip : t('ui.switchCount', { n: sw.list.length })),
+              h('span', { class: 'block text-[11px] text-side-muted truncate mono' }, sw.current ? sw.current.ip : (sw.list.length === 1 ? t('ui.switchCountOne') : t('ui.switchCount', { n: sw.list.length }))),
             ]),
             h(Icon, { name: 'chevron-updown', size: 14, class: 'text-side-muted' }),
           ]),
@@ -178,7 +190,7 @@ const SidebarContent = defineComponent({
         ]),
       ]),
       // per-switch nav
-      h('nav', { class: 'px-3 pt-4 space-y-0.5 flex-1', 'aria-label': 'Switch' }, [
+      h('nav', { class: 'px-3 pt-4 space-y-0.5 flex-1', 'aria-label': t('nav.switchMenu') }, [
         sw.current ? h('p', { class: 'eyebrow text-side-muted px-3 pb-1.5' }, t('sw.managing')) : null,
         ...(sw.current ? NAV.map(item => h(RouterLink, { to: `/switch/${sw.currentId}${item.path}`, custom: true }, {
           default: ({ navigate }) => h('a', {
@@ -189,14 +201,12 @@ const SidebarContent = defineComponent({
           }, [h(Icon, { name: item.icon, size: 17 }), t(item.label)]),
         })) : []),
         h('div', { class: 'pt-4 pb-1.5' }, [h('p', { class: 'eyebrow text-side-muted px-3' }, t('ui.general'))]),
-        h('a', { href: '/', class: [linkBase, route.name === 'dashboard' ? linkActive : linkIdle], onClick: (e) => { e.preventDefault(); go('/') } },
-          [h(Icon, { name: 'switch', size: 17 }), t('nav.allSwitches')]),
-        auth.isAdmin ? h('a', { href: '/users', class: [linkBase, route.name === 'users' ? linkActive : linkIdle], onClick: (e) => { e.preventDefault(); go('/users') } },
-          [h(Icon, { name: 'users', size: 17 }), t('nav.users')]) : null,
+        navLink('/', 'dashboard', 'switch', 'nav.allSwitches'),
+        auth.isAdmin ? navLink('/users', 'users', 'users', 'nav.users') : null,
       ]),
       // user
       h('div', { class: 'p-3 border-t border-side-line flex items-center gap-2.5' }, [
-        h('div', { class: 'w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-semibold shrink-0' }, (auth.username || '?')[0].toUpperCase()),
+        h('div', { class: 'w-8 h-8 rounded-full bg-accent text-on-accent flex items-center justify-center text-xs font-semibold shrink-0' }, (auth.username || '?')[0].toUpperCase()),
         h('div', { class: 'min-w-0 flex-1' }, [
           h('p', { class: 'text-[13px] font-medium text-white truncate' }, auth.username),
           h('p', { class: 'text-[11px] text-side-muted' }, auth.isAdmin ? t('users.roleAdmin') : t('users.roleViewer')),

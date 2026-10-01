@@ -281,7 +281,7 @@ export default {
   'common.on': 'تشغيل',
   'common.off': 'إيقاف',
   'common.loading': 'جارٍ التحميل...',
-  'common.failedLoad': 'فشل التحميل:',
+  'common.failedLoad': 'فشل التحميل',
 
   // Switch Dashboard
   'swdash.temperature': 'درجة الحرارة',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': 'تم تعلّم إدخال واحد',
   'ui.switchCountOne': 'مبدّل واحد',
   'ui.offline': 'تعذر الوصول إلى المبدّل',
+  'sys.portMapToggle': 'تبديل المنفذين 9 و10',
+  'sys.dangerDesc': 'يعيد تشغيل المبدّل. ينقطع الوصول الإداري لنحو دقيقة.',
 }

@@ -281,7 +281,7 @@ export default {
   'common.on': 'EIN',
   'common.off': 'AUS',
   'common.loading': 'Wird geladen...',
-  'common.failedLoad': 'Laden fehlgeschlagen:',
+  'common.failedLoad': 'Laden fehlgeschlagen',
 
   // Switch Dashboard
   'swdash.temperature': 'Temperatur',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 Eintrag gelernt',
   'ui.switchCountOne': '1 Switch',
   'ui.offline': 'Switch nicht erreichbar',
+  'sys.portMapToggle': 'Ports 9 und 10 vertauschen',
+  'sys.dangerDesc': 'Startet den Switch neu. Der Verwaltungszugriff fällt etwa eine Minute aus.',
 }

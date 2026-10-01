@@ -639,12 +639,18 @@ class SwitchClient:
         })
         return await self._save_static_macs()
 
-    async def delete_static_mac(self, data: dict):
-        """Forward the delete request, translating a user-facing 'port' if present."""
-        payload = dict(data)
-        if "port" in payload:
-            payload["port-input"] = str(self.to_internal(payload.pop("port")))
-        await self._post("mac_delete_static_mac_entries.json", payload)
+    async def delete_static_mac(self, mac: str, port: int, fid: int = 0):
+        """Delete one static entry, identified by MAC + port + FID like the add form.
+
+        The firmware's delete form keys were never captured from the native UI; the add
+        form ('mac-input', 'port-input', 'fid-input') is the only documented shape, so the
+        delete payload mirrors it rather than forwarding whatever the caller sent."""
+        internal = self.to_internal(port)
+        await self._post("mac_delete_static_mac_entries.json", {
+            "mac-input": mac,
+            "port-input": str(internal),
+            "fid-input": str(fid),
+        })
         return await self._save_static_macs()
 
     async def _save_static_macs(self) -> list[str]:

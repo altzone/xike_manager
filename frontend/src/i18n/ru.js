@@ -281,7 +281,7 @@ export default {
   'common.on': 'ВКЛ',
   'common.off': 'ВЫКЛ',
   'common.loading': 'Загрузка...',
-  'common.failedLoad': 'Не удалось загрузить:',
+  'common.failedLoad': 'Не удалось загрузить',
 
   // Switch Dashboard
   'swdash.temperature': 'Температура',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 запись изучена',
   'ui.switchCountOne': '1 коммутатор',
   'ui.offline': 'Коммутатор недоступен',
+  'sys.portMapToggle': 'Поменять порты 9 и 10 местами',
+  'sys.dangerDesc': 'Перезагружает коммутатор. Доступ к управлению пропадает примерно на минуту.',
 }

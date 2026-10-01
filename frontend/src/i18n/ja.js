@@ -281,7 +281,7 @@ export default {
   'common.on': 'オン',
   'common.off': 'オフ',
   'common.loading': '読み込み中...',
-  'common.failedLoad': '読み込みに失敗しました:',
+  'common.failedLoad': '読み込みに失敗しました',
 
   // Switch Dashboard
   'swdash.temperature': '温度',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '1 件学習済み',
   'ui.switchCountOne': '1 台のスイッチ',
   'ui.offline': 'スイッチに到達できません',
+  'sys.portMapToggle': 'ポート 9 と 10 を入れ替える',
+  'sys.dangerDesc': 'スイッチを再起動します。管理アクセスは約 1 分間途切れます。',
 }

@@ -105,6 +105,9 @@ class VlanCreate(BaseModel):
     vlan_id: int = Field(ge=1, le=MAX_VLAN_ID)
     name: str = Field(min_length=1, max_length=64)
 
+class VlanRename(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
 class PortAssignment(BaseModel):
     port: int
     mode: Literal["access", "trunk", "flat", "unknown"]  # unknown = as reported by GET: keep as is
@@ -150,6 +153,11 @@ class PortDescription(BaseModel):
     description: str = Field(max_length=128)
 
 class StaticMacAdd(BaseModel):
+    mac: str = Field(pattern=r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
+    port: int
+    fid: int = Field(default=0, ge=0, le=MAX_FID)
+
+class StaticMacDelete(BaseModel):
     mac: str = Field(pattern=r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
     port: int
     fid: int = Field(default=0, ge=0, le=MAX_FID)
@@ -609,6 +617,22 @@ async def create_vlan(switch_id: int, req: VlanCreate, user=Depends(require_admi
             raise HTTPException(409, f"VLAN {req.vlan_id} already exists")
     return {"ok": True}
 
+@app.put("/api/switches/{switch_id}/vlans/{vlan_id}")
+async def rename_vlan(switch_id: int, vlan_id: int, req: VlanRename, user=Depends(require_admin)):
+    """Rename a defined VLAN in place (the ID stays, so port assignments are untouched)."""
+    await _switch_row(switch_id)
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(422, "VLAN name must not be blank")
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("UPDATE vlans SET name=? WHERE switch_id=? AND vlan_id=?",
+                                  (name, switch_id, vlan_id))
+        await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(404, f"VLAN {vlan_id} is not defined")
+    await _log_change(switch_id, user, "vlans", {"vlan_id": vlan_id, "name": name, "renamed": True})
+    return {"ok": True}
+
 @app.delete("/api/switches/{switch_id}/vlans/{vlan_id}")
 async def delete_vlan(switch_id: int, vlan_id: int, user=Depends(require_admin)):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -998,10 +1022,10 @@ async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require
     return {"ok": True, "warnings": warnings}
 
 @app.post("/api/switches/{switch_id}/mac/static/delete")
-async def delete_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
+async def delete_static_mac(switch_id: int, req: StaticMacDelete, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    warnings = await client.delete_static_mac(data)
-    await _log_change(switch_id, user, "static_mac_delete", data)
+    warnings = await client.delete_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
+    await _log_change(switch_id, user, "static_mac_delete", req.model_dump())
     return {"ok": True, "warnings": warnings}
 
 # ── Config Snapshots ──

@@ -58,6 +58,7 @@ Body: {"username": "admin", "password": "yourpass"}
 |--------|----------|-------------|
 | GET | `/api/switches/{id}/vlans` | List VLAN definitions |
 | POST | `/api/switches/{id}/vlans` | Create VLAN `{"vlan_id","name"}` |
+| PUT | `/api/switches/{id}/vlans/{vid}` | Rename VLAN `{"name"}` (1-64 chars, trimmed) → `{"ok"}`; the ID and port assignments are untouched; `404` when that VLAN is not defined for this switch (a VLAN that is only in use on the switch must be created first); logged as a `vlans` change |
 | DELETE | `/api/switches/{id}/vlans/{vid}` | Delete VLAN |
 | GET | `/api/switches/{id}/vlans/assignments` | Port VLAN assignments |
 | POST | `/api/switches/{id}/vlans/apply` | Apply assignments `[{"port","mode","access_vlan","native_vlan","trunk_vlans"}]`; `mode` is `access`, `trunk`, `flat` or `unknown` (= leave as is); ports not listed keep their configuration; tagged entries are written to their VLAN's bridge (VLANs above 63 get a free bridge) |
@@ -103,7 +104,7 @@ Body: {"username": "admin", "password": "yourpass"}
 | POST | `/api/switches/{id}/mac/clear` | Clear dynamic MACs |
 | GET | `/api/switches/{id}/mac/static` | Static MAC entries |
 | POST | `/api/switches/{id}/mac/static/add` | Add static `{"mac","port","fid"}` → `{"ok","warnings"}` (a flash-save timeout is a warning, the entry is applied) |
-| POST | `/api/switches/{id}/mac/static/delete` | Delete static entry (body as listed by GET, with `port`) → `{"ok","warnings"}` |
+| POST | `/api/switches/{id}/mac/static/delete` | Delete static `{"mac","port","fid"}` (same body as add; `fid` defaults to 0, `port` is the user-facing number) → `{"ok","warnings"}`. The backend builds the firmware payload itself with the add form's field names (`mac-input`, `port-input`, `fid-input`); the firmware's own delete form was never captured, so mirroring the add form is the best evidence available |
 
 ## Config Snapshots
 

@@ -31,7 +31,7 @@
           </dl>
         </router-link>
         <div class="px-3 py-2 border-t border-line flex items-center justify-between">
-          <Btn tag="router-link" :to="`/switch/${s.id}`" variant="link" size="sm" icon="chevron-right">{{ t('dash.open') }}</Btn>
+          <Btn tag="router-link" :to="`/switch/${s.id}`" variant="link" size="sm" :icon="isRtl ? 'chevron-left' : 'chevron-right'">{{ t('dash.open') }}</Btn>
           <div v-if="auth.isAdmin" class="flex gap-1">
             <Btn variant="ghost" size="sm" icon="pencil" icon-only :aria-label="t('common.edit')" @click="openEdit(s)" />
             <Btn variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="remove(s)" />
@@ -50,21 +50,21 @@
     <Modal :open="modal" :title="editing ? t('dash.editSwitch') : t('dash.addSwitch')" @close="modal = false">
       <form @submit.prevent="save" class="space-y-3" novalidate id="switch-form">
         <div>
-          <label class="label">{{ t('dash.name') }}</label>
-          <input v-model.trim="form.name" required class="input" placeholder="Core switch" autofocus />
+          <label class="label" for="switch-name">{{ t('dash.name') }}</label>
+          <input id="switch-name" v-model.trim="form.name" required class="input" :placeholder="t('dash.namePlaceholder')" autofocus />
         </div>
         <div>
-          <label class="label">{{ t('dash.ip') }}</label>
-          <input v-model.trim="form.ip" required class="input mono" placeholder="192.168.1.10" />
+          <label class="label" for="switch-ip">{{ t('dash.ip') }}</label>
+          <input id="switch-ip" v-model.trim="form.ip" required class="input mono" placeholder="192.168.1.10" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">{{ t('dash.username') }}</label>
-            <input v-model.trim="form.username" required class="input" autocomplete="off" />
+            <label class="label" for="switch-username">{{ t('dash.username') }}</label>
+            <input id="switch-username" v-model.trim="form.username" required class="input" autocomplete="off" />
           </div>
           <div>
-            <label class="label">{{ t('dash.password') }}</label>
-            <input v-model="form.password" type="password" :required="!editing" class="input" autocomplete="new-password" :placeholder="editing ? t('dash.passwordKeep') : ''" />
+            <label class="label" for="switch-password">{{ t('dash.password') }}</label>
+            <input id="switch-password" v-model="form.password" type="password" :required="!editing" class="input" autocomplete="new-password" :placeholder="editing ? t('dash.passwordKeep') : ''" />
           </div>
         </div>
         <label v-if="!editing" class="flex items-start gap-2.5 text-sm cursor-pointer pt-1">
@@ -95,7 +95,7 @@ import Icon from '../components/ui/Icon.vue'
 import Modal from '../components/ui/Modal.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-const { t } = useI18n()
+const { t, isRtl } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()

@@ -158,7 +158,9 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   `GET /vlans/assignments` reports for a port enabled with neither untag nor tag): the port is
   left as it is. `access_vlan` may be `0`. Tagged entries get their VLAN's bridge (see above).
 - `POST /api/switches/{id}/mac/static/add` and `/delete` return `warnings` when the flash save
-  timed out (the entry is applied regardless).
+  timed out (the entry is applied regardless). `/delete` now takes the same validated body as
+  `/add` (`{"mac", "port", "fid"}`, user-facing port) and builds the firmware payload itself.
+- New: `PUT /api/switches/{id}/vlans/{vid}` with `{"name"}` renames a defined VLAN in place.
 - `POST /api/switches/{id}/time` and `/sntp` validate their fields (`timezone` as `+HH:MM`).
 - New: `GET /api/switches/{id}/changes` (audit log), `PUT /api/switches/{id}/lag/names`.
 - New: `PUT /api/switches/{id}` (edit name, IP, credentials) and

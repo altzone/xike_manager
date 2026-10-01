@@ -281,7 +281,7 @@ export default {
   'common.on': '开启',
   'common.off': '关闭',
   'common.loading': '加载中...',
-  'common.failedLoad': '加载失败：',
+  'common.failedLoad': '加载失败',
 
   // Switch Dashboard
   'swdash.temperature': '温度',
@@ -401,4 +401,6 @@ export default {
   'mac.entriesOne': '已学习 1 条记录',
   'ui.switchCountOne': '1 台交换机',
   'ui.offline': '交换机不可达',
+  'sys.portMapToggle': '交换端口 9 和 10',
+  'sys.dangerDesc': '重启交换机。管理访问将中断约一分钟。',
 }

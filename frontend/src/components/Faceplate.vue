@@ -1,13 +1,14 @@
 <template>
-  <!-- Front panel of the SKS3200-8E2X: 8x RJ45 2.5G + 2x SFP+ 10G -->
+  <!-- Front panel of the SKS3200-8E2X: 8x RJ45 2.5G + 2x SFP+ 10G.
+       The panel is dark in both themes, so its small labels use fixed on-dark colours (slate-400 / violet-300), not theme tokens. -->
   <div dir="ltr" class="rounded-xl bg-[#1b2430] dark:bg-[#0d131b] border border-[#2c3847] p-3 sm:p-4 select-none">
     <div class="flex items-center justify-between mb-3 px-1">
       <div class="flex items-center gap-2 text-[11px] font-medium tracking-wider text-slate-400 uppercase">
         <span class="dot" :class="live ? 'bg-ok live-dot' : 'bg-slate-600'"></span>
         <span>{{ model || 'SKS3200-8E2X' }}</span>
-        <span v-if="firmware" class="text-slate-500 normal-case tracking-normal mono">{{ firmware }}</span>
+        <span v-if="firmware" class="text-slate-400 normal-case tracking-normal mono">{{ firmware }}</span>
       </div>
-      <div class="flex items-center gap-3 text-[10px] text-slate-500">
+      <div class="flex items-center gap-3 text-[10px] text-slate-400">
         <span class="flex items-center gap-1"><span class="dot bg-ok"></span>{{ t('ui.linkUp') }}</span>
         <span class="flex items-center gap-1"><span class="dot bg-warn"></span>{{ t('ports.errors') }}</span>
         <span class="flex items-center gap-1"><span class="dot bg-slate-600"></span>{{ t('ports.down') }}</span>
@@ -17,7 +18,7 @@
     <div class="flex items-stretch gap-2 sm:gap-3">
       <!-- RJ45 block -->
       <div class="flex-1 rounded-lg bg-black/25 p-2 sm:p-2.5">
-        <p class="text-[10px] text-slate-500 font-medium tracking-wider uppercase mb-1.5 px-0.5">RJ45 · 2.5G</p>
+        <p class="text-[10px] text-slate-400 font-medium tracking-wider uppercase mb-1.5 px-0.5">RJ45 · 2.5G</p>
         <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 sm:gap-2">
           <button v-for="p in rj45" :key="p.port" type="button" class="group flex flex-col items-center gap-1 focus-visible:outline-accent rounded"
             :title="tooltip(p)" :aria-label="`${t('ports.port')} ${p.port}`" :aria-pressed="selected === p.port" @click="$emit('select', p.port)">
@@ -28,13 +29,13 @@
               <span v-if="isDisabled(p)" class="absolute bottom-1 end-1 w-1.5 h-1.5 rounded-full bg-danger"></span>
             </span>
             <span class="text-[11px] font-semibold leading-none" :class="selected === p.port ? 'text-white' : 'text-slate-300'">{{ p.port }}</span>
-            <span class="text-[9px] leading-none mono" :class="isUp(p) ? 'text-ok' : 'text-slate-600'">{{ isUp(p) ? shortSpeed(p.link, p.port) : "—" }}</span>
+            <span class="text-[9px] leading-none mono" :class="isUp(p) ? 'text-[#22c55e]' : 'text-slate-500'">{{ isUp(p) ? shortSpeed(p.link, p.port) : "—" }}</span>
           </button>
         </div>
       </div>
       <!-- SFP+ block -->
       <div class="rounded-lg bg-black/25 p-2 sm:p-2.5 w-[132px] sm:w-[164px] shrink-0">
-        <p class="text-[10px] text-sfp font-medium tracking-wider uppercase mb-1.5 px-0.5">SFP+ · 10G</p>
+        <p class="text-[10px] text-[#a78bfa] font-medium tracking-wider uppercase mb-1.5 px-0.5">SFP+ · 10G</p>
         <div class="grid grid-cols-2 gap-1.5 sm:gap-2">
           <button v-for="p in sfp" :key="p.port" type="button" class="group flex flex-col items-center gap-1 focus-visible:outline-accent rounded"
             :title="tooltip(p)" :aria-label="`${t('ports.port')} ${p.port} SFP+`" :aria-pressed="selected === p.port" @click="$emit('select', p.port)">
@@ -45,7 +46,7 @@
               <span v-if="isDisabled(p)" class="absolute bottom-1 end-1 w-1.5 h-1.5 rounded-full bg-danger"></span>
             </span>
             <span class="text-[11px] font-semibold leading-none" :class="selected === p.port ? 'text-white' : 'text-slate-300'">{{ p.port }}</span>
-            <span class="text-[9px] leading-none mono" :class="isUp(p) ? 'text-sfp' : 'text-slate-600'">{{ isUp(p) ? shortSpeed(p.link, p.port) : "—" }}</span>
+            <span class="text-[9px] leading-none mono" :class="isUp(p) ? 'text-[#a78bfa]' : 'text-slate-500'">{{ isUp(p) ? shortSpeed(p.link, p.port) : "—" }}</span>
           </button>
         </div>
       </div>
@@ -80,9 +81,11 @@ function isUp(p) { return !!p.link && p.link !== 'Link Down' }
 function isDisabled(p) { return byPort.value[p.port]?.status === 'Disabled' }
 function hasErrors(p) { return (p.tx_bad || 0) + (p.rx_bad || 0) > 0 }
 // the firmware puts the negotiated speed either in the stats' Link_Status or in the port's Spd_Duplex_Actual
+const SHORT_SPEED = { '10GbpsFull': '10G', '2500MbpsFull': '2.5G', '1000MbpsFull': '1G', '100MbpsFull': '100M', '100MbpsHalf': '100M½', '10MbpsFull': '10M', '10MbpsHalf': '10M½' }
 function shortSpeed(link, port) {
   const raw = [link, byPort.value[port]?.speed_actual].find(v => v && !/^link/i.test(v)) || ''
-  return raw.replace('MbpsFull', 'M').replace('MbpsHalf', 'M½').replace('GbpsFull', 'G') || '↑'
+  // same spelling as the Ports table (2.5G, 10G, 1G, 100M…)
+  return SHORT_SPEED[raw] || raw.replace('MbpsFull', 'M').replace('MbpsHalf', 'M½').replace('GbpsFull', 'G') || '↑'
 }
 function led(p) {
   if (hasErrors(p)) return 'bg-warn shadow-[0_0_6px_var(--sp-warn)]'

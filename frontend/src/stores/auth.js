@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { api } from '../composables/useApi.js'
+import { api, storageGet, storageSet, storageRemove } from '../composables/useApi.js'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('token') || '')
-  const username = ref(localStorage.getItem('username') || '')
-  const role = ref(localStorage.getItem('role') || '')
+  const token = ref(storageGet('token') || '')
+  const username = ref(storageGet('username') || '')
+  const role = ref(storageGet('role') || '')
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => role.value === 'admin')
@@ -15,9 +15,9 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = res.token
     username.value = res.username
     role.value = res.role
-    localStorage.setItem('token', res.token)
-    localStorage.setItem('username', res.username)
-    localStorage.setItem('role', res.role)
+    storageSet('token', res.token)
+    storageSet('username', res.username)
+    storageSet('role', res.role)
   }
 
   // the role stored at login can go stale (demotion): re-read it from the server
@@ -27,8 +27,8 @@ export const useAuthStore = defineStore('auth', () => {
       const me = await api('/api/auth/me')
       username.value = me.username
       role.value = me.role
-      localStorage.setItem('username', me.username)
-      localStorage.setItem('role', me.role)
+      storageSet('username', me.username)
+      storageSet('role', me.role)
     } catch (e) {}
   }
 
@@ -36,9 +36,9 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     username.value = ''
     role.value = ''
-    localStorage.removeItem('token')
-    localStorage.removeItem('username')
-    localStorage.removeItem('role')
+    storageRemove('token')
+    storageRemove('username')
+    storageRemove('role')
   }
 
   return { token, username, role, isLoggedIn, isAdmin, login, refresh, logout }

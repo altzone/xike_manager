@@ -4,10 +4,10 @@
       <Icon :name="icon" :size="19" />
     </div>
     <div class="min-w-0">
-      <p class="eyebrow truncate">{{ label }}</p>
+      <p class="eyebrow leading-tight">{{ label }}</p>
       <p class="text-lg font-semibold text-ink leading-tight truncate num" :class="valueClass">
-        <slot>{{ value }}</slot>
-        <span v-if="unit" class="text-xs font-normal text-muted ms-0.5">{{ unit }}</span>
+        <!-- value + unit are one LTR token ("3 / 10", "41 °C"), also under dir=rtl -->
+        <bdi dir="ltr"><slot>{{ value }}</slot><span v-if="unit" class="text-xs font-normal text-muted ms-0.5">{{ unit }}</span></bdi>
       </p>
     </div>
   </div>
