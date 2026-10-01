@@ -29,8 +29,9 @@ docker compose logs -f --tail=50                      # watch the first start, C
 A healthy start ends with `Application startup complete.` and `Uvicorn running on http://127.0.0.1:8000`.
 
 Then, in your browser, do a hard refresh (**Ctrl+Shift+R**, or **Cmd+Shift+R** on macOS) once so it
-drops the old cached frontend. You stay logged in: sessions are not invalidated by an upgrade as
-long as `SECRET_KEY` in `docker-compose.yml` did not change.
+drops the old cached frontend. Coming from a version before the session key change (section 3),
+you are asked to log in again once; after that, sessions survive upgrades as long as
+`data/secret_key` (or your own `SECRET_KEY`) is kept.
 
 > **You edited `docker-compose.yml` (port, secret, volume path)?** `git pull` keeps your edits
 > unless the same lines changed upstream. If it refuses to pull, run `git stash`, then `git pull`,
@@ -68,12 +69,30 @@ the file; you do not need one.
   why.
 - Tagged VLANs are now written to their own bridge (VLAN 10 → bridge 10) instead of bridge 0,
   so tagged traffic reaches that VLAN's access ports. This matches what the other open-source
-  tools for this switch do, but it could not be tested on hardware before release.
+  tools for this switch do, but it could not be tested on hardware before release. The whole
+  tagged table is normalised on each Apply, so entries written by earlier versions (bridge 0)
+  move to their VLAN's bridge too, and a VLAN above 63 (the hardware has 64 bridges; such a
+  VLAN can only be tagged) gets a free bridge of its own, kept from one Apply to the next.
   **After upgrading, take a snapshot (System → Configuration Snapshots), apply your VLAN
   configuration once from the VLAN page, and check that a tagged VLAN still reaches its access
   ports and the trunk.** If anything behaves differently from before, open an issue with the
   snapshot; the previous behaviour can be restored by rolling back (section 4).
 - Port 1 is kept out of VLAN edits by the UI as before; the API now also preserves it.
+
+### Behind a reverse proxy: set `TRUSTED_PROXIES`
+
+Login attempts are now throttled: ten wrong passwords for one account from one client address
+block that account for ten minutes (for that address). If a reverse proxy sits in front of the
+container, every browser arrives from the proxy's address, so add the proxy's address to
+`docker-compose.yml` (`- TRUSTED_PROXIES=172.17.0.1`) and make the proxy send
+`X-Forwarded-For` (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`;
+Caddy and Traefik do it by default). The container also sends `X-Frame-Options: DENY` now, so
+SwitchPilot no longer loads inside another dashboard's iframe; link to it instead.
+
+### Changing a password logs that user out
+
+Resetting someone's password (Users page) ends their current sessions, including your own if you
+change your own password. Log in again with the new one.
 
 ### Management port protection
 
@@ -131,7 +150,15 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   `GET /api/switches/{id}/vlans` entries carry `in_use` and `defined` and nothing is written.
 - `POST /api/switches/{id}/ports/config` refuses `enabled: false` on port 1 without
   `force: true`; `speed` must be one of the values the UI offers.
-- `POST /api/switches/{id}/network` validates the addresses and returns the new `ip`/`note`.
+- `POST /api/switches/{id}/network` validates the addresses and returns the new `ip`, `accepted`
+  and `note`. SwitchPilot's stored address only follows the change when the switch accepted it
+  and SwitchPilot was talking to the switch's own address (not a hostname or a NAT address);
+  a refusal by the switch is a `502` and nothing is changed.
+- `POST /api/switches/{id}/vlans/apply` also accepts `"mode": "unknown"` (what
+  `GET /vlans/assignments` reports for a port enabled with neither untag nor tag): the port is
+  left as it is. `access_vlan` may be `0`. Tagged entries get their VLAN's bridge (see above).
+- `POST /api/switches/{id}/mac/static/add` and `/delete` return `warnings` when the flash save
+  timed out (the entry is applied regardless).
 - `POST /api/switches/{id}/time` and `/sntp` validate their fields (`timezone` as `+HH:MM`).
 - New: `GET /api/switches/{id}/changes` (audit log), `PUT /api/switches/{id}/lag/names`.
 - New: `PUT /api/switches/{id}` (edit name, IP, credentials) and
@@ -160,6 +187,9 @@ docker compose build --no-cache && docker compose up -d
 
 The previous version ignores the new database column, so restoring the backup is optional. To be
 on the safe side anyway: `rm -rf data && cp -r data-backup-YYYYMMDD data` before `up -d`.
+Switches you add *while* rolled back are shown with the 9/10 swap on by that version; after
+upgrading again they appear with the swap off (the column already exists, so the one-time
+migration does not run twice): flip them under **System → SFP+ Port Numbering** if needed.
 Please open an issue with the `docker compose logs` output so it can be fixed.
 
 ## 5. Troubleshooting
@@ -171,5 +201,5 @@ Please open an issue with the `docker compose logs` output so it can be fixed.
 | `database is locked` at startup | Another SwitchPilot container is using the same `data/` folder. Stop it first. |
 | Ports 9 and 10 look inverted after the upgrade | Nothing changed for existing switches; see "Check each switch once" above and flip the setting under System. |
 | Logged out right after the upgrade | Expected once: the session key changed. Log in again. |
-| `Too many failed logins` | 10 wrong passwords within 10 minutes from the same address. Wait a few minutes. |
+| `Too many failed logins` | 10 wrong passwords for that account within 10 minutes from the same client address (or 100 across accounts). Wait a few minutes; behind a reverse proxy set `TRUSTED_PROXIES` (section 3). |
 | Live stats stay on "Connecting" | Hard refresh the browser: the old frontend uses the old stream URL. |

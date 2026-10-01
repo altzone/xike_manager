@@ -60,7 +60,7 @@ Body: {"username": "admin", "password": "yourpass"}
 | POST | `/api/switches/{id}/vlans` | Create VLAN `{"vlan_id","name"}` |
 | DELETE | `/api/switches/{id}/vlans/{vid}` | Delete VLAN |
 | GET | `/api/switches/{id}/vlans/assignments` | Port VLAN assignments |
-| POST | `/api/switches/{id}/vlans/apply` | Apply assignments `[{"port","mode","access_vlan","native_vlan","trunk_vlans"}]` |
+| POST | `/api/switches/{id}/vlans/apply` | Apply assignments `[{"port","mode","access_vlan","native_vlan","trunk_vlans"}]`; `mode` is `access`, `trunk`, `flat` or `unknown` (= leave as is); ports not listed keep their configuration; tagged entries are written to their VLAN's bridge (VLANs above 63 get a free bridge) |
 | GET | `/api/switches/{id}/vlans/limits` | Hardware limits |
 | POST | `/api/switches/{id}/vlans/sync` | Sync VLANs to all switches |
 
@@ -79,7 +79,7 @@ Body: {"username": "admin", "password": "yourpass"}
 | POST | `/api/switches/{id}/time` | Set time `{"time","date","timezone"}` |
 | POST | `/api/switches/{id}/sntp` | Set SNTP `{"enabled","server","poll"}` |
 | GET | `/api/switches/{id}/sntp/check` | Check SNTP sync status |
-| POST | `/api/switches/{id}/network` | Set IP `{"dhcp","ip","netmask","gateway"}` |
+| POST | `/api/switches/{id}/network` | Set IP `{"dhcp","ip","netmask","gateway"}` → `{"ok","dhcp","ip","accepted","note"}`; `502` when the switch refuses. SwitchPilot follows the new address only when it was talking to the switch's own address |
 | GET | `/api/switches/{id}/stp` | STP config |
 | POST | `/api/switches/{id}/stp` | Set STP `{"enabled","mode"}` |
 | GET | `/api/switches/{id}/storm` | Storm control |
@@ -89,7 +89,7 @@ Body: {"username": "admin", "password": "yourpass"}
 | GET | `/api/switches/{id}/eee` | EEE status |
 | POST | `/api/switches/{id}/eee` | Set EEE `{"enabled"}` |
 | GET | `/api/switches/{id}/mirror` | Port mirror config `{"monitoring_port","enabled","ports":[{"port","ingress","egress"}]}` |
-| POST | `/api/switches/{id}/mirror` | Set mirror `{"monitoring_port","ingress","egress","mirrored_ports"}`; `monitoring_port: 0` turns mirroring off |
+| POST | `/api/switches/{id}/mirror` | Set mirror `{"monitoring_port","ingress","egress","mirrored_ports"}`; `monitoring_port: 0` turns mirroring off. Two requests reach the switch, as the native UI does: the sources, then every other port (destination included) with both directions off |
 | GET | `/api/switches/{id}/loop` | Loop detection status |
 | POST | `/api/switches/{id}/loop` | Set loop `{"ports": {1: true, 2: false}}` |
 | POST | `/api/switches/{id}/reboot` | Reboot switch |
@@ -102,13 +102,14 @@ Body: {"username": "admin", "password": "yourpass"}
 | GET | `/api/switches/{id}/mac/dynamic?search=AA:BB` | Search MAC |
 | POST | `/api/switches/{id}/mac/clear` | Clear dynamic MACs |
 | GET | `/api/switches/{id}/mac/static` | Static MAC entries |
-| POST | `/api/switches/{id}/mac/static/add` | Add static `{"mac","port","fid"}` |
+| POST | `/api/switches/{id}/mac/static/add` | Add static `{"mac","port","fid"}` → `{"ok","warnings"}` (a flash-save timeout is a warning, the entry is applied) |
+| POST | `/api/switches/{id}/mac/static/delete` | Delete static entry (body as listed by GET, with `port`) → `{"ok","warnings"}` |
 
 ## Config Snapshots
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/switches/{id}/snapshots` | List snapshots |
+| GET | `/api/switches/{id}/snapshots` | List snapshots (`404` for an unknown switch) |
 | POST | `/api/switches/{id}/snapshots` | Save snapshot `{"name"}` |
 | GET | `/api/switches/{id}/snapshots/{sid}` | Get snapshot detail |
 | DELETE | `/api/switches/{id}/snapshots/{sid}` | Delete snapshot |

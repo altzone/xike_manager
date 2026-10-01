@@ -9,6 +9,8 @@ from switch_client import SwitchClient
 _clients: dict[int, SwitchClient] = {}
 
 POLL_INTERVAL = 3  # seconds
+ERROR_INTERVAL = 15  # seconds between attempts while the switch is unreachable or refuses the login
+ACCOUNT_CHECK_TICKS = 20  # re-check the viewer's account every N ticks (about a minute)
 
 
 def get_switch_client(switch_id: int, ip: str, username: str, password: str,
@@ -35,10 +37,17 @@ async def drop_switch_client(switch_id: int):
         await client.close()
 
 
-async def stats_generator(client: SwitchClient):
+async def stats_generator(client: SwitchClient, check=None):
+    """check: optional async callable answering whether the viewer may still stream;
+    it is asked at the start and every ACCOUNT_CHECK_TICKS ticks, and a 'no' ends the stream."""
     prev = {}  # internal_port -> (tx_good, rx_good): keyed by physical port so a mapping change can't pair the wrong rows
     prev_time = None
+    ticks = 0
     while not client.closed:
+        if check is not None and ticks % ACCOUNT_CHECK_TICKS == 0 and not await check():
+            break
+        ticks += 1
+        ok = True
         try:
             status = await client.get_status()
             ports = await client.get_port_stats()
@@ -66,10 +75,12 @@ async def stats_generator(client: SwitchClient):
         except Exception as e:
             if client.closed:
                 break
+            ok = False
             # not "error": EventSource would treat that as a connection failure and reconnect
             yield {"event": "switch_error", "data": json.dumps({"error": str(e) or e.__class__.__name__})}
-        await asyncio.sleep(POLL_INTERVAL)
+        # back off while the switch is down or refuses the login (no /authorize every 3 s)
+        await asyncio.sleep(POLL_INTERVAL if ok else ERROR_INTERVAL)
 
 
-async def sse_endpoint(client: SwitchClient):
-    return EventSourceResponse(stats_generator(client))
+async def sse_endpoint(client: SwitchClient, check=None):
+    return EventSourceResponse(stats_generator(client, check))

@@ -3,7 +3,7 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
-## [Unreleased]
+## [2.1.0] - Unreleased
 
 ### Security
 - **Session signing key.** Earlier versions signed every login token with a key that was
@@ -13,9 +13,17 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   old defaults). Everyone is logged out once after upgrading.
 - The user's role is re-read from the database on every request: a demoted or deleted account
   loses access immediately instead of when its 24 h token expires.
-- Login attempts are throttled per client address (10 failures per 10 minutes), the password
+- Login attempts are throttled per client address *and* account (10 failures per 10 minutes,
+  100 per address across accounts), so one person's typos never lock everybody out when all
+  browsers share one address (reverse proxy, Docker Desktop). `TRUSTED_PROXIES` names the
+  proxies whose `X-Forwarded-For` is believed; the container's nginx forwards it. The password
   check no longer blocks the server, and an unknown username costs the same time as a wrong
-  password.
+  password. Expired throttle entries are evicted.
+- Changing a password ends that user's existing sessions (tokens carry a fingerprint of the
+  stored hash); a live-stats stream stops within a minute when its account is deleted or its
+  password changes.
+- The generated signing key is created with mode 0600 from the start; the database file is
+  made private (0600) at startup; `data/` as a whole is ignored by git.
 - The live-stats stream (SSE) is opened with a 5-minute, stream-only token instead of the
   session token, which used to end up in access logs (issue #1 contained one).
 - CORS is off unless `CORS_ORIGINS` is set (the UI is same-origin); nginx sends
@@ -42,7 +50,32 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
 - Disabling the management port (port 1) needs `force: true` (the UI asks for confirmation).
 - Changing the switch's static IP from SwitchPilot left SwitchPilot pointed at the old address;
   the stored address and live connection now follow, settings are validated, and DHCP comes
-  with an explicit note.
+  with an explicit note. The stored address only follows when the switch accepted the change
+  and SwitchPilot was talking to the switch's own address (not a hostname or NAT address); a
+  refusal is reported as `502` and nothing is changed.
+- A write answered with the login page even after re-logging in was reported as success (the
+  change was silently dropped); it is an error now, and so is a read in that state. Endpoints
+  answering `404` on newer firmware count as unsupported like an empty body does.
+- After a session expired, every concurrent request re-logged in separately; one re-login is
+  shared. Live stats back off to 15 s between attempts while the switch is unreachable or
+  refuses the credentials (instead of a login attempt every 3 s). A read timeout is no longer
+  retried (it doubled the wait).
+- Tagged VLAN entries carried over on Apply are written with their VLAN's bridge even when an
+  earlier version had put them in bridge 0, so one VLAN is never split across two bridges.
+  VLANs above 63 (tagged-only) get a free bridge of their own, kept across Applies; double-tag
+  (QinQ) entries are carried over intact instead of being rewritten as single-tag.
+- `POST /vlans/apply` refused the `"unknown"` mode that `GET /vlans/assignments` itself reports
+  (a port enabled with neither untag nor tag), so one such port blocked the whole VLAN page;
+  it is accepted and left as is. `access_vlan` 0 is accepted like `native_vlan` 0.
+- Port mirroring: the clearing request now lists every non-source port including the
+  destination, exactly as the native UI's captured sequence does.
+- A slow flash save after adding or deleting a static MAC entry was reported as a failure
+  although the entry was applied; it is a warning.
+- Flipping the SFP+ numbering waits for an in-flight VLAN apply; the last-admin guards run in
+  one transaction; `GET /snapshots` returns 404 for an unknown switch; the "cannot connect"
+  message no longer echoes the transport error.
+- The old interface requested the stream token with GET (the route is POST-only), so live
+  stats always fell back to polling.
 - An admin could demote themselves or the last admin and lock everyone out; roles are
   validated, passwords need 6 characters, duplicate usernames return 409.
 - SNTP hostname resolution blocked the whole server; "synced" was reported with SNTP off;
@@ -109,6 +142,8 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   `PORT_MAP` is gone.
 - `POST /api/switches/{id}/lag` and `/mirror` bodies are validated models (see docs/api.md).
 - Automatic schema migration at startup (`swap_sfp_9_10` column).
+- The API and the frontend report the same version number (2.1.0); the initial release called
+  itself 2.0.0 (API) and 1.0.0 (frontend).
 
 ## [1.0.0] - 2026-04-09
 

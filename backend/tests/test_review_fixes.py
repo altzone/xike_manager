@@ -144,7 +144,8 @@ def test_vlan_apply_keeps_untouched_ports_and_the_uplink(api):
     assert pv["checkbox_1"] == "" and pv["fidName_1"] == "0"                                     # flat, written explicitly
     assert len([k for k in pv if k.startswith("checkbox_")]) == 10
     tv = m.posted("tag_vlan_cfg.json")[0]
-    assert tv["ppName_0"] == "9" and tv["oVidName_0"] == "30" and tv["brName_0"] == "0"  # carried over as-is
+    assert tv["ppName_0"] == "9" and tv["oVidName_0"] == "30"  # carried over
+    assert tv["brName_0"] == "30"  # ...and moved from bridge 0 (earlier versions) to its VLAN's bridge
 
 
 def test_vlan_apply_bridge_native_and_pvid_zero(api):
@@ -157,7 +158,8 @@ def test_vlan_apply_bridge_native_and_pvid_zero(api):
     assert r.status_code == 200, r.text
     tv = m.posted("tag_vlan_cfg.json")[-1]
     entries = {(tv[f"ppName_{i}"], tv[f"oVidName_{i}"]): tv[f"brName_{i}"] for i in range(3)}
-    assert entries == {("2", "7"): "7", ("9", "10"): "10", ("9", "100"): "0"}  # native 5 skipped, dup removed
+    assert entries[("2", "7")] == "7" and entries[("9", "10")] == "10"  # native 5 skipped, dup removed
+    assert 1 <= int(entries[("9", "100")]) <= 63 and entries[("9", "100")] not in ("5", "7", "10", "20", "30")  # own bridge
     assert "oVidName_3" not in tv
     pv = m.posted("port_vlan_cfg.json")[-1]
     assert pv["fidName_9"] == "5" and pv["fidName_2"] == "0" and pv["checkboxTag_2"] == "on"
@@ -174,9 +176,10 @@ def test_vlan_apply_validation(api):
     assert api.post(f"/api/switches/{sid}/vlans/apply", json=[
         {"port": 2, "mode": "trunk", "trunk_vlans": [5000]}]).status_code == 400
     assert not m.posts
-    many = [{"port": 9, "mode": "trunk", "native_vlan": 1, "trunk_vlans": list(range(2, 2 + 111))}]
+    many = [{"port": 9, "mode": "trunk", "native_vlan": 1, "trunk_vlans": list(range(2, 64))},   # 62 entries
+            {"port": 8, "mode": "trunk", "native_vlan": 1, "trunk_vlans": list(range(2, 51))}]   # + 49 = 111
     assert api.post(f"/api/switches/{sid}/vlans/apply", json=many).status_code == 200  # exactly the maximum
-    many[0]["trunk_vlans"].append(500)
+    many[1]["trunk_vlans"].append(51)
     assert api.post(f"/api/switches/{sid}/vlans/apply", json=many).status_code == 400
 
 
@@ -237,6 +240,7 @@ def test_management_port_needs_force_to_be_disabled(api):
 
 def test_network_change_keeps_switchpilot_pointed_at_the_switch(api):
     sid = add_switch(api)
+    api.mock.state["network_settings.json"]["ipAddress"] = "10.0.0.2"  # SwitchPilot talks to the switch's own address
     api.get(f"/api/switches/{sid}/ports")
     client = sse._clients[sid]
     bad = {"dhcp": False, "ip": "10.0.0.300", "netmask": "255.255.255.0", "gateway": "10.0.0.1"}
