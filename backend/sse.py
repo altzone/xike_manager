@@ -66,7 +66,8 @@ async def stats_generator(client: SwitchClient):
         except Exception as e:
             if client.closed:
                 break
-            yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            # not "error": EventSource would treat that as a connection failure and reconnect
+            yield {"event": "switch_error", "data": json.dumps({"error": str(e) or e.__class__.__name__})}
         await asyncio.sleep(POLL_INTERVAL)
 
 

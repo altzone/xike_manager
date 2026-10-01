@@ -53,6 +53,8 @@ export default {
   'ports.statusTip': 'Haga clic para habilitar o deshabilitar un puerto. Los puertos deshabilitados no reenviarán ningún tráfico.',
   'ports.speed': 'Velocidad',
   'ports.speedTip': 'Auto: negocia la mejor velocidad con el dispositivo conectado. Puede forzar una velocidad específica si la auto-negociación falla. Los puertos RJ45 soportan hasta 2.5G, los SFP+ hasta 10G.',
+  'ports.actual': 'Negociada',
+  'ports.confirmMgmt': 'El puerto 1 es el puerto de gestión: desactivarlo puede dejar a SwitchPilot (y a ti) sin acceso al switch. ¿Desactivarlo de todos modos?',
   'ports.link': 'Enlace',
   'ports.linkTip': 'Estado actual del enlace y velocidad negociada. Se actualiza en tiempo real cada 3 segundos.',
   'ports.flow': 'Flujo',

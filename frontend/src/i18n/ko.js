@@ -53,6 +53,8 @@ export default {
   'ports.statusTip': '클릭하여 포트를 활성화하거나 비활성화합니다. 비활성화된 포트는 트래픽을 전달하지 않습니다.',
   'ports.speed': '속도',
   'ports.speedTip': 'Auto: 연결된 장치와 최적의 속도를 협상합니다. 자동 협상에 실패하면 특정 속도를 수동으로 지정할 수 있습니다. RJ45 포트는 최대 2.5G, SFP+는 최대 10G를 지원합니다.',
+  'ports.actual': '협상됨',
+  'ports.confirmMgmt': '포트 1은 관리 포트입니다. 비활성화하면 SwitchPilot(그리고 사용자)이 스위치에 접근하지 못할 수 있습니다. 그래도 비활성화하시겠습니까?',
   'ports.link': '링크',
   'ports.linkTip': '현재 링크 상태 및 협상된 속도입니다. 3초마다 실시간으로 갱신됩니다.',
   'ports.flow': '플로우',

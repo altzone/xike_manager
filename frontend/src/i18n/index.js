@@ -29,24 +29,40 @@ export const LANGUAGES = [
   { code: 'ko', name: '한국어', flag: '🇰🇷' },
 ]
 
-const state = reactive({
-  locale: localStorage.getItem('locale') || 'en'
-})
+function savedLocale() {
+  try {
+    const code = localStorage.getItem('locale')
+    return messages[code] ? code : 'en'
+  } catch (e) {
+    return 'en'
+  }
+}
+
+const state = reactive({ locale: savedLocale() })
+
+function applyDocumentLocale(code) {
+  document.documentElement.lang = code
+  document.documentElement.dir = LANGUAGES.find(l => l.code === code)?.rtl ? 'rtl' : 'ltr'
+}
+// direction and language must also hold after a reload, not only after a click
+applyDocumentLocale(state.locale)
 
 export function useI18n() {
   function t(key, params) {
     const lang = messages[state.locale] || messages.en
     let val = lang[key] || messages.en[key] || key
     if (params) {
-      Object.entries(params).forEach(([k, v]) => { val = val.replace(`{${k}}`, v) })
+      // split/join: every occurrence, and no String.replace "$" pattern surprises in values
+      Object.entries(params).forEach(([k, v]) => { val = val.split(`{${k}}`).join(String(v)) })
     }
     return val
   }
 
   function setLocale(code) {
+    if (!messages[code]) return
     state.locale = code
-    localStorage.setItem('locale', code)
-    document.documentElement.dir = LANGUAGES.find(l => l.code === code)?.rtl ? 'rtl' : 'ltr'
+    try { localStorage.setItem('locale', code) } catch (e) {}
+    applyDocumentLocale(code)
   }
 
   const locale = computed(() => state.locale)

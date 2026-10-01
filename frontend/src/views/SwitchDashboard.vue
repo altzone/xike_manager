@@ -186,10 +186,12 @@ function formatPkts(n) {
 }
 
 onMounted(async () => {
-  status.value = await api(`/api/switches/${props.switchId}/status`)
-  model.value = status.value?.modle || status.value?.des || ''
-  firmware.value = status.value?.fw_ver || ''
+  sse.connect()  // first: live stats must not depend on the status call succeeding
+  try {
+    status.value = await api(`/api/switches/${props.switchId}/status`)
+    model.value = status.value?.modle || status.value?.des || ''
+    firmware.value = status.value?.fw_ver || ''
+  } catch (e) {}
   try { initialStats.value = await api(`/api/switches/${props.switchId}/ports/stats`) } catch(e) {}
-  sse.connect()
 })
 </script>

@@ -9,4 +9,6 @@ services:
       - ./data:/app/data
     environment:
       - DB_PATH=/app/data/switchpilot.db
-      - SECRET_KEY=switchpilot-prod-change-me
+      # Session signing key. Leave unset: a random key is generated on first start and kept
+      # in ./data/secret_key. Set your own only if you run several replicas.
+      # - SECRET_KEY=

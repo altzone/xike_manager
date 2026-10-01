@@ -43,6 +43,35 @@ long as `SECRET_KEY` in `docker-compose.yml` did not change.
 
 ## 3. What changed, and what to check after upgrading
 
+### You will be asked to log in again (once)
+
+Earlier versions signed login sessions with a key that was part of the repository. The new
+version generates its own key on first start and keeps it in `data/secret_key`, so every
+existing session stops being valid: log in again, that is all. If you had set your own
+`SECRET_KEY` in `docker-compose.yml`, it is still honoured. The example line was removed from
+the file; you do not need one.
+
+### VLAN page: safer, and one change to verify on your switch
+
+- Applying VLANs used to rebuild the tagged-VLAN table from scratch, which dropped the tagged
+  VLANs of the management port (port 1) and of any port not shown in the request, and saved
+  that to flash. Apply now reads the current configuration first and only changes the ports
+  you touched. If your uplink had lost its tagged VLANs after an Apply in the past, this was
+  why.
+- Tagged VLANs are now written to their own bridge (VLAN 10 → bridge 10) instead of bridge 0,
+  so tagged traffic reaches that VLAN's access ports. This matches what the other open-source
+  tools for this switch do, but it could not be tested on hardware before release.
+  **After upgrading, take a snapshot (System → Configuration Snapshots), apply your VLAN
+  configuration once from the VLAN page, and check that a tagged VLAN still reaches its access
+  ports and the trunk.** If anything behaves differently from before, open an issue with the
+  snapshot; the previous behaviour can be restored by rolling back (section 4).
+- Port 1 is kept out of VLAN edits by the UI as before; the API now also preserves it.
+
+### Management port protection
+
+Disabling port 1 from the Ports page asks for confirmation. Scripts must send
+`"force": true` to do it.
+
 ### SFP+ ports 9 and 10 can be numbered per switch (issue #3)
 
 Earlier versions assumed that on every SKS3200 the firmware's index 9 was the SFP+ cage labelled
@@ -86,6 +115,17 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
 
 ### For scripts that call the API directly
 
+- Switch problems return `502` with a `detail` message (they used to be `500`). Input
+  problems return `400`/`422`; a duplicate VLAN or username returns `409`.
+- The SSE stream `GET /api/switches/{id}/sse?token=` needs a token from
+  `POST /api/auth/stream-token` (valid 5 minutes); the session token is refused there.
+- `POST /api/switches/{id}/vlans/apply` only needs the ports you change; others are kept.
+  `GET /api/switches/{id}/vlans` entries carry `in_use` and `defined` and nothing is written.
+- `POST /api/switches/{id}/ports/config` refuses `enabled: false` on port 1 without
+  `force: true`; `speed` must be one of the values the UI offers.
+- `POST /api/switches/{id}/network` validates the addresses and returns the new `ip`/`note`.
+- `POST /api/switches/{id}/time` and `/sntp` validate their fields (`timezone` as `+HH:MM`).
+- New: `GET /api/switches/{id}/changes` (audit log), `PUT /api/switches/{id}/lag/names`.
 - New: `PUT /api/switches/{id}` (edit name, IP, credentials) and
   `PUT /api/switches/{id}/port-mapping` (`{"swap_sfp_9_10": true|false, "move_descriptions": true}`).
   `GET /api/switches` and `/info` now include `swap_sfp_9_10`; `POST /api/switches` accepts it.
@@ -122,3 +162,6 @@ Please open an issue with the `docker compose logs` output so it can be fixed.
 | Ports page still looks like the old version | Hard refresh the browser (Ctrl+Shift+R). |
 | `database is locked` at startup | Another SwitchPilot container is using the same `data/` folder. Stop it first. |
 | Ports 9 and 10 look inverted after the upgrade | Nothing changed for existing switches; see "Check each switch once" above and flip the setting under System. |
+| Logged out right after the upgrade | Expected once: the session key changed. Log in again. |
+| `Too many failed logins` | 10 wrong passwords within 10 minutes from the same address. Wait a few minutes. |
+| Live stats stay on "Connecting" | Hard refresh the browser: the old frontend uses the old stream URL. |

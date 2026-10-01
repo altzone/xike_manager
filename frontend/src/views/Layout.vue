@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { useToast } from '../composables/useToast.js'
@@ -65,6 +65,8 @@ const auth = useAuthStore()
 const toast = useToast()
 const i18n = useI18n()
 const currentLang = computed(() => i18n.LANGUAGES.find(l => l.code === i18n.locale.value))
+
+onMounted(() => auth.refresh())
 
 function doLogout() {
   auth.logout()

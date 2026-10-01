@@ -1,4 +1,5 @@
 """Xikestor SKS3200-8E2X API Client"""
+import asyncio
 import hashlib
 import json
 import httpx
@@ -11,11 +12,22 @@ NUM_PORTS = 10         # 8x 2.5G RJ45 (1-8) + 2x 10G SFP+ (9-10)
 SFP_PORTS = (9, 10)
 MAX_FID = 63           # PVID/native VLAN max
 MAX_TAG_ENTRIES = 111  # Tag VLAN table max entries
-MAX_VLAN_ID = 4095     # 802.1Q max
+MAX_VLAN_ID = 4094     # 802.1Q max usable VID
+MANAGEMENT_PORT = 1    # the port SwitchPilot usually reaches the switch through
 
 
 class InvalidPortError(ValueError):
     """A port number outside 1..NUM_PORTS (or not a number) was given."""
+
+
+class SwitchError(Exception):
+    """The switch refused or garbled a request (bad credentials, HTTP error, odd body)."""
+
+
+def default_bridge(vlan_id: int) -> int:
+    """Bridge (FID) a tagged VLAN joins: the same bridge its access ports use (SwitchPilot
+    writes FID = VLAN ID for those), or bridge 0 when the VID is above the FID range."""
+    return vlan_id if 0 < vlan_id <= MAX_FID else 0
 
 
 def build_port_map(swap_sfp: bool) -> dict[int, int]:
@@ -101,8 +113,9 @@ class SwitchClient:
                  swap_sfp: bool = False, transport: httpx.AsyncBaseTransport | None = None):
         self.configure(ip, username, password)
         self.set_port_mapping(swap_sfp)
-        self.client = httpx.AsyncClient(timeout=30, transport=transport)
+        self.client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5), transport=transport)
         self.closed = False
+        self._login_lock = asyncio.Lock()
 
     # ── Configuration ──
     def configure(self, ip: str, username: str, password: str):
@@ -153,8 +166,17 @@ class SwitchClient:
         return self._logged_in
 
     async def _ensure_login(self):
-        if not self._logged_in:
-            await self.login()
+        # one login at a time: concurrent requests share one cookie jar and would
+        # otherwise each log in and invalidate each other's session
+        async with self._login_lock:
+            if not self._logged_in and not await self.login():
+                raise SwitchError(f"Login to switch {self.ip} failed (check its credentials)")
+
+    async def _relogin(self):
+        async with self._login_lock:
+            self._logged_in = False
+            if not await self.login():
+                raise SwitchError(f"Login to switch {self.ip} failed (check its credentials)")
 
     async def _raw_get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
         try:
@@ -168,8 +190,10 @@ class SwitchClient:
         await self._ensure_login()
         r = await self._raw_get(endpoint, params)
         if "login.html" in r.text:
-            await self.login()
+            await self._relogin()
             r = await self._raw_get(endpoint, params)
+        if r.status_code != 200:
+            raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
         try:
             return decode_payload(r.text)
         except json.JSONDecodeError:
@@ -184,8 +208,10 @@ class SwitchClient:
         await self._ensure_login()
         r = await self.client.post(f"{self.base}/{endpoint}", json=data)
         if "login.html" in r.text:
-            await self.login()
+            await self._relogin()
             r = await self.client.post(f"{self.base}/{endpoint}", json=data)
+        if r.status_code != 200:
+            raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
         return r.text
 
     # ── System ──
@@ -322,24 +348,29 @@ class SwitchClient:
         return result
 
     async def set_port_vlans(self, configs: list[dict]):
-        """configs: [{"port": 1, "mode": "access"|"trunk"|"flat", "pvid": 10}, ...]"""
+        """configs: [{"port": 1, "mode": "access"|"trunk"|"flat"|"unknown", "pvid": 10}, ...]
+
+        Every port in the list is written explicitly: a flat port is sent with its checkbox
+        empty, as the native UI's form does, instead of being left out (the firmware treats a
+        missing port as unchecked, which used to reset ports the caller did not mention).
+        """
         data = {}
         for cfg in configs:
             internal = self.to_internal(cfg["port"])
             mode = cfg.get("mode", "flat")
-            pvid = cfg.get("pvid", 0)
+            pvid = int(cfg.get("pvid", 0))
+            if not 0 <= pvid <= MAX_FID:
+                raise ValueError(f"PVID {pvid} on port {cfg['port']} is outside 0-{MAX_FID}")
             if mode == "flat":
-                continue  # don't include = untouched
-            if mode == "access" and pvid > MAX_FID:
-                raise ValueError(f"PVID {pvid} exceeds max {MAX_FID} for access mode")
-            if mode == "trunk" and pvid > MAX_FID:
-                raise ValueError(f"Native VLAN {pvid} exceeds max {MAX_FID}")
+                data[f"checkbox_{internal}"] = ""
+                data[f"fidName_{internal}"] = "0"
+                data[f"checkboxUntag_{internal}"] = ""
+                data[f"checkboxTag_{internal}"] = ""
+                continue
             data[f"checkbox_{internal}"] = "on"
             data[f"fidName_{internal}"] = str(pvid)
-            if mode == "access":
-                data[f"checkboxUntag_{internal}"] = "on"
-            elif mode == "trunk":
-                data[f"checkboxTag_{internal}"] = "on"
+            data[f"checkboxUntag_{internal}"] = "on" if mode == "access" else ""
+            data[f"checkboxTag_{internal}"] = "on" if mode == "trunk" else ""
         result = await self._post("port_vlan_cfg.json", data)
         if "invalid FID" in result:
             raise ValueError(f"Invalid FID/PVID (max {MAX_FID})")
@@ -362,21 +393,32 @@ class SwitchClient:
                     "entry": i,
                     "port": self.to_user(int(e[f"pP_{i}"])),
                     "vlan_id": int(e[f"oVid_{i}"]),
+                    "bridge": int(e.get(f"bR_{i}", 0) or 0),
                     "tag_type": "single" if e[f"tT_{i}"] == "0" else "double",
                 })
         return entries
 
     async def set_tag_vlans(self, entries: list[dict]):
-        """entries: [{"entry": 0, "port": 7, "vlan_id": 10}, ...]"""
+        """entries: [{"entry": 0, "port": 7, "vlan_id": 10, "bridge": 10}, ...]
+
+        bridge defaults to the VLAN's own bridge (see default_bridge) so tagged frames land
+        in the same bridge as the VLAN's access ports.
+        """
         data = {}
         for e in entries:
             idx = e["entry"]
             internal = self.to_internal(e["port"])
+            vid = int(e["vlan_id"])
+            if not 1 <= vid <= MAX_VLAN_ID:
+                raise ValueError(f"VLAN ID {vid} is outside 1-{MAX_VLAN_ID}")
+            bridge = e.get("bridge")
+            if bridge is None:
+                bridge = default_bridge(vid)
             data[f"bpCboxName_{idx}"] = "on"
             data[f"vtypeName_{idx}"] = "0"
             data[f"ppName_{idx}"] = str(internal)
-            data[f"brName_{idx}"] = "0"
-            data[f"oVidName_{idx}"] = str(e["vlan_id"])
+            data[f"brName_{idx}"] = str(int(bridge))
+            data[f"oVidName_{idx}"] = str(vid)
             data[f"iVidName_{idx}"] = "0"
         return await self._post("tag_vlan_cfg.json", data)
 

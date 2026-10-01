@@ -13,8 +13,9 @@
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.desc') }} <Tip>{{ t('ports.descTip') }}</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.status') }} <Tip>{{ t('ports.statusTip') }}</Tip></span></th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.speed') }} <Tip :title="t('ports.speed')">{{ t('ports.speedTip') }}</Tip></span></th>
-            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.link') }} <Tip>{{ t('ports.linkTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">{{ t('ports.actual') }}</th>
             <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.flow') }} <Tip :title="t('ports.flow')">{{ t('ports.flowTip') }}</Tip></span></th>
+            <th class="px-5 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.link') }} <Tip>{{ t('ports.linkTip') }}</Tip></span></th>
             <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.tx') }} <Tip>{{ t('ports.txTip') }}</Tip></span></th>
             <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.rx') }} <Tip>{{ t('ports.rxTip') }}</Tip></span></th>
             <th class="px-5 py-3 text-right font-medium text-gray-500 text-xs uppercase tracking-wider"><span class="flex items-center gap-1">{{ t('ports.errors') }} <Tip>{{ t('ports.errorsTip') }}</Tip></span></th>
@@ -136,16 +137,22 @@ async function saveDesc(port) {
 }
 
 async function applyPort(port) {
+  const disablingMgmt = port.port === 1 && port.status !== 'Enabled'
+  if (disablingMgmt && !confirm(t('ports.confirmMgmt'))) {
+    await reload()  // put the optimistic toggle back
+    return
+  }
   try {
     await api(`/api/switches/${props.switchId}/ports/config`, {
       method: 'POST', body: JSON.stringify([{
         port: port.port, enabled: port.status === 'Enabled',
-        speed: port.speed_config, flow_ctrl: port.flow_ctrl_config
+        speed: port.speed_config, flow_ctrl: port.flow_ctrl_config,
+        force: disablingMgmt,
       }])
     })
     flash(t('ports.updated', { port: port.port }))
-    await reload()
   } catch (e) { flash(e.message, false) }
+  await reload()
 }
 
 async function togglePort(port) {

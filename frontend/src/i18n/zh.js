@@ -53,6 +53,8 @@ export default {
   'ports.statusTip': '点击启用或禁用端口。禁用的端口不会转发任何流量。',
   'ports.speed': '速率',
   'ports.speedTip': '自动：与连接的设备协商最佳速率。如果自动协商失败，可以强制指定速率。RJ45 端口最高支持 2.5G，SFP+ 最高支持 10G。',
+  'ports.actual': '协商速率',
+  'ports.confirmMgmt': '端口 1 是管理端口：禁用它可能导致 SwitchPilot（以及您）无法访问交换机。仍要禁用吗？',
   'ports.link': '链路',
   'ports.linkTip': '当前链路状态及协商速率。每 3 秒实时更新。',
   'ports.flow': '流控',

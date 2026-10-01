@@ -12,6 +12,7 @@ if BACKEND_DIR not in sys.path:
 
 import switch_client  # noqa: E402
 import db as dbmod  # noqa: E402
+import auth  # noqa: E402
 import sse  # noqa: E402
 import main  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -95,18 +96,38 @@ class MockSwitch:
         self.gets: list[str] = []
         self.logged_in = False
         self.logins = 0
+        self.reject_login = False
+        # endpoint -> callable(request) returning a Response, or raising; None = default behaviour
+        self.responders: dict = {}
 
     def posted(self, endpoint: str) -> list[dict]:
         return [body for ep, body in self.posts if ep == endpoint]
 
+    def fail_once(self, endpoint: str, exc: Exception, method: str = "POST"):
+        state = {"done": False}
+
+        def responder(request):
+            if request.method == method and not state["done"]:
+                state["done"] = True
+                raise exc
+            return None
+        self.responders[endpoint] = responder
+
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path.lstrip("/")
         if path == "authorize":
+            if self.reject_login:
+                return httpx.Response(200, text="<html>login.html</html>")
             self.logged_in = True
             self.logins += 1
             return httpx.Response(200, text="<html>setup.html</html>")
         if not self.logged_in:
             return httpx.Response(200, text="<html>login.html</html>")
+        responder = self.responders.get(path)
+        if responder is not None:
+            forced = responder(request)
+            if forced is not None:
+                return forced
         if request.method == "POST":
             body = json.loads(request.content or b"{}")
             self.posts.append((path, body))
@@ -139,16 +160,28 @@ def db_path(tmp_path, monkeypatch):
     return path
 
 
+ADMIN_PASSWORD = "secret123"
+
+
 @pytest.fixture
 def api(db_path, mock_switch):
     sse._clients.clear()
+    auth._failures.clear()
     with TestClient(main.app) as client:
-        assert client.post("/api/setup", json={"username": "admin", "password": "pw"}).status_code == 200
-        token = client.post("/api/auth/login", json={"username": "admin", "password": "pw"}).json()["token"]
+        assert client.post("/api/setup", json={"username": "admin", "password": ADMIN_PASSWORD}).status_code == 200
+        token = client.post("/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD}).json()["token"]
         client.headers["Authorization"] = f"Bearer {token}"
         client.mock = mock_switch
         yield client
     sse._clients.clear()
+    auth._failures.clear()
+
+
+def login_as(api, username: str, password: str) -> dict:
+    """Headers for another account (the api fixture's default headers stay admin)."""
+    r = api.post("/api/auth/login", json={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
 def add_switch(api, swap: bool = False, name: str = "SW") -> int:

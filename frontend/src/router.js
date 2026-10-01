@@ -9,7 +9,7 @@ const routes = [
     meta: { auth: true },
     children: [
       { path: '', name: 'dashboard', component: () => import('./views/Dashboard.vue') },
-      { path: 'users', name: 'users', component: () => import('./views/Users.vue') },
+      { path: 'users', name: 'users', component: () => import('./views/Users.vue'), meta: { admin: true } },
       { path: 'switch/:id', name: 'switch', component: () => import('./views/SwitchView.vue'),
         children: [
           { path: '', name: 'switch-dashboard', component: () => import('./views/SwitchDashboard.vue') },
@@ -28,8 +28,9 @@ const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach(async (to) => {
   const token = localStorage.getItem('token')
-  if (to.meta.auth && !token) return { name: 'login' }
+  if (to.meta.auth && !token) return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} }
   if (to.name === 'login' && token) return { name: 'dashboard' }
+  if (to.meta.admin && localStorage.getItem('role') !== 'admin') return { name: 'dashboard' }
 })
 
 export default router

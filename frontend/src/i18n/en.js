@@ -59,6 +59,8 @@ export default {
   'ports.statusTip': 'Click to enable or disable a port. Disabled ports will not forward any traffic.',
   'ports.speed': 'Speed',
   'ports.speedTip': 'Auto: negotiates best speed with the connected device. You can force a specific speed if auto-negotiation fails. RJ45 ports support up to 2.5G, SFP+ up to 10G.',
+  'ports.actual': 'Negotiated',
+  'ports.confirmMgmt': 'Port 1 is the management port: disabling it can cut SwitchPilot (and you) off from the switch. Disable it anyway?',
   'ports.link': 'Link',
   'ports.linkTip': 'Current link state and negotiated speed. Updates live every 3 seconds.',
   'ports.flow': 'Flow',

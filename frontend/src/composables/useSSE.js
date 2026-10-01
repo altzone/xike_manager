@@ -1,6 +1,13 @@
 import { ref, onUnmounted } from 'vue'
 import { api } from './useApi.js'
 
+/**
+ * Live stats for one switch over Server-Sent Events, with polling as a fallback.
+ *
+ * The stream is opened with a short-lived token (EventSource cannot send headers, so the
+ * token sits in the URL and in access logs; the real session token never does).
+ * One reconnect timer at a time, and nothing runs after disconnect()/unmount.
+ */
 export function useSSE(switchId) {
   const data = ref(null)
   const connected = ref(false)
@@ -8,77 +15,87 @@ export function useSSE(switchId) {
   let reconnectTimer = null
   let fallbackTimer = null
   let retryCount = 0
+  let active = false
+  let polling = false
 
-  function connect() {
+  async function connect() {
+    active = true
     cleanup()
-    const token = localStorage.getItem('token')
-    if (!token) return
-
+    let token
     try {
-      source = new EventSource(`/api/switches/${switchId}/sse?token=${token}`)
-
-      source.addEventListener('stats', (e) => {
-        data.value = JSON.parse(e.data)
-        connected.value = true
-        retryCount = 0
-      })
-
-      source.addEventListener('error', () => {
-        connected.value = false
-        scheduleReconnect()
-      })
-
-      source.onerror = () => {
-        connected.value = false
-        scheduleReconnect()
-      }
+      token = (await api('/api/auth/stream-token')).token
     } catch (e) {
+      if (active) startFallback()
+      return
+    }
+    if (!active) return
+
+    source = new EventSource(`/api/switches/${switchId}/sse?token=${encodeURIComponent(token)}`)
+    source.addEventListener('stats', (e) => {
+      data.value = JSON.parse(e.data)
+      connected.value = true
+      retryCount = 0
+      stopFallback()
+    })
+    // the backend reports a switch problem on this event; the stream itself is still up
+    source.addEventListener('switch_error', () => { connected.value = false })
+    // connection-level failure (proxy, expired stream token, restart): reconnect with backoff
+    source.onerror = () => {
       connected.value = false
-      startFallback()
+      scheduleReconnect()
     }
   }
 
   function scheduleReconnect() {
+    if (!active) return
     if (source) { source.close(); source = null }
+    if (reconnectTimer) return
     retryCount++
-    const delay = Math.min(retryCount * 3000, 30000) // backoff: 3s, 6s, 9s... max 30s
+    const delay = Math.min(retryCount * 3000, 30000) // 3s, 6s, 9s... max 30s
     reconnectTimer = setTimeout(() => {
-      // Try SSE first, fallback to polling if it fails
-      connect()
-      // Also do a poll as backup
+      reconnectTimer = null
+      if (!active) return
       pollOnce()
+      connect()
     }, delay)
   }
 
   async function pollOnce() {
+    if (polling || !active) return
+    polling = true
     try {
-      const stats = await api(`/api/switches/${switchId}/ports/stats`)
-      const status = await api(`/api/switches/${switchId}/ping`)
-      if (stats && status) {
-        data.value = {
-          temperature: status.temperature || '?',
-          ports: stats,
-        }
-        connected.value = status.online
-      }
+      const [stats, status] = await Promise.all([
+        api(`/api/switches/${switchId}/ports/stats`),
+        api(`/api/switches/${switchId}/ping`),
+      ])
+      if (!active) return
+      data.value = { temperature: status.temperature || '?', ports: stats }
+      connected.value = !!status.online
     } catch (e) {
       connected.value = false
+    } finally {
+      polling = false
     }
   }
 
   function startFallback() {
-    // Poll every 5s when SSE is completely broken
-    if (fallbackTimer) return
+    if (fallbackTimer || !active) return
+    pollOnce()
     fallbackTimer = setInterval(pollOnce, 5000)
+  }
+
+  function stopFallback() {
+    if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null }
   }
 
   function cleanup() {
     if (source) { source.close(); source = null }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
-    if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null }
+    stopFallback()
   }
 
   function disconnect() {
+    active = false
     cleanup()
     connected.value = false
   }

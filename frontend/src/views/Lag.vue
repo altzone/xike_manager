@@ -216,9 +216,11 @@ async function createGroup() {
       method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names: names })
     })
     showCreate.value = false
-    newGroup.ports = []; newGroup.name = ''; newGroup.id = availableGroupIds.value[0] || 1
+    newGroup.ports = []; newGroup.name = ''
     flash(t('lag.created'))
     await load()
+    // pick the next free id only once the reloaded state knows the group just created
+    newGroup.id = availableGroupIds.value[0] || 1
   } catch (e) { flash(e.message, false) }
   finally { applying.value = false }
 }

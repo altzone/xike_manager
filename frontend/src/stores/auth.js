@@ -20,6 +20,18 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('role', res.role)
   }
 
+  // the role stored at login can go stale (demotion): re-read it from the server
+  async function refresh() {
+    if (!token.value) return
+    try {
+      const me = await api('/api/auth/me')
+      username.value = me.username
+      role.value = me.role
+      localStorage.setItem('username', me.username)
+      localStorage.setItem('role', me.role)
+    } catch (e) {}
+  }
+
   function logout() {
     token.value = ''
     username.value = ''
@@ -29,5 +41,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('role')
   }
 
-  return { token, username, role, isLoggedIn, isAdmin, login, logout }
+  return { token, username, role, isLoggedIn, isAdmin, login, refresh, logout }
 })

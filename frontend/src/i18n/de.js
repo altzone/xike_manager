@@ -53,6 +53,8 @@ export default {
   'ports.statusTip': 'Klicken Sie, um einen Port zu aktivieren oder zu deaktivieren. Deaktivierte Ports leiten keinen Datenverkehr weiter.',
   'ports.speed': 'Geschwindigkeit',
   'ports.speedTip': 'Auto: Handelt die beste Geschwindigkeit mit dem angeschlossenen Gerät aus. Sie können eine bestimmte Geschwindigkeit erzwingen, wenn die Auto-Negotiation fehlschlägt. RJ45-Ports unterstützen bis zu 2,5G, SFP+ bis zu 10G.',
+  'ports.actual': 'Ausgehandelt',
+  'ports.confirmMgmt': 'Port 1 ist der Management-Port: Wird er deaktiviert, verliert SwitchPilot (und Sie) möglicherweise den Zugriff auf den Switch. Trotzdem deaktivieren?',
   'ports.link': 'Link',
   'ports.linkTip': 'Aktueller Verbindungsstatus und ausgehandelte Geschwindigkeit. Wird alle 3 Sekunden live aktualisiert.',
   'ports.flow': 'Fluss',

@@ -40,7 +40,8 @@ Body: {"username": "admin", "password": "yourpass"}
 | GET | `/api/switches/{id}/info` | Switch name, IP, model, `swap_sfp_9_10` |
 | GET | `/api/switches/{id}/ping` | Quick online check |
 | GET | `/api/switches/{id}/status` | Full system status |
-| GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats) |
+| GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats); `token` from `POST /api/auth/stream-token` (5 min) |
+| GET | `/api/switches/{id}/changes?limit=50` | Audit log of configuration changes |
 
 ## Ports
 

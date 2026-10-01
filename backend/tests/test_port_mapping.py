@@ -100,7 +100,8 @@ def test_every_write_path_translates_port_9(api, swap, expected_internal):
     ]).status_code == 200
     pv = m.posted("port_vlan_cfg.json")[-1]
     assert pv[f"checkboxTag_{expected_internal}"] == "on" and pv[f"fidName_{expected_internal}"] == "5"
-    assert f"checkbox_{other}" not in pv and pv["fidName_2"] == "7"
+    assert pv["fidName_2"] == "7" and pv["checkboxUntag_2"] == "on"
+    assert len([k for k in pv if k.startswith("checkbox_")]) == 10  # every port written explicitly
     assert m.posted("tag_vlan_cfg.json")[-1]["ppName_0"] == expected_internal
 
     assert api.post(f"/api/switches/{sid}/lag", json={
@@ -219,8 +220,8 @@ def test_port_mapping_toggle_relabels_live_client_and_moves_descriptions(api):
 def test_port_mapping_requires_admin_and_existing_switch(api):
     sid = add_switch(api)
     assert api.put("/api/switches/999/port-mapping", json={"swap_sfp_9_10": True}).status_code == 404
-    api.post("/api/users", json={"username": "ro", "password": "pw", "role": "viewer"})
-    token = api.post("/api/auth/login", json={"username": "ro", "password": "pw"}).json()["token"]
+    assert api.post("/api/users", json={"username": "ro", "password": "viewer123", "role": "viewer"}).status_code == 200
+    token = api.post("/api/auth/login", json={"username": "ro", "password": "viewer123"}).json()["token"]
     r = api.put(f"/api/switches/{sid}/port-mapping", json={"swap_sfp_9_10": True},
                 headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403

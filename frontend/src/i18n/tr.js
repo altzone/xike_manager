@@ -53,6 +53,8 @@ export default {
   'ports.statusTip': 'Portu etkinleştirmek veya devre dışı bırakmak için tıklayın. Devre dışı bırakılan portlar trafik iletmez.',
   'ports.speed': 'Hız',
   'ports.speedTip': 'Auto: bağlı cihazla en iyi hızı otomatik belirler. Otomatik anlaşma başarısız olursa belirli bir hız zorlayabilirsiniz. RJ45 portlar 2.5G\'ye, SFP+ 10G\'ye kadar destekler.',
+  'ports.actual': 'Anlaşılan',
+  'ports.confirmMgmt': 'Port 1 yönetim portudur: devre dışı bırakmak SwitchPilot\'un (ve sizin) anahtara erişimini kesebilir. Yine de devre dışı bırakılsın mı?',
   'ports.link': 'Bağlantı',
   'ports.linkTip': 'Güncel bağlantı durumu ve anlaşılan hız. Her 3 saniyede canlı olarak güncellenir.',
   'ports.flow': 'Akış',
