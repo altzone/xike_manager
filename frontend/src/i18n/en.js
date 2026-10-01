@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Dashboard',
   'nav.overview': 'Overview',
   'nav.ports': 'Ports',
   'nav.vlans': 'VLANs',
@@ -111,7 +110,7 @@ export default {
 
   // LAG
   'lag.title': 'Link Aggregation',
-  'lag.tip': 'Bond multiple physical ports into a single logical link. Increases bandwidth (e.g. 2x 2.5G = 5G) and provides redundancy. Both ends must be configured. Up to 16 groups supported.',
+  'lag.tip': 'Bond multiple physical ports into a single logical link. Increases bandwidth (e.g. 2x 2.5G = 5G) and provides redundancy. Both ends must be configured. Up to 15 groups supported.',
   'lag.create': 'Create LAG Group',
   'lag.noGroups': 'No LAG groups configured',
   'lag.createDesc': 'Create a group to bond ports together',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'Select a switch',
   'ui.refresh': 'Refresh',
   'ui.retry': 'Retry',
-  'ui.switchCount': '{n} switch(es)',
+  'ui.switchCount': '{n} switches',
   'ui.theme': 'Theme',
   'ui.theme_dark': 'Dark',
   'ui.theme_light': 'Light',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'Copy the VLAN names of this switch to all other switches? Existing names are kept.',
   'vlans.trunkOnly': 'Tagged only (trunk)',
   'vlans.unnamed': 'Unnamed',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Core switch',
+  'lag.namePlaceholder': 'Uplink, Server bond…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Guest…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200 management',
+  'nav.switchMenu': 'Switch pages',
+  'api.network': 'Cannot reach SwitchPilot (network error)',
+  'api.sessionExpired': 'Session expired, log in again',
+  'api.forbidden': 'Not allowed: {message}',
+  'sys.snapshotImportName': 'Import: {name}',
+  'vlans.modeUnknown': 'Unknown (as on the switch)',
+  'lag.memberOne': '1 port',
+  'mac.entriesOne': '1 entry learned',
+  'ui.switchCountOne': '1 switch',
+  'ui.offline': 'Switch unreachable',
 }

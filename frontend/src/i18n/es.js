@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Panel',
   'nav.overview': 'Resumen',
   'nav.ports': 'Puertos',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Agregación de enlaces',
-  'lag.tip': 'Agrupe múltiples puertos físicos en un solo enlace lógico. Aumenta el ancho de banda (ej. 2x 2.5G = 5G) y proporciona redundancia. Ambos extremos deben configurarse. Se admiten hasta 16 grupos.',
+  'lag.tip': 'Agrupe múltiples puertos físicos en un solo enlace lógico. Aumenta el ancho de banda (ej. 2x 2.5G = 5G) y proporciona redundancia. Ambos extremos deben configurarse. Se admiten hasta 15 grupos.',
   'lag.create': 'Crear grupo LAG',
   'lag.noGroups': 'No hay grupos LAG configurados',
   'lag.createDesc': 'Cree un grupo para agrupar puertos',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'Elegir un switch',
   'ui.refresh': 'Actualizar',
   'ui.retry': 'Reintentar',
-  'ui.switchCount': '{n} switch(es)',
+  'ui.switchCount': '{n} switches',
   'ui.theme': 'Tema',
   'ui.theme_dark': 'Oscuro',
   'ui.theme_light': 'Claro',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': '¿Copiar los nombres de VLAN de este switch a todos los demás? Los nombres existentes se conservan.',
   'vlans.trunkOnly': 'Solo etiquetada (trunk)',
   'vlans.unnamed': 'Sin nombre',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Switch principal',
+  'lag.namePlaceholder': 'Uplink, bond de servidor…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Invitados…',
+  'auth.footer': 'SwitchPilot · gestión Xikestor SKS3200',
+  'nav.switchMenu': 'Páginas del switch',
+  'api.network': 'No se puede contactar con SwitchPilot (error de red)',
+  'api.sessionExpired': 'Sesión caducada, inicia sesión de nuevo',
+  'api.forbidden': 'No permitido: {message}',
+  'sys.snapshotImportName': 'Importación: {name}',
+  'vlans.modeUnknown': 'Desconocido (estado del switch)',
+  'lag.memberOne': '1 puerto',
+  'mac.entriesOne': '1 entrada aprendida',
+  'ui.switchCountOne': '1 switch',
+  'ui.offline': 'Switch inaccesible',
 }

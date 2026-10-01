@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Dashboard',
   'nav.overview': 'Übersicht',
   'nav.ports': 'Ports',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Link-Aggregation',
-  'lag.tip': 'Bündeln Sie mehrere physische Ports zu einem logischen Link. Erhöht die Bandbreite (z.B. 2x 2,5G = 5G) und bietet Redundanz. Beide Seiten müssen konfiguriert sein. Bis zu 16 Gruppen werden unterstützt.',
+  'lag.tip': 'Bündeln Sie mehrere physische Ports zu einem logischen Link. Erhöht die Bandbreite (z.B. 2x 2,5G = 5G) und bietet Redundanz. Beide Seiten müssen konfiguriert sein. Bis zu 15 Gruppen werden unterstützt.',
   'lag.create': 'LAG-Gruppe erstellen',
   'lag.noGroups': 'Keine LAG-Gruppen konfiguriert',
   'lag.createDesc': 'Erstellen Sie eine Gruppe, um Ports zu bündeln',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'Switch wählen',
   'ui.refresh': 'Aktualisieren',
   'ui.retry': 'Erneut versuchen',
-  'ui.switchCount': '{n} Switch(es)',
+  'ui.switchCount': '{n} Switches',
   'ui.theme': 'Design',
   'ui.theme_dark': 'Dunkel',
   'ui.theme_light': 'Hell',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'VLAN-Namen dieses Switches auf alle anderen Switches kopieren? Vorhandene Namen bleiben erhalten.',
   'vlans.trunkOnly': 'Nur getaggt (Trunk)',
   'vlans.unnamed': 'Ohne Namen',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Core-Switch',
+  'lag.namePlaceholder': 'Uplink, Server-Bond…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Gast…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200-Verwaltung',
+  'nav.switchMenu': 'Switch-Seiten',
+  'api.network': 'SwitchPilot nicht erreichbar (Netzwerkfehler)',
+  'api.sessionExpired': 'Sitzung abgelaufen, bitte erneut anmelden',
+  'api.forbidden': 'Nicht erlaubt: {message}',
+  'sys.snapshotImportName': 'Import: {name}',
+  'vlans.modeUnknown': 'Unbekannt (Zustand am Switch)',
+  'lag.memberOne': '1 Port',
+  'mac.entriesOne': '1 Eintrag gelernt',
+  'ui.switchCountOne': '1 Switch',
+  'ui.offline': 'Switch nicht erreichbar',
 }

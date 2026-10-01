@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Tableau de bord',
   'nav.overview': 'Vue d\'ensemble',
   'nav.ports': 'Ports',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Agrégation de liens',
-  'lag.tip': 'Agrégez plusieurs ports physiques en un seul lien logique. Augmente la bande passante (ex. 2x 2.5G = 5G) et offre de la redondance. Les deux extrémités doivent être configurées. Jusqu\'à 16 groupes supportés.',
+  'lag.tip': 'Agrégez plusieurs ports physiques en un seul lien logique. Augmente la bande passante (ex. 2x 2.5G = 5G) et offre de la redondance. Les deux extrémités doivent être configurées. Jusqu\'à 15 groupes supportés.',
   'lag.create': 'Créer un groupe LAG',
   'lag.noGroups': 'Aucun groupe LAG configuré',
   'lag.createDesc': 'Créez un groupe pour agréger des ports ensemble',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'Choisir un switch',
   'ui.refresh': 'Actualiser',
   'ui.retry': 'Réessayer',
-  'ui.switchCount': '{n} switch(s)',
+  'ui.switchCount': '{n} switchs',
   'ui.theme': 'Thème',
   'ui.theme_dark': 'Sombre',
   'ui.theme_light': 'Clair',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'Copier les noms de VLAN de ce switch vers tous les autres switchs ? Les noms existants sont conservés.',
   'vlans.trunkOnly': 'Taggé uniquement (trunk)',
   'vlans.unnamed': 'Sans nom',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Switch principal',
+  'lag.namePlaceholder': 'Uplink, agrégat serveur…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Invités…',
+  'auth.footer': 'SwitchPilot · gestion Xikestor SKS3200',
+  'nav.switchMenu': 'Pages du switch',
+  'api.network': 'SwitchPilot est injoignable (erreur réseau)',
+  'api.sessionExpired': 'Session expirée, reconnectez-vous',
+  'api.forbidden': 'Non autorisé : {message}',
+  'sys.snapshotImportName': 'Import : {name}',
+  'vlans.modeUnknown': 'Inconnu (état du switch)',
+  'lag.memberOne': '1 port',
+  'mac.entriesOne': '1 entrée apprise',
+  'ui.switchCountOne': '1 switch',
+  'ui.offline': 'Switch injoignable',
 }

@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Панель управления',
   'nav.overview': 'Обзор',
   'nav.ports': 'Порты',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Агрегация каналов',
-  'lag.tip': 'Объединение нескольких физических портов в один логический канал. Увеличивает пропускную способность (например, 2x 2,5G = 5G) и обеспечивает резервирование. Оба конца должны быть настроены. Поддерживается до 16 групп.',
+  'lag.tip': 'Объединение нескольких физических портов в один логический канал. Увеличивает пропускную способность (например, 2x 2,5G = 5G) и обеспечивает резервирование. Оба конца должны быть настроены. Поддерживается до 15 групп.',
   'lag.create': 'Создать группу LAG',
   'lag.noGroups': 'Группы LAG не настроены',
   'lag.createDesc': 'Создайте группу для объединения портов',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'Скопировать имена VLAN этого коммутатора на все остальные? Существующие имена сохраняются.',
   'vlans.trunkOnly': 'Только тегированный (trunk)',
   'vlans.unnamed': 'Без имени',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Основной коммутатор',
+  'lag.namePlaceholder': 'Uplink, агрегация серверов…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Гости…',
+  'auth.footer': 'SwitchPilot · управление Xikestor SKS3200',
+  'nav.switchMenu': 'Страницы коммутатора',
+  'api.network': 'SwitchPilot недоступен (ошибка сети)',
+  'api.sessionExpired': 'Сессия истекла, войдите снова',
+  'api.forbidden': 'Запрещено: {message}',
+  'sys.snapshotImportName': 'Импорт: {name}',
+  'vlans.modeUnknown': 'Неизвестно (состояние коммутатора)',
+  'lag.memberOne': '1 порт',
+  'mac.entriesOne': '1 запись изучена',
+  'ui.switchCountOne': '1 коммутатор',
+  'ui.offline': 'Коммутатор недоступен',
 }

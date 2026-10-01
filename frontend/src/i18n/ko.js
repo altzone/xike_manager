@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': '대시보드',
   'nav.overview': '개요',
   'nav.ports': '포트',
   'nav.vlans': 'VLAN',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': '링크 어그리게이션',
-  'lag.tip': '여러 물리 포트를 하나의 논리 링크로 결합합니다. 대역폭 증가(예: 2x 2.5G = 5G)와 이중화를 제공합니다. 양쪽 모두 설정이 필요합니다. 최대 16개 그룹을 지원합니다.',
+  'lag.tip': '여러 물리 포트를 하나의 논리 링크로 결합합니다. 대역폭 증가(예: 2x 2.5G = 5G)와 이중화를 제공합니다. 양쪽 모두 설정이 필요합니다. 최대 15개 그룹을 지원합니다.',
   'lag.create': 'LAG 그룹 생성',
   'lag.noGroups': '구성된 LAG 그룹이 없습니다',
   'lag.createDesc': '포트를 결합할 그룹을 생성하십시오',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': '이 스위치의 VLAN 이름을 다른 모든 스위치에 복사할까요? 기존 이름은 유지됩니다.',
   'vlans.trunkOnly': '태그만 (trunk)',
   'vlans.unnamed': '이름 없음',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': '코어 스위치',
+  'lag.namePlaceholder': '업링크, 서버 본드…',
+  'vlans.namePlaceholder': 'LAN, VoIP, 게스트…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200 관리',
+  'nav.switchMenu': '스위치 페이지',
+  'api.network': 'SwitchPilot에 연결할 수 없습니다 (네트워크 오류)',
+  'api.sessionExpired': '세션이 만료되었습니다. 다시 로그인하세요',
+  'api.forbidden': '허용되지 않음: {message}',
+  'sys.snapshotImportName': '가져오기: {name}',
+  'vlans.modeUnknown': '알 수 없음 (스위치 상태)',
+  'lag.memberOne': '포트 1개',
+  'mac.entriesOne': '학습된 항목 1개',
+  'ui.switchCountOne': '스위치 1대',
+  'ui.offline': '스위치에 연결할 수 없음',
 }

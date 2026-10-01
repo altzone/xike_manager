@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Kontrol Paneli',
   'nav.overview': 'Genel bakış',
   'nav.ports': 'Portlar',
   'nav.vlans': 'VLAN',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Bağlantı Birleştirme',
-  'lag.tip': 'Birden fazla fiziksel portu tek bir mantıksal bağlantıda birleştirir. Bant genişliğini artırır (örn. 2x 2.5G = 5G) ve yedeklilik sağlar. Her iki ucun da yapılandırılması gerekir. En fazla 16 grup desteklenir.',
+  'lag.tip': 'Birden fazla fiziksel portu tek bir mantıksal bağlantıda birleştirir. Bant genişliğini artırır (örn. 2x 2.5G = 5G) ve yedeklilik sağlar. Her iki ucun da yapılandırılması gerekir. En fazla 15 grup desteklenir.',
   'lag.create': 'LAG Grubu Oluştur',
   'lag.noGroups': 'Yapılandırılmış LAG grubu yok',
   'lag.createDesc': 'Portları birleştirmek için bir grup oluşturun',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'Bir anahtar seçin',
   'ui.refresh': 'Yenile',
   'ui.retry': 'Yeniden dene',
-  'ui.switchCount': '{n} anahtar',
+  'ui.switchCount': '{n} switch',
   'ui.theme': 'Tema',
   'ui.theme_dark': 'Koyu',
   'ui.theme_light': 'Açık',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'Bu anahtarın VLAN adları diğer tüm anahtarlara kopyalansın mı? Mevcut adlar korunur.',
   'vlans.trunkOnly': 'Yalnızca etiketli (trunk)',
   'vlans.unnamed': 'Adsız',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Ana switch',
+  'lag.namePlaceholder': 'Uplink, sunucu bond…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Misafir…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200 yönetimi',
+  'nav.switchMenu': 'Switch sayfaları',
+  'api.network': 'SwitchPilot\'a ulaşılamıyor (ağ hatası)',
+  'api.sessionExpired': 'Oturum süresi doldu, yeniden giriş yapın',
+  'api.forbidden': 'İzin verilmiyor: {message}',
+  'sys.snapshotImportName': 'İçe aktarma: {name}',
+  'vlans.modeUnknown': 'Bilinmiyor (switch durumu)',
+  'lag.memberOne': '1 port',
+  'mac.entriesOne': '1 kayıt öğrenildi',
+  'ui.switchCountOne': '1 switch',
+  'ui.offline': 'Switch\'e ulaşılamıyor',
 }

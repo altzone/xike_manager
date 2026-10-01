@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'لوحة التحكم',
   'nav.overview': 'نظرة عامة',
   'nav.ports': 'المنافذ',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'تجميع الارتباطات',
-  'lag.tip': 'ربط عدة منافذ فعلية في ارتباط منطقي واحد. يزيد عرض النطاق (مثلًا 2x 2.5G = 5G) ويوفر التكرار. يجب إعداد كلا الطرفين. يدعم حتى 16 مجموعة.',
+  'lag.tip': 'ربط عدة منافذ فعلية في ارتباط منطقي واحد. يزيد عرض النطاق (مثلًا 2x 2.5G = 5G) ويوفر التكرار. يجب إعداد كلا الطرفين. يدعم حتى 15 مجموعة.',
   'lag.create': 'إنشاء مجموعة LAG',
   'lag.noGroups': 'لا توجد مجموعات LAG مُعدَّة',
   'lag.createDesc': 'أنشئ مجموعة لربط المنافذ معًا',
@@ -369,7 +368,7 @@ export default {
   'ui.pickSwitch': 'اختر مبدّلاً',
   'ui.refresh': 'تحديث',
   'ui.retry': 'إعادة المحاولة',
-  'ui.switchCount': '{n} مبدّل',
+  'ui.switchCount': '{n} مبدّلات',
   'ui.theme': 'المظهر',
   'ui.theme_dark': 'داكن',
   'ui.theme_light': 'فاتح',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'نسخ أسماء VLAN لهذا المبدّل إلى جميع المبدّلات الأخرى؟ تُحفظ الأسماء الموجودة.',
   'vlans.trunkOnly': 'موسوم فقط (trunk)',
   'vlans.unnamed': 'بلا اسم',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'المبدّل الرئيسي',
+  'lag.namePlaceholder': 'Uplink، تجميع الخادم…',
+  'vlans.namePlaceholder': 'LAN، VoIP، الضيوف…',
+  'auth.footer': 'SwitchPilot · إدارة Xikestor SKS3200',
+  'nav.switchMenu': 'صفحات المبدّل',
+  'api.network': 'تعذر الوصول إلى SwitchPilot (خطأ في الشبكة)',
+  'api.sessionExpired': 'انتهت الجلسة، سجّل الدخول مجددًا',
+  'api.forbidden': 'غير مسموح: {message}',
+  'sys.snapshotImportName': 'استيراد: {name}',
+  'vlans.modeUnknown': 'غير معروف (حالة المبدّل)',
+  'lag.memberOne': 'منفذ واحد',
+  'mac.entriesOne': 'تم تعلّم إدخال واحد',
+  'ui.switchCountOne': 'مبدّل واحد',
+  'ui.offline': 'تعذر الوصول إلى المبدّل',
 }

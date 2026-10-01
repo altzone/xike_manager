@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': '仪表盘',
   'nav.overview': '概览',
   'nav.ports': '端口',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': '链路聚合',
-  'lag.tip': '将多个物理端口绑定为一条逻辑链路。可增加带宽（例如 2x 2.5G = 5G）并提供冗余。两端均需配置。最多支持 16 个组。',
+  'lag.tip': '将多个物理端口绑定为一条逻辑链路。可增加带宽（例如 2x 2.5G = 5G）并提供冗余。两端均需配置。最多支持 15 个组。',
   'lag.create': '创建 LAG 组',
   'lag.noGroups': '未配置 LAG 组',
   'lag.createDesc': '创建一个组以绑定多个端口',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': '将此交换机的 VLAN 名称复制到所有其他交换机？现有名称将保留。',
   'vlans.trunkOnly': '仅标记 (trunk)',
   'vlans.unnamed': '未命名',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': '核心交换机',
+  'lag.namePlaceholder': '上行链路、服务器聚合…',
+  'vlans.namePlaceholder': 'LAN、VoIP、访客…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200 管理',
+  'nav.switchMenu': '交换机页面',
+  'api.network': '无法连接 SwitchPilot（网络错误）',
+  'api.sessionExpired': '会话已过期，请重新登录',
+  'api.forbidden': '不允许：{message}',
+  'sys.snapshotImportName': '导入：{name}',
+  'vlans.modeUnknown': '未知（交换机当前状态）',
+  'lag.memberOne': '1 个端口',
+  'mac.entriesOne': '已学习 1 条记录',
+  'ui.switchCountOne': '1 台交换机',
+  'ui.offline': '交换机不可达',
 }

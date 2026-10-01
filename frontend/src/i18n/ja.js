@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'ダッシュボード',
   'nav.overview': '概要',
   'nav.ports': 'ポート',
   'nav.vlans': 'VLAN',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'リンクアグリゲーション',
-  'lag.tip': '複数の物理ポートを1つの論理リンクに束ねます。帯域幅の増加（例: 2x 2.5G = 5G）と冗長性を提供します。両端の設定が必要です。最大16グループまで対応しています。',
+  'lag.tip': '複数の物理ポートを1つの論理リンクに束ねます。帯域幅の増加（例: 2x 2.5G = 5G）と冗長性を提供します。両端の設定が必要です。最大15グループまで対応しています。',
   'lag.create': 'LAGグループを作成',
   'lag.noGroups': 'LAGグループが設定されていません',
   'lag.createDesc': 'グループを作成してポートを束ねてください',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'このスイッチの VLAN 名を他のすべてのスイッチにコピーしますか？既存の名前は保持されます。',
   'vlans.trunkOnly': 'タグ付きのみ (trunk)',
   'vlans.unnamed': '名前なし',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'コアスイッチ',
+  'lag.namePlaceholder': 'アップリンク、サーバーボンド…',
+  'vlans.namePlaceholder': 'LAN、VoIP、ゲスト…',
+  'auth.footer': 'SwitchPilot · Xikestor SKS3200 管理',
+  'nav.switchMenu': 'スイッチのページ',
+  'api.network': 'SwitchPilot に接続できません（ネットワークエラー）',
+  'api.sessionExpired': 'セッションが切れました。再度ログインしてください',
+  'api.forbidden': '許可されていません: {message}',
+  'sys.snapshotImportName': 'インポート: {name}',
+  'vlans.modeUnknown': '不明（スイッチの状態）',
+  'lag.memberOne': '1 ポート',
+  'mac.entriesOne': '1 件学習済み',
+  'ui.switchCountOne': '1 台のスイッチ',
+  'ui.offline': 'スイッチに到達できません',
 }

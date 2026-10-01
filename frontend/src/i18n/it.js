@@ -1,6 +1,5 @@
 export default {
   // Nav
-  'nav.dashboard': 'Dashboard',
   'nav.overview': 'Panoramica',
   'nav.ports': 'Porte',
   'nav.vlans': 'VLANs',
@@ -106,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Aggregazione di link',
-  'lag.tip': 'Unisci più porte fisiche in un unico collegamento logico. Aumenta la larghezza di banda (es. 2x 2,5G = 5G) e fornisce ridondanza. Entrambi i lati devono essere configurati. Fino a 16 gruppi supportati.',
+  'lag.tip': 'Unisci più porte fisiche in un unico collegamento logico. Aumenta la larghezza di banda (es. 2x 2,5G = 5G) e fornisce ridondanza. Entrambi i lati devono essere configurati. Fino a 15 gruppi supportati.',
   'lag.create': 'Crea gruppo LAG',
   'lag.noGroups': 'Nessun gruppo LAG configurato',
   'lag.createDesc': 'Crea un gruppo per unire le porte',
@@ -387,4 +386,19 @@ export default {
   'vlans.syncConfirm': 'Copiare i nomi delle VLAN di questo switch su tutti gli altri? I nomi esistenti vengono mantenuti.',
   'vlans.trunkOnly': 'Solo tagged (trunk)',
   'vlans.unnamed': 'Senza nome',
+  // Verification fixes (plurals, placeholders, API errors, live status)
+  'dash.namePlaceholder': 'Switch principale',
+  'lag.namePlaceholder': 'Uplink, bond server…',
+  'vlans.namePlaceholder': 'LAN, VoIP, Ospiti…',
+  'auth.footer': 'SwitchPilot · gestione Xikestor SKS3200',
+  'nav.switchMenu': 'Pagine dello switch',
+  'api.network': 'Impossibile raggiungere SwitchPilot (errore di rete)',
+  'api.sessionExpired': 'Sessione scaduta, accedi di nuovo',
+  'api.forbidden': 'Non consentito: {message}',
+  'sys.snapshotImportName': 'Importazione: {name}',
+  'vlans.modeUnknown': 'Sconosciuto (stato dello switch)',
+  'lag.memberOne': '1 porta',
+  'mac.entriesOne': '1 voce appresa',
+  'ui.switchCountOne': '1 switch',
+  'ui.offline': 'Switch irraggiungibile',
 }
