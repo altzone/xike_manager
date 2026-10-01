@@ -142,13 +142,15 @@ cp -r data/ data-backup-$(date +%Y%m%d)/
 ### Update
 
 ```bash
-git pull
 docker compose down
+cp -r data/ data-backup-$(date +%Y%m%d)/
+git pull
 docker compose build --no-cache
 docker compose up -d
 ```
 
-Your data in `data/` is preserved across updates.
+Your data in `data/` is preserved across updates. Read the [Upgrade Guide](upgrade.md) first:
+it lists what changed and what to check afterwards (for example the SFP+ port numbering setting).
 
 ## Troubleshooting
 

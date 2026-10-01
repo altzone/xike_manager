@@ -182,6 +182,12 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |
 
+## Upgrading
+
+Existing installs keep their data; database changes are applied automatically at startup.
+Follow the **[Upgrade Guide](docs/upgrade.md)** (backup, rebuild, what to check after the
+port-numbering change, rollback) and see the [Changelog](CHANGELOG.md) for what each version brings.
+
 ## Data Persistence
 
 All data is stored in `./data/switchpilot.db` (SQLite):
