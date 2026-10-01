@@ -12,3 +12,6 @@ services:
       # Session signing key. Leave unset: a random key is generated on first start and kept
       # in ./data/secret_key. Set your own only if you run several replicas.
       # - SECRET_KEY=
+      # Behind a reverse proxy: its address(es), so login throttling sees the real client
+      # address from X-Forwarded-For instead of the proxy's.
+      # - TRUSTED_PROXIES=172.17.0.1,10.0.0.0/8

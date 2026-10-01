@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field
 from db import init_db, DB_PATH
 from auth import (hash_password_async, verify_password_async, validate_password, validate_role,
                   create_token, create_stream_token, decode_token, get_current_user, require_admin,
-                  check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH)
+                  check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH,
+                  load_user, password_version)
 from switch_client import (SwitchClient, SwitchError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
                            MAX_VLAN_ID, NUM_PORTS, MANAGEMENT_PORT)
 from sse import get_switch_client, drop_switch_client, sse_endpoint
@@ -106,8 +107,8 @@ class VlanCreate(BaseModel):
 
 class PortAssignment(BaseModel):
     port: int
-    mode: Literal["access", "trunk", "flat"]
-    access_vlan: Optional[int] = Field(default=None, ge=1, le=MAX_FID)
+    mode: Literal["access", "trunk", "flat", "unknown"]  # unknown = as reported by GET: keep as is
+    access_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_FID)  # 0 = the default bridge
     native_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_FID)  # 0 = the default bridge
     trunk_vlans: Optional[list[int]] = None
 
@@ -233,7 +234,7 @@ async def _probe_switch(ip: str, username: str, password: str) -> dict:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(400, f"Cannot connect to switch at {ip}: {e}")
+        raise HTTPException(400, f"Cannot connect to switch at {ip} ({e.__class__.__name__})")
     finally:
         await probe.close()
     # 1.0.0.x firmware spells the model "modle"; 2.0.0.x puts it in "des"
@@ -277,7 +278,7 @@ async def setup(req: SetupRequest):
 # ── Auth ──
 @app.post("/api/auth/login")
 async def login(req: LoginRequest, request: Request):
-    check_login_allowed(request)
+    check_login_allowed(request, req.username)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM users WHERE username = ?", (req.username,))
@@ -285,10 +286,10 @@ async def login(req: LoginRequest, request: Request):
     # verify against a dummy hash when the user is unknown so timing does not reveal usernames
     ok = await verify_password_async(req.password, user["password_hash"] if user else DUMMY_HASH)
     if not user or not ok:
-        record_login_failure(request)
+        record_login_failure(request, req.username)
         raise HTTPException(401, "Invalid credentials")
-    clear_login_failures(request)
-    token = create_token(user["id"], user["username"], user["role"])
+    clear_login_failures(request, req.username)
+    token = create_token(user["id"], user["username"], user["role"], pv=password_version(user["password_hash"]))
     return {"token": token, "username": user["username"], "role": user["role"]}
 
 @app.get("/api/auth/me")
@@ -367,29 +368,39 @@ async def set_port_mapping(switch_id: int, req: PortMappingUpdate, user=Depends(
     sw = await _switch_row(switch_id)
     moved = False
     if bool(sw["swap_sfp_9_10"]) != req.swap_sfp_9_10:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?",
-                             (int(req.swap_sfp_9_10), switch_id))
-            if req.move_descriptions:
-                # Descriptions describe what is plugged into a cage, so they follow it.
-                # UNIQUE(switch_id, port) forbids a direct CASE swap: go through -9.
-                await db.execute("UPDATE port_descriptions SET port = -9 WHERE switch_id = ? AND port = 9", (switch_id,))
-                await db.execute("UPDATE port_descriptions SET port = 9 WHERE switch_id = ? AND port = 10", (switch_id,))
-                await db.execute("UPDATE port_descriptions SET port = 10 WHERE switch_id = ? AND port = -9", (switch_id,))
-                moved = True
-            await db.commit()
+        # not while a VLAN apply is writing ports 9/10 with the old numbering
+        async with _vlan_locks.setdefault(switch_id, asyncio.Lock()):
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?",
+                                 (int(req.swap_sfp_9_10), switch_id))
+                if req.move_descriptions:
+                    # Descriptions describe what is plugged into a cage, so they follow it.
+                    # UNIQUE(switch_id, port) forbids a direct CASE swap: go through -9.
+                    await db.execute("UPDATE port_descriptions SET port = -9 WHERE switch_id = ? AND port = 9", (switch_id,))
+                    await db.execute("UPDATE port_descriptions SET port = 9 WHERE switch_id = ? AND port = 10", (switch_id,))
+                    await db.execute("UPDATE port_descriptions SET port = 10 WHERE switch_id = ? AND port = -9", (switch_id,))
+                    moved = True
+                await db.commit()
+            get_switch_client(switch_id, sw["ip"], sw["username"], sw["password"], req.swap_sfp_9_10)
         await _log_change(switch_id, user, "port_mapping",
                           {"swap_sfp_9_10": req.swap_sfp_9_10, "moved_descriptions": moved})
-        get_switch_client(switch_id, sw["ip"], sw["username"], sw["password"], req.swap_sfp_9_10)
     return {"swap_sfp_9_10": req.swap_sfp_9_10, "moved_descriptions": moved}
 
 
 # ── SSE ──
 @app.get("/api/switches/{switch_id}/sse")
 async def switch_sse(switch_id: int, token: str = Query(...)):
-    decode_token(token, scope="stream")
+    payload = decode_token(token, scope="stream")
+    await load_user(payload)
     client = await _get_client(switch_id)
-    return await sse_endpoint(client)
+
+    async def still_allowed() -> bool:
+        try:
+            await load_user(payload)  # deleted account or changed password: stop streaming
+            return True
+        except HTTPException:
+            return False
+    return await sse_endpoint(client, still_allowed)
 
 
 # ── Switch Info (name from DB) ──
@@ -429,11 +440,21 @@ async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_a
             raise HTTPException(400, f"Invalid network settings: {e}")
         if gateway and gateway not in ipaddress.IPv4Network(f"{ip}/{mask}", strict=False):
             raise HTTPException(400, "Gateway is not inside the configured subnet")
+    # What the switch believes its address is: SwitchPilot only follows a change when it was
+    # talking to that address directly (not through a hostname, NAT or a port forward).
+    try:
+        current_ip = str((await client.get_network()).get("ipAddress", "") or "")
+    except Exception:
+        current_ip = ""
     note = ""
+    accepted = True
     try:
         await client.set_network_ipv4(cfg.ip, cfg.netmask, cfg.gateway, cfg.dhcp)
+    except SwitchError as e:
+        raise HTTPException(502, f"The switch refused the network change: {e}")
     except Exception as e:
         # the switch typically drops the connection while it re-addresses itself
+        accepted = False
         note = f"The switch did not acknowledge the change ({e.__class__.__name__}); it may have re-addressed itself."
     await _log_change(switch_id, user, "network", cfg.model_dump())
     if cfg.dhcp:
@@ -441,12 +462,17 @@ async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_a
                 "note": (note + " " if note else "") + "The switch now takes its address from DHCP: "
                 "once you know the new address, update it under the switch settings (PUT /api/switches/{id})."}
     if cfg.ip != sw["ip"]:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute("UPDATE switches SET ip = ? WHERE id = ?", (cfg.ip, switch_id))
-            await db.commit()
-        get_switch_client(switch_id, cfg.ip, sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
-        note = (note + " " if note else "") + f"SwitchPilot now reaches this switch at {cfg.ip}."
-    return {"ok": True, "dhcp": False, "ip": cfg.ip, "note": note}
+        if sw["ip"] == current_ip:
+            async with aiosqlite.connect(DB_PATH) as db:
+                await db.execute("UPDATE switches SET ip = ? WHERE id = ?", (cfg.ip, switch_id))
+                await db.commit()
+            get_switch_client(switch_id, cfg.ip, sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
+            note = (note + " " if note else "") + f"SwitchPilot now reaches this switch at {cfg.ip}."
+        else:
+            note = (note + " " if note else "") + (
+                f"SwitchPilot keeps reaching this switch at {sw['ip']} (not the switch's own address); "
+                "update it under the switch settings if needed.")
+    return {"ok": True, "dhcp": False, "ip": cfg.ip, "accepted": accepted, "note": note}
 
 # ── System ──
 @app.get("/api/switches/{switch_id}/status")
@@ -510,6 +536,40 @@ async def get_port_stats(switch_id: int, user=Depends(get_current_user)):
 
 
 # ── VLANs (abstraction layer) ──
+def _assign_bridges(tag_entries: list[dict], port_configs: list[dict], current_tags: list[dict], defined: set[int]):
+    """Give every tagged entry the bridge its VLAN lives in, for the whole table at once.
+
+    VLANs 1-63 use their own ID (the FID of their access ports), so the tagged and untagged
+    traffic of one VLAN share a bridge. The hardware only has bridges 0-63, so a VLAN above
+    63 (tagged-only, by construction) gets a free bridge: the one it already had on the
+    switch when there is one, else the highest ID not used by a port's FID, by another VLAN,
+    or by a VLAN defined in SwitchPilot that could become an access VLAN later. Entries are
+    normalised on every apply so one VLAN never ends up split over two bridges (entries
+    written with bridge 0 by earlier versions included).
+    """
+    used = {int(p["pvid"]) for p in port_configs if p["mode"] != "flat"}
+    reserved = (used | {v for v in defined if 1 <= v <= MAX_FID}
+                | {e["vlan_id"] for e in tag_entries if e["vlan_id"] <= MAX_FID})
+    assigned: dict[int, int] = {}
+    for t in current_tags:  # keep what the switch already holds for a high VLAN
+        vid, bridge = t["vlan_id"], int(t.get("bridge") or 0)
+        if vid > MAX_FID and 1 <= bridge <= MAX_FID and bridge not in reserved and bridge not in assigned.values():
+            assigned.setdefault(vid, bridge)
+    for e in tag_entries:
+        vid = e["vlan_id"]
+        if vid <= MAX_FID:
+            e["bridge"] = vid
+            continue
+        if vid not in assigned:
+            taken = reserved | set(assigned.values())
+            free = next((b for b in range(MAX_FID, 0, -1) if b not in taken), None)
+            if free is None:
+                raise HTTPException(400, f"No free bridge for VLAN {vid}: the switch has 64 bridges (0-63) "
+                                         "and all are in use")
+            assigned[vid] = free
+        e["bridge"] = assigned[vid]
+
+
 async def _vlans_in_use(client: SwitchClient) -> set[int]:
     in_use = set()
     for pv in await client.get_port_vlans():
@@ -603,11 +663,12 @@ async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignmen
         current_ports = {p["port"]: p for p in await client.get_port_vlans()}
         current_tags = await client.get_tag_vlans()
 
-        # 1. Full port-VLAN table: requested ports as asked, the others as they are now
+        # 1. Full port-VLAN table: requested ports as asked, the others (and ports sent back
+        #    with the "unknown" mode GET reported) as they are now
         port_configs = []
         for port in range(1, NUM_PORTS + 1):
             a = requested.get(port)
-            if a is None:
+            if a is None or a.mode == "unknown":
                 cur = current_ports.get(port)
                 if cur:
                     port_configs.append({"port": port, "mode": cur["mode"], "pvid": cur["pvid"]})
@@ -624,10 +685,11 @@ async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignmen
         tag_entries = []
         for port in range(1, NUM_PORTS + 1):
             a = requested.get(port)
-            if a is None:
+            if a is None or a.mode == "unknown":
                 for t in current_tags:
                     if t["port"] == port:
-                        tag_entries.append({"port": port, "vlan_id": t["vlan_id"], "bridge": t.get("bridge")})
+                        tag_entries.append({"port": port, "vlan_id": t["vlan_id"],
+                                            "tag_type": t.get("tag_type"), "inner_vid": t.get("inner_vid")})
             elif a.mode == "trunk" and a.trunk_vlans:
                 native = a.native_vlan if a.native_vlan is not None else 1
                 for vid in sorted(set(a.trunk_vlans)):
@@ -637,6 +699,10 @@ async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignmen
             raise HTTPException(400, f"Too many tag VLAN entries: {len(tag_entries)} (max {MAX_TAG_ENTRIES})")
         for i, e in enumerate(tag_entries):
             e["entry"] = i
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute("SELECT vlan_id FROM vlans WHERE switch_id=?", (switch_id,))
+            defined = {r[0] for r in await cursor.fetchall()}
+        _assign_bridges(tag_entries, port_configs, current_tags, defined)
 
         # 3. Write: reset first so the outcome is the same whatever init_vlan clears
         previous_ports = [{"port": p["port"], "mode": p["mode"], "pvid": p["pvid"]} for p in current_ports.values()]
@@ -927,20 +993,21 @@ async def get_static_macs(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/mac/static/add")
 async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    await client.add_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
+    warnings = await client.add_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
     await _log_change(switch_id, user, "static_mac_add", req.model_dump())
-    return {"ok": True}
+    return {"ok": True, "warnings": warnings}
 
 @app.post("/api/switches/{switch_id}/mac/static/delete")
 async def delete_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    await client.delete_static_mac(data)
+    warnings = await client.delete_static_mac(data)
     await _log_change(switch_id, user, "static_mac_delete", data)
-    return {"ok": True}
+    return {"ok": True, "warnings": warnings}
 
 # ── Config Snapshots ──
 @app.get("/api/switches/{switch_id}/snapshots")
 async def list_snapshots(switch_id: int, user=Depends(get_current_user)):
+    await _switch_row(switch_id)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -1057,6 +1124,7 @@ async def delete_user(user_id: int, user=Depends(require_admin)):
         raise HTTPException(400, "Cannot delete yourself")
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")  # the count and the write happen under one lock
         cursor = await db.execute("SELECT role FROM users WHERE id=?", (user_id,))
         target = await cursor.fetchone()
         if not target:
@@ -1071,6 +1139,7 @@ async def delete_user(user_id: int, user=Depends(require_admin)):
 async def update_user(user_id: int, req: UserUpdate, user=Depends(require_admin)):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
         cursor = await db.execute("SELECT role FROM users WHERE id=?", (user_id,))
         target = await cursor.fetchone()
         if not target:

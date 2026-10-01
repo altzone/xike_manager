@@ -125,11 +125,26 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_buffering off;
         proxy_read_timeout 86400s;
     }
 }
 ```
+
+Then tell SwitchPilot which address the proxy connects from, so that login throttling (10 wrong
+passwords per account and client address) counts browsers, not the proxy:
+
+```yaml
+# docker-compose.yml
+      - TRUSTED_PROXIES=172.17.0.1        # the proxy's address or network, comma-separated
+```
+
+Without it every browser behind the proxy shares one address, which is fine for one household
+but means ten wrong passwords on one account lock that account for everyone for 10 minutes.
+Caddy forwards `X-Forwarded-For` on its own; only `TRUSTED_PROXIES` is needed with it.
+SwitchPilot sends `X-Frame-Options: DENY`: it opens in its own tab, not inside another
+dashboard's iframe.
 
 ### Backup
 
@@ -165,12 +180,18 @@ docker compose logs
 ```
 
 ### Lost admin password
-Delete the database and restart:
+If another admin account exists, ask them: **Users → Reset password**.
+
+Otherwise the only way is to start the database over. That loses everything SwitchPilot stores
+(switch entries, port descriptions, VLAN and LAG names, snapshots, the change log); the switches
+themselves keep their configuration. Take a backup first, then:
 ```bash
-rm data/switchpilot.db
-docker compose restart
+docker compose down
+mv data/switchpilot.db data/switchpilot.db.old
+docker compose up -d
 ```
-You'll go through the setup wizard again. Switch configurations are on the switches themselves, not in SwitchPilot.
+You'll go through the setup wizard again and will have to re-add your switches. Export any
+snapshot you care about before doing this (System → Configuration Snapshots).
 
 ### Port changes don't persist
 Make sure to click "Apply & Save" on the VLAN page, or wait for the changes to auto-save on the Ports page.

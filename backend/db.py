@@ -28,6 +28,14 @@ async def _migrate(db):
         await db.commit()
 
 
+def _restrict_db_permissions():
+    """The database holds the switches' admin passwords: keep it readable by this user only."""
+    try:
+        os.chmod(DB_PATH, 0o600)
+    except OSError:
+        pass
+
+
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript("""
@@ -107,6 +115,7 @@ async def init_db():
         """)
         await db.commit()
         await _migrate(db)
+        _restrict_db_permissions()
         # Load OUI database if empty
         cursor = await db.execute("SELECT COUNT(*) FROM oui")
         count = (await cursor.fetchone())[0]

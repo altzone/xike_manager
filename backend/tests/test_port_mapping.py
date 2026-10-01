@@ -127,7 +127,7 @@ def test_every_write_path_translates_port_9(api, swap, expected_internal):
     assert select["Ingress_Status"] == "1" and select["Egress_Status"] == "0"
     # second request, like the native UI: every other port switched off on the same destination
     assert clear["mirroring_port_selection"] == expected_internal
-    assert clear["mirrored_port_selection"] == sorted({str(i) for i in range(2, 11)} - {expected_internal}, key=int)
+    assert clear["mirrored_port_selection"] == [str(i) for i in range(2, 11)]  # every non-source, destination included
     assert clear["Ingress_Status"] == "0" and clear["Egress_Status"] == "0"
 
     assert api.post(f"/api/switches/{sid}/mac/static/add",
@@ -167,7 +167,7 @@ def test_mirror_can_be_disabled(api):
     posts = api.mock.posted("port_mirror.json")
     assert len(posts) == 1  # the firmware keeps the destination: off = all sources cleared on it
     assert posts[0]["mirroring_port_selection"] == "9"
-    assert posts[0]["mirrored_port_selection"] == [str(i) for i in range(1, 11) if i != 9]
+    assert posts[0]["mirrored_port_selection"] == [str(i) for i in range(1, 11)]  # all ten, as the native UI
     assert posts[0]["Ingress_Status"] == "0" and posts[0]["Egress_Status"] == "0"
 
     api.mock.state["port_mirror.json"]["MonitoringPortId"] = "0"

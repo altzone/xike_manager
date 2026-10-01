@@ -119,11 +119,25 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_buffering off;
         proxy_read_timeout 86400s;
     }
 }
 ```
+
+Then tell SwitchPilot which address the proxy connects from, so that login throttling (10 wrong
+passwords per account and client address) counts browsers, not the proxy:
+
+```yaml
+# docker-compose.yml
+      - TRUSTED_PROXIES=172.17.0.1        # the proxy's address or network, comma-separated
+```
+
+Without it every browser behind the proxy shares one address, which is fine for one household
+but means ten wrong passwords on one account lock that account for everyone for 10 minutes.
+SwitchPilot sends `X-Frame-Options: DENY`: it opens in its own tab, not inside another
+dashboard's iframe.
 
 ## Platform Support
 
@@ -197,16 +211,24 @@ port-numbering change, rollback) and see the [Changelog](CHANGELOG.md) for what 
 
 ## Data Persistence
 
-All data is stored in `./data/switchpilot.db` (SQLite):
-- User accounts and sessions
-- Switch connection details
-- VLAN names
-- Port descriptions
-- LAG group names
-- Configuration snapshots
-- OUI vendor database
+Everything lives in `./data/` (ignored by git):
 
-To backup: just copy the `data/` directory.
+- `switchpilot.db` (SQLite): user accounts, switch connection details (including each switch's
+  admin password, which SwitchPilot needs to log in), VLAN names, port descriptions, LAG group
+  names, configuration snapshots, the change log and the OUI vendor database
+- `secret_key`: the key that signs login sessions, generated on first start
+
+To backup: just copy the `data/` directory (stop the container first for a consistent copy).
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DB_PATH` | `/app/data/switchpilot.db` | Where the database lives inside the container |
+| `SECRET_KEY` | generated | Session signing key; set your own only to share it between several instances |
+| `SECRET_KEY_FILE` | `<DB dir>/secret_key` | Where the generated key is kept |
+| `TRUSTED_PROXIES` | none | Reverse proxy addresses/networks whose `X-Forwarded-For` is believed (see *Running with SSL*) |
+| `CORS_ORIGINS` | none | Comma-separated origins allowed to call the API from another site (the UI needs none) |
 
 ## API
 

@@ -2,6 +2,8 @@
 import asyncio
 import hashlib
 import json
+import time
+
 import httpx
 
 # Sentinel so _get can distinguish "no default supplied" from default=None
@@ -116,6 +118,7 @@ class SwitchClient:
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5), transport=transport)
         self.closed = False
         self._login_lock = asyncio.Lock()
+        self._last_login = 0.0
 
     # ── Configuration ──
     def configure(self, ip: str, username: str, password: str):
@@ -163,6 +166,7 @@ class SwitchClient:
         # Success is a redirect to setup.html (1.0.0.x) or index.html?page= (2.0.0.x);
         # a bad password is a 200 that redirects to login.html.
         self._logged_in = r.status_code == 200 and "login.html" not in r.text
+        self._last_login = time.monotonic()
         return self._logged_in
 
     async def _ensure_login(self):
@@ -173,7 +177,10 @@ class SwitchClient:
                 raise SwitchError(f"Login to switch {self.ip} failed (check its credentials)")
 
     async def _relogin(self):
+        observed = time.monotonic()  # when this request saw the stale session
         async with self._login_lock:
+            if self._logged_in and self._last_login > observed:
+                return  # another request re-logged in meanwhile: share that session
             self._logged_in = False
             if not await self.login():
                 raise SwitchError(f"Login to switch {self.ip} failed (check its credentials)")
@@ -181,6 +188,8 @@ class SwitchClient:
     async def _raw_get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
         try:
             return await self.client.get(f"{self.base}/{endpoint}", params=params)
+        except httpx.TimeoutException:
+            raise
         except httpx.TransportError:
             # the switch drops the pooled connection after /authorize on some firmware;
             # a GET is safe to send again on a fresh connection (a POST never is)
@@ -192,6 +201,11 @@ class SwitchClient:
         if "login.html" in r.text:
             await self._relogin()
             r = await self._raw_get(endpoint, params)
+            if "login.html" in r.text:
+                self._logged_in = False
+                raise SwitchError(f"{endpoint}: the switch rejected the session right after login")
+        if r.status_code == 404 and default is not _UNSET:
+            return default  # endpoint removed in this firmware
         if r.status_code != 200:
             raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
         try:
@@ -210,6 +224,10 @@ class SwitchClient:
         if "login.html" in r.text:
             await self._relogin()
             r = await self.client.post(f"{self.base}/{endpoint}", json=data)
+            if "login.html" in r.text:
+                # the write was dropped: never report it as applied
+                self._logged_in = False
+                raise SwitchError(f"{endpoint}: the switch rejected the write (session expired)")
         if r.status_code != 200:
             raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
         return r.text
@@ -395,6 +413,7 @@ class SwitchClient:
                     "vlan_id": int(e[f"oVid_{i}"]),
                     "bridge": int(e.get(f"bR_{i}", 0) or 0),
                     "tag_type": "single" if e[f"tT_{i}"] == "0" else "double",
+                    "inner_vid": int(e.get(f"iVid_{i}", 0) or 0),
                 })
         return entries
 
@@ -415,11 +434,11 @@ class SwitchClient:
             if bridge is None:
                 bridge = default_bridge(vid)
             data[f"bpCboxName_{idx}"] = "on"
-            data[f"vtypeName_{idx}"] = "0"
+            data[f"vtypeName_{idx}"] = "1" if e.get("tag_type") == "double" else "0"
             data[f"ppName_{idx}"] = str(internal)
             data[f"brName_{idx}"] = str(int(bridge))
             data[f"oVidName_{idx}"] = str(vid)
-            data[f"iVidName_{idx}"] = "0"
+            data[f"iVidName_{idx}"] = str(int(e.get("inner_vid") or 0))
         return await self._post("tag_vlan_cfg.json", data)
 
     async def save_tag_vlans(self):
@@ -565,9 +584,10 @@ class SwitchClient:
         """Ports are user-facing. monitoring_port 0 turns mirroring off.
 
         Like the native UI, this sends two requests: the selected sources with the
-        requested directions, then every other port with both directions off, so
-        sources from a previous session are cleared. Turning off = all ports off on
-        the current destination (the firmware keeps the destination itself).
+        requested directions, then every other port (the destination included, as the
+        captured sequence does) with both directions off, so sources from a previous
+        session are cleared. Turning off = all ten ports off on the current destination
+        (the firmware keeps the destination itself).
         """
         if monitoring_port:
             dest = self.to_internal(monitoring_port)
@@ -578,7 +598,7 @@ class SwitchClient:
             selected = set()
             if not dest:
                 return ""  # never configured: nothing to clear
-        others = [i for i in range(1, NUM_PORTS + 1) if i != dest and i not in selected]
+        others = [i for i in range(1, NUM_PORTS + 1) if i not in selected]
         result = ""
         if selected:
             result = await self._post_mirror(dest, selected, ingress, egress)
@@ -615,7 +635,7 @@ class SwitchClient:
             "port-input": str(internal),
             "fid-input": str(fid),
         })
-        return await self._post("mac_save_static_mac_entries.json", {})
+        return await self._save_static_macs()
 
     async def delete_static_mac(self, data: dict):
         """Forward the delete request, translating a user-facing 'port' if present."""
@@ -623,7 +643,15 @@ class SwitchClient:
         if "port" in payload:
             payload["port-input"] = str(self.to_internal(payload.pop("port")))
         await self._post("mac_delete_static_mac_entries.json", payload)
-        return await self._post("mac_save_static_mac_entries.json", {})
+        return await self._save_static_macs()
+
+    async def _save_static_macs(self) -> list[str]:
+        """Returns warnings: the entry change is applied already, a save timeout only delays flash."""
+        try:
+            await self._post("mac_save_static_mac_entries.json", {})
+        except (httpx.TimeoutException, SwitchError) as e:
+            return [f"Static MAC table applied but saving to flash did not complete: {e.__class__.__name__}"]
+        return []
 
     async def clear_dynamic_macs(self):
         return await self._post("mac_clear_dynamic_mac_entries.json", {})
