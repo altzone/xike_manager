@@ -3,7 +3,7 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
-## [2.1.0] - Unreleased
+## [2.1.0] - 2026-10-01
 
 ### Security
 - **Session signing key.** Earlier versions signed every login token with a key that was

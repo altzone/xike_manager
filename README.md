@@ -4,7 +4,9 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.1.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+
+Already running SwitchPilot? Jump to **[Updating](#updating)**.
 
 ---
 
@@ -21,30 +23,23 @@ The stock Xikestor web UI is:
 
 ## Features
 
-### Switch Management
-- **Visual Dashboard** — Real-time port status (up/down, speed, traffic counters via SSE)
-- **Port Configuration** — Speed, duplex, flow control, enable/disable, descriptions, live TX/RX/pps counters with green/red status dots
-- **VLAN Editor** — Create named VLANs, then assign to ports as Access or Trunk with allowed VLAN selection. Clear warnings for hardware limits (native VLAN max 63, 111 tag entries)
-- **Link Aggregation** — Create LAG groups (Static/LACP), name them, visual port status per group
-- **MAC Address Table** — Live table with search, vendor identification (39,000+ IEEE OUI entries), port mapping
-- **System Settings** — STP, Storm Control, IGMP Snooping, EEE, Port Mirroring (3-step wizard), Loop Detection (per port), SNTP with DNS resolution
+### Switch management
+- **Overview** — front-panel view of the switch with per-port LEDs and negotiated speeds, live figures (temperature, ports up, traffic, errors) and the latest configuration changes
+- **Ports** — enable/disable, speed/duplex, flow control, descriptions, live TX/RX and packets-per-second counters; disabling the management port asks for confirmation
+- **VLANs** — named VLANs assigned to ports as Access, Trunk (native + allowed VLANs) or Flat. Only the ports you change are written, the rest of the switch's VLAN tables is preserved; hardware limits (native VLAN ≤ 63, 111 tag entries) are shown as you go
+- **Link aggregation** — static or LACP groups with names, member state and LACP timeout
+- **MAC table** — live table with search and vendor lookup (39,000+ IEEE OUI entries), plus static entries
+- **System** — management IP (DHCP/static), clock and SNTP (hostnames resolved for you), STP, storm control, IGMP snooping, EEE, port mirroring, loop detection, configuration snapshots (save / download / import), reboot
 
 ### Platform
-- **Multi-switch** — Manage multiple Xikestor switches from a single interface
-- **User Management** — Admin and Viewer roles, password management
-- **VLAN Sync** — Copy VLAN definitions across all switches with one click
-- **Config Snapshots** — Save, download (JSON), import, and compare full switch configurations
-- **12 Languages** — English, French, German, Spanish, Portuguese, Italian, Turkish, Russian, Arabic (RTL), Chinese, Japanese, Korean
-- **Real-time SSE** — Live port stats with automatic reconnect and fallback polling
-- **Toast Notifications** — Visual feedback for every action
-- **Unsaved Changes Banner** — Prevents accidental data loss on VLAN page
-
-### Hardware Awareness
-- Native VLAN (PVID) limited to 0-63 — clearly indicated in the UI
-- Tag VLAN entries limited to 111 — counter displayed
-- SFP+ port 9/10 numbering is a per-switch setting (some units are wired the other way round from the firmware's indexes)
-- Management port (port 1) protected from accidental VLAN lockout
-- Management IP configuration (DHCP/Static) with disconnect warning
+- **Multi-switch** — all your Xikestor switches in one place, each with its own SFP+ 9/10 numbering setting (some units are wired the other way round from the firmware's indexes)
+- **Users** — admin and viewer roles, enforced by the backend on every request
+- **Change log** — who changed what and when, per switch
+- **VLAN sync** — copy VLAN definitions to every switch in one click
+- **12 languages** — English, French, German, Spanish, Portuguese, Italian, Turkish, Russian, Arabic (RTL), Chinese, Japanese, Korean; light and dark themes; works on a phone
+- **Live updates** — Server-Sent Events with automatic reconnect and polling fallback
+- **Secure by default** — generated session key, login throttling, short-lived stream tokens, no CORS unless you ask for it
+- **REST API** — everything the UI does, documented in [docs/api.md](docs/api.md); backend test suite against a simulated switch
 
 ## Supported Hardware
 
@@ -78,7 +73,8 @@ docker compose up -d
 
 Open **http://localhost:8880** in your browser.
 
-That's it. No SSL certificates, no reverse proxy, no configuration files needed.
+That's it. No SSL certificates, no reverse proxy, no configuration files needed. More options
+(ports, NAS, Raspberry Pi, reverse proxy) are in **[docs/installation.md](docs/installation.md)**.
 
 ### Xikestor Default Settings
 
@@ -93,6 +89,27 @@ That's it. No SSL certificates, no reverse proxy, no configuration files needed.
 1. **Create admin account** — Enter your desired username and password (this is for SwitchPilot, not the switch)
 2. **Add your switch** — Click "Add Switch", enter the switch IP (default `192.168.10.12`), username `admin`, password `admin`
 3. **Start managing** — Dashboard, Ports, VLANs, and all features are immediately available
+
+### Updating
+
+Your data (`./data/`) is kept across updates; database changes are applied automatically at startup.
+Nothing is written to your switches by an update.
+
+```bash
+cd xike_manager
+docker compose down                          # stop (releases the database file)
+cp -r data/ data-backup-$(date +%Y%m%d)/     # backup, takes a second
+git pull                                     # fetch the new version
+docker compose build --no-cache              # rebuild the image (frontend + backend)
+docker compose up -d                         # start
+```
+
+Then hard-refresh the browser once (**Ctrl+Shift+R**, **Cmd+Shift+R** on macOS) so it drops the
+old cached frontend. Coming from the first release (before October 2026) you are logged out
+once, and you should check each switch's SFP+ port numbering under **System** (see the guide).
+
+Full details, what to check after the update, rollback and troubleshooting:
+**[docs/upgrade.md](docs/upgrade.md)**. What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ### Running on a Specific Port
 
@@ -195,19 +212,13 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Limitation | Value | Displayed in UI |
 |------------|-------|-----------------|
 | Native VLAN (PVID/FID) | 0 - 63 only | Warning badge + form validation |
-| Tagged VLAN ID | 0 - 4095 | Standard 802.1Q |
+| Tagged VLAN ID | 1 - 4094 | Standard 802.1Q |
 | Tag VLAN entries | 111 max | Counter in header |
 | Management VLAN | Not supported | Info tooltip |
 | Port 9/10 mapping | Differs between units | Per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |
-
-## Upgrading
-
-Existing installs keep their data; database changes are applied automatically at startup.
-Follow the **[Upgrade Guide](docs/upgrade.md)** (backup, rebuild, what to check after the
-port-numbering change, rollback) and see the [Changelog](CHANGELOG.md) for what each version brings.
 
 ## Data Persistence
 
@@ -249,13 +260,14 @@ curl -H "Authorization: Bearer <token>" \
   http://localhost:8880/api/switches/1/mac/dynamic
 ```
 
-See all endpoints in `backend/main.py`.
+The full endpoint list is in **[docs/api.md](docs/api.md)**.
 
 ## Contributing
 
 Pull requests welcome. Please:
 - Keep the UI clean and consistent
-- Maintain i18n coverage when adding new strings
+- Maintain i18n coverage when adding new strings (every key in all 12 files)
+- Run the backend tests (`cd backend && pip install -r requirements.txt pytest && pytest tests`)
 - Test with a real Xikestor switch if possible
 - Technical networking terms should stay in English across all translations
 
