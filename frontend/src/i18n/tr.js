@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': 'Model',
   'users.rolePerms': 'Rol Yetkileri',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'SFP+ Port Numaralandırması',
+  'sys.portMapTip': 'Bazı SKS3200 cihazlarında iki SFP+ yuvası, yazılımın numaralandırmasının tersine bağlıdır: anahtarın 9 numaralı indeksi ön panelde 10 olarak etiketlenen yuvadır. Kablonuz 10 etiketli yuvadayken SwitchPilot bağlantıyı 9. portta gösteriyorsa (veya tersi) bunu açın. Anahtara hiçbir şey yazılmaz, yalnızca etiketler değişir.',
+  'sys.portMapDesc': 'Bu anahtarda 9 ve 10 numaralı portların nasıl etiketleneceği. Ön panelle karşılaştırın: kablonun takılı olduğu yuva bağlantıyı göstermelidir.',
+  'sys.portMapCurrent': 'Port 9 = anahtar indeksi {a}, port 10 = anahtar indeksi {b}',
+  'sys.portMapSwap': 'Bu cihazda 9 ve 10 numaralı portlar ters',
+  'sys.portMapMoveDesc': 'Port açıklamalarını fiziksel portla birlikte taşı',
+  'sys.portMapUpdated': 'Port numaralandırması güncellendi',
+  'dash.swapSfp': 'Bu cihazda SFP+ 9 ve 10 numaralı portlar ters',
+  'dash.swapSfpHint': 'Anahtarın kendi web arayüzü SFP+ yuvalarını ön panelin tersine numaralandırmıyorsa kapalı bırakın. Daha sonra Sistem bölümünden değiştirilebilir.',
+  'ports.internalIdx': 'Anahtar indeksi {n}',
 }

@@ -31,7 +31,7 @@ Docker: single container (nginx + supervisor + uvicorn)
 ### Switch API
 - Switch at http://SWITCH_IP:80, login via GET /authorize with MD5 hashed credentials
 - All config via JSON POST endpoints (port_vlan_cfg.json, tag_vlan_cfg.json, etc.)
-- Port mapping: ports 9 and 10 are SWAPPED internally (PORT_MAP in switch_client.py)
+- Port mapping: on some units the SFP+ ports 9 and 10 are SWAPPED relative to the firmware's JSON indexes, on others they match (issue #3). It is a per-switch setting (`switches.swap_sfp_9_10`, `PUT /api/switches/{id}/port-mapping`) applied only through `SwitchClient.to_internal()` / `to_user()`; never translate ports anywhere else
 - Cookie-based session, auto-relogin on expiry
 
 ### Hardware Limits (MaxLinear MxL86282S)

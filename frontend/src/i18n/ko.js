@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': '모델',
   'users.rolePerms': '역할 권한',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'SFP+ 포트 번호',
+  'sys.portMapTip': '일부 SKS3200 장비는 두 SFP+ 케이지가 펌웨어 번호와 반대로 배선되어 있습니다(스위치 인덱스 9가 전면 패널의 10번 케이지). 케이블을 10번 케이지에 꽂았는데 SwitchPilot이 9번 포트에 링크를 표시한다면(또는 그 반대) 이 옵션을 켜세요. 스위치에는 아무것도 기록되지 않으며 라벨만 바뀝니다.',
+  'sys.portMapDesc': '이 스위치에서 포트 9와 10을 표시하는 방식입니다. 전면 패널과 비교하세요. 케이블이 꽂힌 케이지에 링크가 표시되어야 합니다.',
+  'sys.portMapCurrent': '포트 9 = 스위치 인덱스 {a}, 포트 10 = 스위치 인덱스 {b}',
+  'sys.portMapSwap': '이 장비에서는 포트 9와 10이 바뀌어 있음',
+  'sys.portMapMoveDesc': '포트 설명을 물리 포트와 함께 이동',
+  'sys.portMapUpdated': '포트 번호가 업데이트되었습니다',
+  'dash.swapSfp': '이 장비에서는 SFP+ 포트 9와 10이 바뀌어 있음',
+  'dash.swapSfpHint': '스위치 자체 웹 UI가 SFP+ 케이지를 전면 패널과 반대로 번호 매기는 경우가 아니면 꺼 두세요. 나중에 시스템에서 변경할 수 있습니다.',
+  'ports.internalIdx': '스위치 인덱스 {n}',
 }

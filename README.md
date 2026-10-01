@@ -42,7 +42,7 @@ The stock Xikestor web UI is:
 ### Hardware Awareness
 - Native VLAN (PVID) limited to 0-63 — clearly indicated in the UI
 - Tag VLAN entries limited to 111 — counter displayed
-- Port 9/10 internal mapping handled transparently
+- SFP+ port 9/10 numbering is a per-switch setting (some units are wired the other way round from the firmware's indexes)
 - Management port (port 1) protected from accidental VLAN lockout
 - Management IP configuration (DHCP/Static) with disconnect warning
 
@@ -177,7 +177,7 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Tagged VLAN ID | 0 - 4095 | Standard 802.1Q |
 | Tag VLAN entries | 111 max | Counter in header |
 | Management VLAN | Not supported | Info tooltip |
-| Port 9/10 mapping | Internally swapped | Handled transparently |
+| Port 9/10 mapping | Differs between units | Per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |

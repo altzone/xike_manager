@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from typing import Optional
 import aiosqlite
 import json
@@ -9,8 +10,8 @@ import json
 import socket
 from db import init_db, DB_PATH
 from auth import hash_password, verify_password, create_token, decode_token, get_current_user, require_admin
-from switch_client import SwitchClient, MAX_FID, MAX_TAG_ENTRIES, PORT_MAP
-from sse import get_switch_client, sse_endpoint
+from switch_client import SwitchClient, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES, NUM_PORTS
+from sse import get_switch_client, drop_switch_client, sse_endpoint
 
 
 @asynccontextmanager
@@ -21,6 +22,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="SwitchPilot", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    # InvalidPortError and the VLAN range checks in SwitchClient are input errors, not crashes
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 # ── Models ──
@@ -37,6 +44,17 @@ class SwitchAdd(BaseModel):
     ip: str
     username: str = "admin"
     password: str = "admin"
+    swap_sfp_9_10: bool = False
+
+class SwitchUpdate(BaseModel):
+    name: Optional[str] = None
+    ip: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+class PortMappingUpdate(BaseModel):
+    swap_sfp_9_10: bool
+    move_descriptions: bool = True  # keep descriptions next to the physical port they were written for
 
 class VlanCreate(BaseModel):
     vlan_id: int
@@ -67,8 +85,10 @@ class IgmpConfig(BaseModel):
     querier: bool = False
 
 class MirrorConfig(BaseModel):
-    monitoring_port: int
-    ports: dict[int, dict]  # port -> {"ingress": bool, "egress": bool}
+    monitoring_port: int  # 0 disables mirroring
+    mirrored_ports: list[int] = []
+    ingress: bool = True
+    egress: bool = True
 
 class EeeConfig(BaseModel):
     enabled: bool
@@ -80,8 +100,24 @@ class PortConfig(BaseModel):
     flow_ctrl: str = "On"
 
 class PortDescription(BaseModel):
-    port: int
+    port: int = Field(ge=1, le=NUM_PORTS)
     description: str
+
+class StaticMacAdd(BaseModel):
+    mac: str
+    port: int
+    fid: int = Field(default=0, ge=0, le=MAX_FID)
+
+class LagPort(BaseModel):
+    port: int
+    type: int
+    timeout: int = 0
+    group: int = 0
+
+class LagConfig(BaseModel):
+    system_priority: int = 32768
+    ports: list[LagPort] = []
+    group_names: dict[str, str] = {}
 
 
 # ── Setup ──
@@ -125,49 +161,121 @@ async def me(user=Depends(get_current_user)):
 
 
 # ── Switches CRUD ──
-@app.get("/api/switches")
-async def list_switches(user=Depends(get_current_user)):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT id, name, ip, username, model, firmware, mac_address, created_at FROM switches")
-        return [dict(r) for r in await cursor.fetchall()]
+SWITCH_PUBLIC_COLUMNS = "id, name, ip, username, model, firmware, mac_address, swap_sfp_9_10, created_at"
 
-@app.post("/api/switches")
-async def add_switch(req: SwitchAdd, user=Depends(require_admin)):
-    client = SwitchClient(req.ip, req.username, req.password)
-    try:
-        if not await client.login():
-            raise HTTPException(400, f"Cannot connect to switch at {req.ip}")
-        status = await client.get_status()
-    except Exception as e:
-        raise HTTPException(400, f"Switch connection failed: {e}")
-    finally:
-        await client.close()
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "INSERT INTO switches (name, ip, username, password, model, firmware, mac_address) VALUES (?,?,?,?,?,?,?)",
-            (req.name, req.ip, req.username, req.password,
-             status.get("modle", ""), status.get("fw_ver", ""), status.get("sys_macaddr", "")))
-        await db.commit()
-        return {"id": cursor.lastrowid, "model": status.get("modle"), "firmware": status.get("fw_ver")}
+def _public_switch(row) -> dict:
+    d = dict(row)
+    d["swap_sfp_9_10"] = bool(d.get("swap_sfp_9_10", 0))
+    return d
 
-@app.delete("/api/switches/{switch_id}")
-async def delete_switch(switch_id: int, user=Depends(require_admin)):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM switches WHERE id = ?", (switch_id,))
-        await db.commit()
-        return {"ok": True}
-
-
-# ── Helper ──
-async def _get_client(switch_id: int) -> SwitchClient:
+async def _switch_row(switch_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM switches WHERE id = ?", (switch_id,))
         sw = await cursor.fetchone()
         if not sw:
             raise HTTPException(404, "Switch not found")
-        return get_switch_client(sw["id"], sw["ip"], sw["username"], sw["password"])
+        return sw
+
+async def _probe_switch(ip: str, username: str, password: str) -> dict:
+    """Log in once with throw-away credentials and return status.json, or raise 400."""
+    probe = SwitchClient(ip, username, password)
+    try:
+        if not await probe.login():
+            raise HTTPException(400, f"Cannot connect to switch at {ip}")
+        return await probe.get_status()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Switch connection failed: {e}")
+    finally:
+        await probe.close()
+
+@app.get("/api/switches")
+async def list_switches(user=Depends(get_current_user)):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(f"SELECT {SWITCH_PUBLIC_COLUMNS} FROM switches")
+        return [_public_switch(r) for r in await cursor.fetchall()]
+
+@app.post("/api/switches")
+async def add_switch(req: SwitchAdd, user=Depends(require_admin)):
+    status = await _probe_switch(req.ip, req.username, req.password)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO switches (name, ip, username, password, model, firmware, mac_address, swap_sfp_9_10) VALUES (?,?,?,?,?,?,?,?)",
+            (req.name, req.ip, req.username, req.password,
+             status.get("modle", ""), status.get("fw_ver", ""), status.get("sys_macaddr", ""),
+             int(req.swap_sfp_9_10)))
+        await db.commit()
+        return {"id": cursor.lastrowid, "model": status.get("modle"), "firmware": status.get("fw_ver"),
+                "swap_sfp_9_10": req.swap_sfp_9_10}
+
+@app.put("/api/switches/{switch_id}")
+async def update_switch(switch_id: int, req: SwitchUpdate, user=Depends(require_admin)):
+    sw = await _switch_row(switch_id)
+    name = req.name if req.name is not None else sw["name"]
+    ip = req.ip or sw["ip"]
+    username = req.username or sw["username"]
+    password = req.password or sw["password"]
+    model, firmware, mac = sw["model"], sw["firmware"], sw["mac_address"]
+    if (ip, username, password) != (sw["ip"], sw["username"], sw["password"]):
+        status = await _probe_switch(ip, username, password)
+        model = status.get("modle", model)
+        firmware = status.get("fw_ver", firmware)
+        mac = status.get("sys_macaddr", mac)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE switches SET name=?, ip=?, username=?, password=?, model=?, firmware=?, mac_address=? WHERE id=?",
+            (name, ip, username, password, model, firmware, mac, switch_id))
+        await db.commit()
+    # keep the shared client (and any open SSE stream) pointed at the new address
+    get_switch_client(switch_id, ip, username, password, bool(sw["swap_sfp_9_10"]))
+    return {"id": switch_id, "name": name, "ip": ip, "username": username,
+            "model": model, "firmware": firmware, "mac_address": mac,
+            "swap_sfp_9_10": bool(sw["swap_sfp_9_10"])}
+
+@app.delete("/api/switches/{switch_id}")
+async def delete_switch(switch_id: int, user=Depends(require_admin)):
+    await _switch_row(switch_id)
+    await drop_switch_client(switch_id)
+    async with aiosqlite.connect(DB_PATH) as db:
+        for table in ("port_descriptions", "lag_names", "vlans", "vlan_profiles", "config_snapshots", "change_log"):
+            await db.execute(f"DELETE FROM {table} WHERE switch_id = ?", (switch_id,))
+        await db.execute("DELETE FROM switches WHERE id = ?", (switch_id,))
+        await db.commit()
+        return {"ok": True}
+
+@app.put("/api/switches/{switch_id}/port-mapping")
+async def set_port_mapping(switch_id: int, req: PortMappingUpdate, user=Depends(require_admin)):
+    """Tell SwitchPilot whether this unit's SFP+ cages are numbered the other way round
+    from the firmware's own indexes. Nothing is written to the switch: only the labels move."""
+    sw = await _switch_row(switch_id)
+    moved = False
+    if bool(sw["swap_sfp_9_10"]) != req.swap_sfp_9_10:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?",
+                             (int(req.swap_sfp_9_10), switch_id))
+            if req.move_descriptions:
+                # Descriptions describe what is plugged into a cage, so they follow it.
+                # UNIQUE(switch_id, port) forbids a direct CASE swap: go through -9.
+                await db.execute("UPDATE port_descriptions SET port = -9 WHERE switch_id = ? AND port = 9", (switch_id,))
+                await db.execute("UPDATE port_descriptions SET port = 9 WHERE switch_id = ? AND port = 10", (switch_id,))
+                await db.execute("UPDATE port_descriptions SET port = 10 WHERE switch_id = ? AND port = -9", (switch_id,))
+                moved = True
+            await db.execute(
+                "INSERT INTO change_log (switch_id, user_id, action, details) VALUES (?,?,?,?)",
+                (switch_id, int(user.get("sub", 0)), "port_mapping",
+                 json.dumps({"swap_sfp_9_10": req.swap_sfp_9_10, "moved_descriptions": moved})))
+            await db.commit()
+        get_switch_client(switch_id, sw["ip"], sw["username"], sw["password"], req.swap_sfp_9_10)
+    return {"swap_sfp_9_10": req.swap_sfp_9_10, "moved_descriptions": moved}
+
+
+# ── Helper ──
+async def _get_client(switch_id: int) -> SwitchClient:
+    sw = await _switch_row(switch_id)
+    return get_switch_client(sw["id"], sw["ip"], sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
 
 
 # ── SSE ──
@@ -183,11 +291,12 @@ async def switch_sse(switch_id: int, token: str = Query(...)):
 async def switch_info(switch_id: int, user=Depends(get_current_user)):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT id, name, ip, model, firmware, mac_address FROM switches WHERE id=?", (switch_id,))
+        cursor = await db.execute(
+            "SELECT id, name, ip, model, firmware, mac_address, swap_sfp_9_10 FROM switches WHERE id=?", (switch_id,))
         sw = await cursor.fetchone()
         if not sw:
             raise HTTPException(404, "Switch not found")
-        return dict(sw)
+        return _public_switch(sw)
 
 @app.get("/api/switches/{switch_id}/ping")
 async def switch_ping(switch_id: int, user=Depends(get_current_user)):
@@ -196,6 +305,8 @@ async def switch_ping(switch_id: int, user=Depends(get_current_user)):
         client = await _get_client(switch_id)
         status = await client.get_status()
         return {"online": True, "temperature": status.get("temperature")}
+    except HTTPException:
+        raise
     except Exception:
         return {"online": False}
 
@@ -239,6 +350,8 @@ async def get_ports(switch_id: int, user=Depends(get_current_user)):
 async def set_port_config(switch_id: int, configs: list[PortConfig], user=Depends(require_admin)):
     client = await _get_client(switch_id)
     for cfg in configs:
+        client.to_internal(cfg.port)  # validate everything before touching the switch
+    for cfg in configs:
         await client.set_port(cfg.port, cfg.enabled, cfg.speed, cfg.flow_ctrl)
     try:
         await client.save_ports()
@@ -248,6 +361,7 @@ async def set_port_config(switch_id: int, configs: list[PortConfig], user=Depend
 
 @app.post("/api/switches/{switch_id}/ports/description")
 async def set_port_description(switch_id: int, req: PortDescription, user=Depends(require_admin)):
+    await _switch_row(switch_id)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR REPLACE INTO port_descriptions (switch_id, port, description) VALUES (?,?,?)",
                          (switch_id, req.port, req.description))
@@ -326,6 +440,8 @@ async def get_vlan_assignments(switch_id: int, user=Depends(get_current_user)):
 async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignment], user=Depends(require_admin)):
     """Apply VLAN config like a real switch: access VLAN, trunk allowed VLANs, native VLAN"""
     client = await _get_client(switch_id)
+    for a in assignments:
+        client.to_internal(a.port)  # reject bad ports before any write
 
     # 1. Build port VLAN config
     port_configs = []
@@ -379,12 +495,7 @@ async def get_stp(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/stp")
 async def set_stp(switch_id: int, cfg: StpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    data = {"stp_enable": "1" if cfg.enabled else "0", "stp_mode": "1" if cfg.mode == "rstp" else "0"}
-    if cfg.edge_ports:
-        for port in range(1, 11):
-            internal = PORT_MAP.get(port, port)
-            data[f"Stp_Edge_{internal}"] = "1" if port in cfg.edge_ports else "0"
-    await client.set_stp(data)
+    await client.set_stp(cfg.enabled, cfg.mode, cfg.edge_ports)
     return {"ok": True}
 
 
@@ -392,28 +503,12 @@ async def set_stp(switch_id: int, cfg: StpConfig, user=Depends(require_admin)):
 @app.get("/api/switches/{switch_id}/loop")
 async def get_loop(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    config = await client.get_loop_config()
-    status = await client.get_loop_status()
-    ports = []
-    for i in range(1, 11):
-        user_port = {v: k for k, v in PORT_MAP.items()}.get(i, i)
-        ports.append({
-            "port": user_port,
-            "enabled": config[f"Port_{i}"][f"Locken_{i}"] == "1",
-            "violation": status.get(f"Violdetd_{i}", "0") == "1",
-        })
-    ports.sort(key=lambda x: x["port"])
-    return ports
+    return await client.get_loop()
 
 @app.post("/api/switches/{switch_id}/loop")
 async def set_loop(switch_id: int, cfg: LoopConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    data = {}
-    for port, enabled in cfg.ports.items():
-        internal = PORT_MAP.get(port, port)
-        if enabled:
-            data[f"checkbox_{internal}"] = "on"
-    await client._post("port_lock_cfg.json", data)
+    await client.set_loop(cfg.ports)
     return {"ok": True}
 
 
@@ -453,30 +548,12 @@ async def set_igmp(switch_id: int, cfg: IgmpConfig, user=Depends(require_admin))
 @app.get("/api/switches/{switch_id}/mirror")
 async def get_mirror(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    raw = await client.get_mirror()
-    rev = {v: k for k, v in PORT_MAP.items()}
-    monitoring = int(raw.get("MonitoringPortId", 0))
-    ports = []
-    for i in range(1, 11):
-        p = raw[f"Port_{i}"]
-        user_port = rev.get(i, i)
-        ports.append({
-            "port": user_port,
-            "ingress": p[f"Ingress_Status"] == "Enabled",
-            "egress": p[f"Egress_Status"] == "Enabled",
-        })
-    ports.sort(key=lambda x: x["port"])
-    return {"monitoring_port": rev.get(monitoring, monitoring), "ports": ports}
+    return await client.get_mirror()
 
 @app.post("/api/switches/{switch_id}/mirror")
 async def set_mirror(switch_id: int, cfg: MirrorConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    data = {"MonitoringPortId": str(PORT_MAP.get(cfg.monitoring_port, cfg.monitoring_port))}
-    for port, settings in cfg.ports.items():
-        internal = PORT_MAP.get(int(port), int(port))
-        data[f"Ingress_Status_{internal}"] = "Enabled" if settings.get("ingress") else "Disabled"
-        data[f"Egress_Status_{internal}"] = "Enabled" if settings.get("egress") else "Disabled"
-    await client.set_mirror(data)
+    await client.set_mirror(cfg.monitoring_port, cfg.mirrored_ports, cfg.ingress, cfg.egress)
     return {"ok": True}
 
 
@@ -514,25 +591,9 @@ async def _lookup_vendors(macs: list) -> list:
 @app.get("/api/switches/{switch_id}/mac/dynamic")
 async def get_dynamic_macs(switch_id: int, search: Optional[str] = None, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    if search:
-        raw = await client._get(f"mac_search_dynamic_mac_entries.json?mac_search_txt={search}")
-    else:
-        raw = await client.get_dynamic_macs()
-    rev = {v: k for k, v in PORT_MAP.items()}
-    macs = []
-    for k, v in raw.items():
-        if not k.startswith("Idx_"):
-            continue
-        internal_port = int(v["Dynamic_portid"])
-        macs.append({
-            "idx": v["Dynamic_idx"],
-            "mac": v["Dynamic_mac_addr"],
-            "port": rev.get(internal_port, internal_port),
-            "fid": v["Dynamic_fid"],
-            "age": v["Dynamic_age_timer"],
-        })
-    macs = await _lookup_vendors(macs)
-    return {"entries": macs, "total": raw.get("total_entries", len(macs))}
+    result = await client.get_dynamic_macs(search)
+    result["entries"] = await _lookup_vendors(result["entries"])
+    return result
 
 @app.post("/api/switches/{switch_id}/mac/clear")
 async def clear_macs(switch_id: int, user=Depends(require_admin)):
@@ -545,26 +606,26 @@ async def clear_macs(switch_id: int, user=Depends(require_admin)):
 @app.get("/api/switches/{switch_id}/lag")
 async def get_lag(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
-    raw = await client.get_lag()
-    rev = {v: k for k, v in PORT_MAP.items()}
-    ports = []
-    for i in range(1, raw["PortNum"] + 1):
-        p = raw[f"Port_{i}"]
-        user_port = rev.get(i, i)
-        ports.append({
-            "port": user_port,
-            "type": int(p[f"portTypeId_{i}"]),
-            "timeout": int(p[f"lacpTimeoutId_{i}"]),
-            "group": int(p[f"Port_{i}_grpInd"]),
-            "state": int(p[f"Port_{i}_state"]),
-        })
-    ports.sort(key=lambda x: x["port"])
+    lag = await client.get_lag()
     # Enrich with local names
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT group_id, name FROM lag_names WHERE switch_id=?", (switch_id,))
         names = {r["group_id"]: r["name"] for r in await cursor.fetchall()}
-    return {"system_priority": raw["system_priority"], "ports": ports, "group_names": names}
+    return {**lag, "group_names": names}
+
+@app.post("/api/switches/{switch_id}/lag")
+async def set_lag(switch_id: int, cfg: LagConfig, user=Depends(require_admin)):
+    client = await _get_client(switch_id)
+    await client.set_lag(cfg.system_priority, [p.model_dump() for p in cfg.ports])
+    # Save group names if provided
+    if cfg.group_names:
+        async with aiosqlite.connect(DB_PATH) as db:
+            for gid, name in cfg.group_names.items():
+                await db.execute("INSERT OR REPLACE INTO lag_names (switch_id, group_id, name) VALUES (?,?,?)",
+                                 (switch_id, int(gid), name))
+            await db.commit()
+    return {"ok": True}
 
 
 # ── System Time ──
@@ -580,12 +641,12 @@ async def set_time(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     # Read current time first so we don't reset fields
     current = await client.get_time()
-    await client._post("systemtime_settings.json", {
-        "input_time": data.get("time") or current.get("timeVal", ""),
-        "input_date": data.get("date") or current.get("dateVal", ""),
-        "timezone_offset": data.get("timezone", current.get("timezoneOffsetVal", "+00:00")),
-        "input_daylight": data.get("daylight", "0"),
-    })
+    await client.set_time(
+        data.get("time") or current.get("timeVal", ""),
+        data.get("date") or current.get("dateVal", ""),
+        data.get("timezone", current.get("timezoneOffsetVal", "+00:00")),
+        data.get("daylight", "0"),
+    )
     return {"ok": True}
 
 @app.post("/api/switches/{switch_id}/sntp")
@@ -614,38 +675,6 @@ async def check_sntp(switch_id: int, user=Depends(get_current_user)):
     synced = time_data.get("dateVal", "01/01/1970") != "01/01/1970"
     return {"synced": synced, "server_ip": sntp_cfg.get("sntp_server_ip"), "time": time_data.get("timeVal"), "date": time_data.get("dateVal")}
 
-# ── Port Mirror ──
-@app.post("/api/switches/{switch_id}/mirror")
-async def set_mirror(switch_id: int, data: dict, user=Depends(require_admin)):
-    client = await _get_client(switch_id)
-    post_data = {
-        "mirroring_port_selection": str(PORT_MAP.get(data.get("monitoring_port", 1), 1)),
-        "Ingress_Status": "1" if data.get("ingress") else "0",
-        "Egress_Status": "1" if data.get("egress") else "0",
-        "mirrored_port_selection": [str(PORT_MAP.get(p, p)) for p in data.get("mirrored_ports", [])],
-    }
-    await client._post("port_mirror.json", post_data)
-    return {"ok": True}
-
-@app.post("/api/switches/{switch_id}/lag")
-async def set_lag(switch_id: int, data: dict, user=Depends(require_admin)):
-    client = await _get_client(switch_id)
-    post = {"system_priority": str(data.get("system_priority", 32768))}
-    for p in data.get("ports", []):
-        internal = PORT_MAP.get(p["port"], p["port"])
-        post[f"portTypeId_{internal}"] = str(p["type"])
-        post[f"lacpTimeoutId_{internal}"] = str(p["timeout"])
-        post[f"Port_{internal}_grpInd"] = str(p["group"])
-    await client._post("port_trunk_cfg.json", post)
-    # Save group names if provided
-    group_names = data.get("group_names", {})
-    if group_names:
-        async with aiosqlite.connect(DB_PATH) as db:
-            for gid, name in group_names.items():
-                await db.execute("INSERT OR REPLACE INTO lag_names (switch_id, group_id, name) VALUES (?,?,?)",
-                                 (switch_id, int(gid), name))
-            await db.commit()
-    return {"ok": True}
 
 # ── Static MAC ──
 @app.get("/api/switches/{switch_id}/mac/static")
@@ -654,22 +683,15 @@ async def get_static_macs(switch_id: int, user=Depends(get_current_user)):
     return await client.get_static_macs()
 
 @app.post("/api/switches/{switch_id}/mac/static/add")
-async def add_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
+async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    internal_port = PORT_MAP.get(data.get("port", 1), 1)
-    await client._post("mac_add_static_mac_entries.json", {
-        "mac-input": data["mac"],
-        "port-input": str(internal_port),
-        "fid-input": str(data.get("fid", 0)),
-    })
-    await client._post("mac_save_static_mac_entries.json", {})
+    await client.add_static_mac(req.mac, req.port, req.fid)
     return {"ok": True}
 
 @app.post("/api/switches/{switch_id}/mac/static/delete")
 async def delete_static_mac(switch_id: int, data: dict, user=Depends(require_admin)):
     client = await _get_client(switch_id)
-    await client._post("mac_delete_static_mac_entries.json", data)
-    await client._post("mac_save_static_mac_entries.json", {})
+    await client.delete_static_mac(data)
     return {"ok": True}
 
 # ── Config Snapshots ──
@@ -683,9 +705,10 @@ async def list_snapshots(switch_id: int, user=Depends(get_current_user)):
 
 @app.post("/api/switches/{switch_id}/snapshots")
 async def create_snapshot(switch_id: int, data: dict, user=Depends(require_admin)):
-    """Save a full snapshot of all switch settings"""
+    """Save a full snapshot of all switch settings (port numbers are user-facing)"""
     client = await _get_client(switch_id)
     snapshot = {
+        "meta": {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": client.swap_sfp},
         "status": await client.get_status(),
         "network": await client.get_network(),
         "ports": await client.get_ports(),
@@ -697,7 +720,7 @@ async def create_snapshot(switch_id: int, data: dict, user=Depends(require_admin
         "eee": await client.get_eee(),
         "lag": await client.get_lag(),
         "mirror": await client.get_mirror(),
-        "loop": await client.get_loop_config(),
+        "loop": await client.get_loop(),
         "sntp": await client.get_sntp(),
     }
     name = data.get("name", "Snapshot")

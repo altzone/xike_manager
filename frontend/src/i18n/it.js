@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': 'Modello',
   'users.rolePerms': 'Permessi dei ruoli',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'Numerazione porte SFP+',
+  'sys.portMapTip': 'Su alcune unità SKS3200 le due gabbie SFP+ sono cablate al contrario rispetto alla numerazione del firmware: l\'indice 9 dello switch è la gabbia etichettata 10 sul frontale. Attivalo se SwitchPilot mostra il link sulla porta 9 mentre il cavo è nella gabbia 10 (o viceversa). Nulla viene scritto sullo switch, cambiano solo le etichette.',
+  'sys.portMapDesc': 'Come vengono etichettate le porte 9 e 10 su questo switch. Confronta con il frontale: la gabbia con il cavo deve essere quella che mostra il link.',
+  'sys.portMapCurrent': 'Porta 9 = indice {a} dello switch, porta 10 = indice {b}',
+  'sys.portMapSwap': 'Le porte 9 e 10 sono invertite su questa unità',
+  'sys.portMapMoveDesc': 'Sposta le descrizioni insieme alla porta fisica',
+  'sys.portMapUpdated': 'Numerazione porte aggiornata',
+  'dash.swapSfp': 'Le porte SFP+ 9 e 10 sono invertite su questa unità',
+  'dash.swapSfpHint': 'Lascia disattivato a meno che l\'interfaccia web dello switch numeri le gabbie SFP+ al contrario del frontale. Modificabile in seguito in Sistema.',
+  'ports.internalIdx': 'Indice {n} dello switch',
 }

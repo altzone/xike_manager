@@ -313,4 +313,15 @@ export default {
   'common.error': 'Error',
   'common.success': 'Success',
   'common.failedLoad': 'Failed to load:',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'SFP+ Port Numbering',
+  'sys.portMapTip': 'On some SKS3200 units the two SFP+ cages are wired the other way round from the firmware\'s own numbering: the switch\'s index 9 is the cage labelled 10 on the front panel. Turn this on if SwitchPilot shows the link on port 9 while your cable is in the cage labelled 10 (or the reverse). Nothing is written to the switch, only the labels move.',
+  'sys.portMapDesc': 'How ports 9 and 10 are labelled for this switch. Check against the front panel: the cage with the cable should be the one showing a link.',
+  'sys.portMapCurrent': 'Port 9 = switch index {a}, port 10 = switch index {b}',
+  'sys.portMapSwap': 'Ports 9 and 10 are swapped on this unit',
+  'sys.portMapMoveDesc': 'Move port descriptions with their physical port',
+  'sys.portMapUpdated': 'Port numbering updated',
+  'dash.swapSfp': 'SFP+ ports 9 and 10 are swapped on this unit',
+  'dash.swapSfpHint': 'Leave off unless the switch\'s own web UI numbers the SFP+ cages the other way round from the front panel. Can be changed later under System.',
+  'ports.internalIdx': 'Switch index {n}',
 }

@@ -33,9 +33,11 @@ Body: {"username": "admin", "password": "yourpass"}
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/switches` | List all switches |
-| POST | `/api/switches` | Add switch `{"name","ip","username","password"}` |
-| DELETE | `/api/switches/{id}` | Remove switch |
-| GET | `/api/switches/{id}/info` | Switch name, IP, model |
+| POST | `/api/switches` | Add switch `{"name","ip","username","password","swap_sfp_9_10"?}` |
+| PUT | `/api/switches/{id}` | Edit switch `{"name"?,"ip"?,"username"?,"password"?}` (connection re-tested when address/credentials change) |
+| DELETE | `/api/switches/{id}` | Remove switch and its local data (descriptions, LAG names, VLAN names, snapshots) |
+| PUT | `/api/switches/{id}/port-mapping` | `{"swap_sfp_9_10": bool, "move_descriptions"?: true}` — whether this unit's SFP+ cages 9/10 are numbered the other way round from the firmware's indexes. Changes labels only; nothing is written to the switch |
+| GET | `/api/switches/{id}/info` | Switch name, IP, model, `swap_sfp_9_10` |
 | GET | `/api/switches/{id}/ping` | Quick online check |
 | GET | `/api/switches/{id}/status` | Full system status |
 | GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats) |

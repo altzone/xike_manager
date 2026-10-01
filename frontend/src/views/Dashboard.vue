@@ -74,6 +74,10 @@
                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
             </div>
           </div>
+          <label class="flex items-start gap-2 text-sm text-gray-600 cursor-pointer pt-1">
+            <input type="checkbox" v-model="form.swap_sfp_9_10" class="mt-0.5 rounded border-gray-300 text-indigo-600">
+            <span>{{ t('dash.swapSfp') }}<span class="block text-xs text-gray-400">{{ t('dash.swapSfpHint') }}</span></span>
+          </label>
           <p v-if="addError" class="text-red-500 text-sm">{{ addError }}</p>
           <div class="flex gap-3 pt-2">
             <button type="button" @click="showAdd = false" class="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50">{{ t('dash.cancel') }}</button>
@@ -98,7 +102,8 @@ const switches = ref([])
 const showAdd = ref(false)
 const adding = ref(false)
 const addError = ref('')
-const form = ref({ name: '', ip: '', username: 'admin', password: 'admin' })
+const emptyForm = () => ({ name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
+const form = ref(emptyForm())
 
 async function load() {
   switches.value = await api('/api/switches')
@@ -110,7 +115,7 @@ async function doAdd() {
   try {
     await api('/api/switches', { method: 'POST', body: JSON.stringify(form.value) })
     showAdd.value = false
-    form.value = { name: '', ip: '', username: 'admin', password: 'admin' }
+    form.value = emptyForm()
     await load()
   } catch (e) {
     addError.value = e.message

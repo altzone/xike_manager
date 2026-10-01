@@ -25,7 +25,7 @@
             <td class="px-5 py-3">
               <div class="flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full shrink-0 transition-colors" :class="(stats[port.port]?.link && stats[port.port]?.link !== 'Link Down') ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'"></span>
-                <span class="font-semibold text-gray-900">{{ port.port }}</span>
+                <span class="font-semibold text-gray-900" :title="port.internal_port && port.internal_port !== port.port ? t('ports.internalIdx', { n: port.internal_port }) : ''">{{ port.port }}</span>
                 <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                   :class="port.type?.includes('SFP') ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'">
                   {{ port.type }}

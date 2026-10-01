@@ -13,6 +13,21 @@ async def get_db():
     finally:
         await db.close()
 
+async def _columns(db, table: str) -> set[str]:
+    cursor = await db.execute(f"PRAGMA table_info({table})")
+    return {row[1] for row in await cursor.fetchall()}
+
+
+async def _migrate(db):
+    """Add columns introduced after the first release (CREATE TABLE IF NOT EXISTS never does)."""
+    if "swap_sfp_9_10" not in await _columns(db, "switches"):
+        await db.execute("ALTER TABLE switches ADD COLUMN swap_sfp_9_10 INTEGER NOT NULL DEFAULT 0")
+        # Switches added before this setting existed were always shown with the
+        # 9/10 swap applied; keep that so an upgrade does not relabel their ports.
+        await db.execute("UPDATE switches SET swap_sfp_9_10 = 1")
+        await db.commit()
+
+
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript("""
@@ -32,6 +47,7 @@ async def init_db():
                 model TEXT DEFAULT '',
                 firmware TEXT DEFAULT '',
                 mac_address TEXT DEFAULT '',
+                swap_sfp_9_10 INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS vlan_profiles (
@@ -90,6 +106,7 @@ async def init_db():
             );
         """)
         await db.commit()
+        await _migrate(db)
         # Load OUI database if empty
         cursor = await db.execute("SELECT COUNT(*) FROM oui")
         count = (await cursor.fetchone())[0]

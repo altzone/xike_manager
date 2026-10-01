@@ -1,38 +1,61 @@
 """SSE endpoint for real-time switch stats"""
 import asyncio
 import json
+import time
 from sse_starlette.sse import EventSourceResponse
 from switch_client import SwitchClient
 
-# Cache of active switch clients for SSE
+# Cache of active switch clients, shared by request handlers and SSE streams
 _clients: dict[int, SwitchClient] = {}
 
+POLL_INTERVAL = 3  # seconds
 
-def get_switch_client(switch_id: int, ip: str, username: str, password: str) -> SwitchClient:
-    if switch_id not in _clients:
-        _clients[switch_id] = SwitchClient(ip, username, password)
-    return _clients[switch_id]
+
+def get_switch_client(switch_id: int, ip: str, username: str, password: str,
+                      swap_sfp: bool = False) -> SwitchClient:
+    """Return the cached client for a switch, kept in sync with the DB row.
+
+    The instance is updated in place (address, credentials, port mapping) so that
+    running SSE streams holding a reference pick the change up on their next tick.
+    """
+    client = _clients.get(switch_id)
+    if client is None or client.closed:
+        client = SwitchClient(ip, username, password, swap_sfp=swap_sfp)
+        _clients[switch_id] = client
+    else:
+        client.configure(ip, username, password)
+        if client.swap_sfp != bool(swap_sfp):
+            client.set_port_mapping(swap_sfp)
+    return client
+
+
+async def drop_switch_client(switch_id: int):
+    client = _clients.pop(switch_id, None)
+    if client is not None:
+        await client.close()
 
 
 async def stats_generator(client: SwitchClient):
-    prev_stats = None
-    while True:
+    prev = {}  # internal_port -> (tx_good, rx_good): keyed by physical port so a mapping change can't pair the wrong rows
+    prev_time = None
+    while not client.closed:
         try:
             status = await client.get_status()
             ports = await client.get_port_stats()
             port_settings = await client.get_ports()
 
-            # Calculate pps delta
-            if prev_stats:
-                for p, prev in zip(ports, prev_stats):
-                    p["tx_pps"] = max(0, p["tx_good"] - prev["tx_good"])
-                    p["rx_pps"] = max(0, p["rx_good"] - prev["rx_good"])
-            else:
-                for p in ports:
+            now = time.monotonic()
+            elapsed = (now - prev_time) if prev_time else None
+            for p in ports:
+                last = prev.get(p["internal_port"])
+                if last and elapsed and elapsed > 0:
+                    p["tx_pps"] = round(max(0, p["tx_good"] - last[0]) / elapsed)
+                    p["rx_pps"] = round(max(0, p["rx_good"] - last[1]) / elapsed)
+                else:
                     p["tx_pps"] = 0
                     p["rx_pps"] = 0
-
-            prev_stats = [dict(p) for p in ports]
+            prev = {p["internal_port"]: (p["tx_good"], p["rx_good"]) for p in ports}
+            prev_time = now
 
             data = {
                 "temperature": status.get("temperature", "?"),
@@ -41,8 +64,10 @@ async def stats_generator(client: SwitchClient):
             }
             yield {"event": "stats", "data": json.dumps(data)}
         except Exception as e:
+            if client.closed:
+                break
             yield {"event": "error", "data": json.dumps({"error": str(e)})}
-        await asyncio.sleep(3)
+        await asyncio.sleep(POLL_INTERVAL)
 
 
 async def sse_endpoint(client: SwitchClient):

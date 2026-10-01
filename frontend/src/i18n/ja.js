@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': 'モデル',
   'users.rolePerms': 'ロール権限',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'SFP+ ポート番号',
+  'sys.portMapTip': '一部の SKS3200 では、2 つの SFP+ ケージがファームウェアの番号と逆に配線されています（スイッチのインデックス 9 が前面パネルで 10 と表示されたケージ）。ケーブルを 10 のケージに挿しているのに SwitchPilot がポート 9 にリンクを表示する場合（またはその逆）は、これをオンにしてください。スイッチには何も書き込まれず、ラベルだけが変わります。',
+  'sys.portMapDesc': 'このスイッチでポート 9 と 10 をどう表示するか。前面パネルと照合してください。ケーブルを挿したケージにリンクが表示されるのが正しい状態です。',
+  'sys.portMapCurrent': 'ポート 9 = スイッチ インデックス {a}、ポート 10 = スイッチ インデックス {b}',
+  'sys.portMapSwap': 'この機器ではポート 9 と 10 が入れ替わっている',
+  'sys.portMapMoveDesc': 'ポートの説明を物理ポートと一緒に移動する',
+  'sys.portMapUpdated': 'ポート番号を更新しました',
+  'dash.swapSfp': 'この機器では SFP+ ポート 9 と 10 が入れ替わっている',
+  'dash.swapSfpHint': 'スイッチ自体の Web UI が SFP+ ケージを前面パネルと逆に番号付けしている場合以外はオフのままにしてください。後でシステム画面から変更できます。',
+  'ports.internalIdx': 'スイッチ インデックス {n}',
 }

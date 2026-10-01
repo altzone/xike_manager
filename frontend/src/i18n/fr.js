@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': 'Modèle',
   'users.rolePerms': 'Permissions des rôles',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'Numérotation des ports SFP+',
+  'sys.portMapTip': 'Sur certains SKS3200, les deux cages SFP+ sont câblées à l\'inverse de la numérotation du firmware : l\'index 9 du switch correspond à la cage marquée 10 en façade. Activez cette option si SwitchPilot affiche le lien sur le port 9 alors que votre câble est dans la cage marquée 10 (ou l\'inverse). Rien n\'est écrit sur le switch, seules les étiquettes changent.',
+  'sys.portMapDesc': 'Comment les ports 9 et 10 sont étiquetés pour ce switch. Vérifiez avec la façade : la cage qui a le câble doit être celle qui affiche un lien.',
+  'sys.portMapCurrent': 'Port 9 = index {a} du switch, port 10 = index {b}',
+  'sys.portMapSwap': 'Les ports 9 et 10 sont inversés sur cet appareil',
+  'sys.portMapMoveDesc': 'Déplacer les descriptions avec leur port physique',
+  'sys.portMapUpdated': 'Numérotation des ports mise à jour',
+  'dash.swapSfp': 'Les ports SFP+ 9 et 10 sont inversés sur cet appareil',
+  'dash.swapSfpHint': 'À laisser désactivé sauf si l\'interface web du switch numérote les cages SFP+ à l\'inverse de la façade. Modifiable plus tard dans Système.',
+  'ports.internalIdx': 'Index {n} du switch',
 }

@@ -35,6 +35,26 @@
         </div>
       </div>
 
+      <!-- SFP+ port numbering: the 9/10 order differs between units (issue #3) -->
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <span class="flex items-center gap-2"><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">{{ t('sys.portMap') }}</h3><Tip :title="t('sys.portMap')">{{ t('sys.portMapTip') }}</Tip></span>
+            <p class="text-xs text-gray-400 mt-1">{{ t('sys.portMapDesc') }}</p>
+            <p class="text-xs text-gray-600 mt-2 font-mono">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-sm text-gray-600">{{ t('sys.portMapSwap') }}</span>
+            <button @click="togglePortMap" class="relative w-11 h-6 rounded-full transition-colors duration-200" :class="swapSfp ? 'bg-emerald-500' : 'bg-gray-300'">
+              <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" :class="swapSfp ? 'translate-x-5' : ''"></span>
+            </button>
+          </div>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-gray-500 mt-3 cursor-pointer">
+          <input type="checkbox" v-model="moveDescriptions" class="rounded border-gray-300 text-indigo-600"> {{ t('sys.portMapMoveDesc') }}
+        </label>
+      </div>
+
       <!-- Time -->
       <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
@@ -217,7 +237,7 @@
                 {{ t('sys.mirrorEgress') }}
               </label>
             </div>
-            <button v-if="mirror.monitoring_port > 0" @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.mirrorApply') }}</button>
+            <button @click="applyMirror" class="mt-3 w-full px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">{{ t('sys.mirrorApply') }}</button>
           </div>
         </div>
         <!-- Visual summary -->
@@ -369,7 +389,9 @@ const storm = reactive({ enabled: false, rate: 100 })
 const igmp = reactive({ enabled: false, fast_leave: true, querier: false })
 const eee = reactive({ enabled: false })
 const loop = ref([])
-const mirror = reactive({ monitoring_port: 0, ingress: '0', egress: '0', mirrored_ports: [] })
+const mirror = reactive({ monitoring_port: 0, ingress: '1', egress: '1', mirrored_ports: [] })
+const swapSfp = ref(false)
+const moveDescriptions = ref(true)
 const staticMacs = ref([])
 const staticMac = reactive({ mac: '', port: 1, fid: 0 })
 const snapshots = ref([])
@@ -388,6 +410,8 @@ function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 
 
 async function load() {
   try {
+    const info = await api(`/api/switches/${props.switchId}/info`)
+    swapSfp.value = !!info.swap_sfp_9_10
     const s = await api(`/api/switches/${props.switchId}/status`)
     sysInfo.value = { Model: s.modle, Firmware: s.fw_ver, Hardware: s.hw_ver, MAC: s.sys_macaddr, Temperature: `${s.temperature}C` }
     netInfo.value = { IPv4: s.ipAddress, Netmask: s.netmask, Gateway: s.gateway, DHCP: s.dhcpEnabled === '1' ? 'On' : 'Off' }
@@ -401,7 +425,12 @@ async function load() {
     const ig = await api(`/api/switches/${props.switchId}/igmp`); igmp.enabled = ig.config.igmp === 'on'; igmp.fast_leave = ig.config.fast_leave === 'on'; igmp.querier = ig.config.snoop_querier === 'on'
     const ee = await api(`/api/switches/${props.switchId}/eee`); eee.enabled = ee.eee === 'on'
     loop.value = await api(`/api/switches/${props.switchId}/loop`)
-    const mi = await api(`/api/switches/${props.switchId}/mirror`); mirror.monitoring_port = mi.monitoring_port; mirror.mirrored_ports = mi.ports.filter(p => p.ingress || p.egress).map(p => p.port)
+    const mi = await api(`/api/switches/${props.switchId}/mirror`)
+    const mirrored = mi.ports.filter(p => p.ingress || p.egress)
+    mirror.monitoring_port = mi.monitoring_port
+    mirror.mirrored_ports = mirrored.map(p => p.port)
+    mirror.ingress = mirrored.length === 0 || mirrored.some(p => p.ingress) ? '1' : '0'
+    mirror.egress = mirrored.length === 0 || mirrored.some(p => p.egress) ? '1' : '0'
     try { staticMacs.value = await api(`/api/switches/${props.switchId}/mac/static`) } catch(e) {}
     snapshots.value = await api(`/api/switches/${props.switchId}/snapshots`)
     loaded.value = true
@@ -435,7 +464,22 @@ async function applyStorm() { await api(`/api/switches/${props.switchId}/storm`,
 async function applyIgmp() { await api(`/api/switches/${props.switchId}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); flash(t('sys.igmpUpdated')) }
 async function applyEee() { await api(`/api/switches/${props.switchId}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); flash(t('sys.eeeUpdated')) }
 async function toggleLoop(port) { const lp = loop.value.find(l => l.port === port); lp.enabled = !lp.enabled; const ports = {}; loop.value.forEach(l => ports[l.port] = l.enabled); await api(`/api/switches/${props.switchId}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); flash(t('sys.loopToggle', { port, state: lp.enabled ? t('common.on') : t('common.off') })) }
-async function applyMirror() { await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify(mirror) }); flash(t('sys.mirrorUpdated')) }
+async function applyMirror() {
+  try {
+    await api(`/api/switches/${props.switchId}/mirror`, { method: 'POST', body: JSON.stringify({
+      monitoring_port: mirror.monitoring_port, mirrored_ports: mirror.mirrored_ports,
+      ingress: mirror.ingress === '1', egress: mirror.egress === '1',
+    }) })
+    flash(t('sys.mirrorUpdated'))
+  } catch(e) { flash(e.message, false) }
+}
+async function togglePortMap() {
+  try {
+    await api(`/api/switches/${props.switchId}/port-mapping`, { method: 'PUT', body: JSON.stringify({ swap_sfp_9_10: !swapSfp.value, move_descriptions: moveDescriptions.value }) })
+    flash(t('sys.portMapUpdated'))
+    await load()
+  } catch(e) { flash(e.message, false) }
+}
 async function addStaticMac() { if (!staticMac.mac) return; await api(`/api/switches/${props.switchId}/mac/static/add`, { method: 'POST', body: JSON.stringify(staticMac) }); flash(t('sys.macAdded')); staticMac.mac = ''; await load() }
 async function doReboot() { if (!confirm(t('sys.rebootConfirm'))) return; await api(`/api/switches/${props.switchId}/reboot`, { method: 'POST' }); flash(t('sys.rebooting')) }
 async function saveSnapshot() { await api(`/api/switches/${props.switchId}/snapshots`, { method: 'POST', body: JSON.stringify({ name: snapshotName.value }) }); showSaveSnapshot.value = false; snapshotName.value = ''; flash(t('sys.snapshotSaved')); await load() }

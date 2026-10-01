@@ -313,4 +313,15 @@ export default {
   'swdash.sse': 'SSE',
   'swdash.model': '型号',
   'users.rolePerms': '角色权限',
+  // SFP+ port numbering (issue #3)
+  'sys.portMap': 'SFP+ 端口编号',
+  'sys.portMapTip': '部分 SKS3200 设备的两个 SFP+ 插槽接线顺序与固件编号相反：交换机的索引 9 对应前面板标为 10 的插槽。如果线缆插在标为 10 的插槽，而 SwitchPilot 却在端口 9 显示链路（或相反），请开启此项。不会向交换机写入任何内容，仅更改标签。',
+  'sys.portMapDesc': '此交换机端口 9 和 10 的标注方式。请对照前面板：插有线缆的插槽应显示链路。',
+  'sys.portMapCurrent': '端口 9 = 交换机索引 {a}，端口 10 = 交换机索引 {b}',
+  'sys.portMapSwap': '本设备的端口 9 和 10 已互换',
+  'sys.portMapMoveDesc': '端口描述随物理端口一起移动',
+  'sys.portMapUpdated': '端口编号已更新',
+  'dash.swapSfp': '本设备的 SFP+ 端口 9 和 10 已互换',
+  'dash.swapSfpHint': '除非交换机自带 Web 界面对 SFP+ 插槽的编号与前面板相反，否则请保持关闭。之后可在“系统”中更改。',
+  'ports.internalIdx': '交换机索引 {n}',
 }
