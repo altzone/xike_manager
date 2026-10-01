@@ -132,14 +132,16 @@ async function saveDesc(port) {
 
 async function applyPort(port, overrides = {}) {
   const next = { enabled: port.status === 'Enabled', speed: port.speed_config, flow_ctrl: port.flow_ctrl_config, ...overrides }
-  const disablingMgmt = port.port === 1 && !next.enabled
+  // the backend wants force whenever port 1 is sent disabled; only ask when this change disables it
+  const mgmtDisabled = port.port === 1 && !next.enabled
+  const disablingMgmt = mgmtDisabled && port.status === 'Enabled'
   if (disablingMgmt && !await confirm({ title: t('ports.port') + ' 1', message: t('ports.confirmMgmt'), danger: true, confirmText: t('ports.disabled') })) {
     await reload(); return
   }
   busy.value = port.port
   try {
     const res = await api(`/api/switches/${props.switchId}/ports/config`, {
-      method: 'POST', body: JSON.stringify([{ port: port.port, ...next, force: disablingMgmt }])
+      method: 'POST', body: JSON.stringify([{ port: port.port, ...next, force: mgmtDisabled }])
     })
     toast.success(t('ports.updated', { port: port.port }))
     for (const w of res.warnings || []) toast.error(w)

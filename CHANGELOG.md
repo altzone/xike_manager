@@ -76,6 +76,10 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   message no longer echoes the transport error.
 - The old interface requested the stream token with GET (the route is POST-only), so live
   stats always fell back to polling.
+- Ports page: changing the speed or flow control of port 1 while it was already disabled asked
+  the "disable the management port?" question (and reverted the change on Cancel); the question
+  is only asked when the change itself disables the port. Live stats go back to the stream
+  after a failed stream-token request instead of polling for good.
 - An admin could demote themselves or the last admin and lock everyone out; roles are
   validated, passwords need 6 characters, duplicate usernames return 409.
 - SNTP hostname resolution blocked the whole server; "synced" was reported with SNTP off;

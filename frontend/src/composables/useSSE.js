@@ -25,7 +25,8 @@ export function useSSE(switchId) {
     try {
       token = (await api('/api/auth/stream-token', { method: 'POST' })).token
     } catch (e) {
-      if (active) startFallback()
+      // poll meanwhile, and keep trying to get back on the stream (backend restart, proxy hiccup)
+      if (active) { startFallback(); scheduleReconnect() }
       return
     }
     if (!active) return
