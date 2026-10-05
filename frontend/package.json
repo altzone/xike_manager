@@ -20,5 +20,10 @@
     "vite": "^8.0.8",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
+  },
+  "overrides": {
+    "postcss": {
+      "nanoid": "5.1.16"
+    }
   }
 }
