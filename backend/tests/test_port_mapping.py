@@ -291,6 +291,7 @@ def test_migration_adds_column_and_keeps_legacy_swap(db_path):
     assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='old'").fetchone() == (1,)  # unknown: as before
     assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='v1'").fetchone() == (1,)
     assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='v2'").fetchone() == (0,)  # issue #3
+    assert con.execute("PRAGMA user_version").fetchone() == (dbmod.SCHEMA_VERSION,)
     con.execute("INSERT INTO switches (name, ip, username, password) VALUES ('new', '10.0.0.2', 'a', 'b')")
     assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='new'").fetchone() == (0,)
 
@@ -325,3 +326,46 @@ def test_status_reports_what_the_firmware_line_suggests(api):
     assert api.get(f"/api/switches/{sid}/status").json()["swap_sfp_suggested"] is True  # fixture runs 1.0.0.6
     api.mock.state["status.json"]["fw_ver"] = "2.0.0.2"
     assert api.get(f"/api/switches/{sid}/status").json()["swap_sfp_suggested"] is False
+
+
+def test_upgrade_from_2_1_0_sets_each_switch_to_its_firmware_line_once(db_path):
+    """2.1.0 already had the column: every switch on 2.0.0.x was swapped (legacy) and every
+    switch added under 2.1.0 was not. The schema-version step corrects both, once, and moves the
+    9/10 descriptions with the cages."""
+    asyncio.run(dbmod.init_db())
+    con = sqlite3.connect(db_path)
+    con.execute("PRAGMA user_version = 0")  # what a 2.1.0 database looks like
+    rows = [("v2-legacy", "2.0.0.2", 1), ("v1-added-2.1.0", "1.0.0.4", 0), ("v1-ok", "1.0.0.6", 1),
+            ("unknown", "", 0), ("v2-ok", "2.0.0.3", 0)]
+    for name, fw, swap in rows:
+        con.execute("INSERT INTO switches (name, ip, username, password, firmware, swap_sfp_9_10) VALUES (?,?,?,?,?,?)",
+                    (name, "10.0.0.9", "a", "b", fw, swap))
+    ids = {n: i for i, n in con.execute("SELECT id, name FROM switches")}
+    for name in ("v2-legacy", "v1-added-2.1.0", "v1-ok"):
+        con.execute("INSERT INTO port_descriptions (switch_id, port, description) VALUES (?, 9, 'nas'), (?, 10, 'spare')",
+                    (ids[name], ids[name]))
+    con.commit()
+    con.close()
+
+    asyncio.run(dbmod.init_db())
+    asyncio.run(dbmod.init_db())  # runs once
+
+    con = sqlite3.connect(db_path)
+    swap = dict(con.execute("SELECT name, swap_sfp_9_10 FROM switches"))
+    assert swap == {"v2-legacy": 0, "v1-added-2.1.0": 1, "v1-ok": 1, "unknown": 0, "v2-ok": 0}
+    desc = lambda n: dict(con.execute("SELECT port, description FROM port_descriptions WHERE switch_id=?", (ids[n],)))
+    assert desc("v2-legacy") == {9: "spare", 10: "nas"}       # moved with the cages
+    assert desc("v1-added-2.1.0") == {9: "spare", 10: "nas"}
+    assert desc("v1-ok") == {9: "nas", 10: "spare"}           # unchanged switch, unchanged labels
+    logged = con.execute("SELECT switch_id, user_id, action FROM change_log ORDER BY switch_id").fetchall()
+    assert logged == [(ids["v2-legacy"], 0, "port_mapping"), (ids["v1-added-2.1.0"], 0, "port_mapping")]
+    assert con.execute("PRAGMA user_version").fetchone() == (dbmod.SCHEMA_VERSION,)
+
+
+def test_automatic_change_log_entries_are_attributed_to_switchpilot(api):
+    sid = add_switch(api)
+    con = sqlite3.connect(dbmod.DB_PATH)
+    con.execute("INSERT INTO change_log (switch_id, user_id, action, details) VALUES (?, 0, 'port_mapping', '{}')", (sid,))
+    con.commit()
+    con.close()
+    assert api.get(f"/api/switches/{sid}/changes").json()[0]["username"] == "SwitchPilot"

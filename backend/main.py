@@ -493,8 +493,8 @@ async def switch_status(switch_id: int, user=Depends(get_current_user)):
     status = await client.get_status()
     network = await client.get_network()
     status["modle"] = status.get("modle") or status.get("des", "")
-    # what this firmware line usually needs, so the UI can flag a setting that no longer matches
-    # (e.g. after a 1.0.0.x -> 2.0.0.x upgrade); None when the version is unknown
+    # what this firmware line usually needs, so the UI can flag a setting that does not match
+    # (a choice forced when the switch was added, or a unit that differs); None when unknown
     status["swap_sfp_suggested"] = default_swap_sfp(status.get("fw_ver"))
     return {**status, **network}
 
@@ -1209,7 +1209,9 @@ async def list_changes(switch_id: int, limit: int = Query(default=50, ge=1, le=5
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT c.id, c.action, c.details, c.created_at, u.username FROM change_log c "
+            # user_id 0 = done by SwitchPilot itself (startup migration)
+            "SELECT c.id, c.action, c.details, c.created_at, "
+            "COALESCE(u.username, CASE WHEN c.user_id = 0 THEN 'SwitchPilot' END) AS username FROM change_log c "
             "LEFT JOIN users u ON u.id = c.user_id WHERE c.switch_id = ? ORDER BY c.id DESC LIMIT ?",
             (switch_id, limit))
         rows = []

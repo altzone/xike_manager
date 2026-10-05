@@ -240,7 +240,7 @@ const busy = reactive({ net: false, sntp: false, time: false, mirror: false, sna
 const info = ref({})
 const net = reactive({ dhcp: false, ip: '', netmask: '', gateway: '' })
 const swapSfp = ref(false)
-// the firmware line usually decides the numbering (1.0.0.x swapped, 2.0.0.x not): flag a mismatch, e.g. after a firmware change
+// the firmware line usually decides the numbering (1.0.0.x swapped, 2.0.0.x not): flag a setting that does not match
 const portMapMismatch = computed(() => typeof info.value.swap_sfp_suggested === 'boolean' && info.value.swap_sfp_suggested !== swapSfp.value)
 const moveDescriptions = ref(true)
 const timeData = ref({})

@@ -33,7 +33,7 @@ Body: {"username": "admin", "password": "yourpass"}
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/switches` | List all switches |
-| POST | `/api/switches` | Add switch `{"name","ip","username","password","swap_sfp_9_10"?}`; `swap_sfp_9_10` omitted or `null` = chosen from the firmware line (1.0.0.x swapped, 2.0.0.x not). Returns `{"id","model","firmware","swap_sfp_9_10","swap_auto"}` |
+| POST | `/api/switches` | Add switch `{"name","ip","username","password","swap_sfp_9_10"?}`; `swap_sfp_9_10` omitted or `null` = chosen from the firmware line (1.0.0.x swapped, 2.0.0.x not; unreadable version = not swapped). Returns `{"id","model","firmware","swap_sfp_9_10","swap_auto"}` |
 | PUT | `/api/switches/{id}` | Edit switch `{"name"?,"ip"?,"username"?,"password"?}` (connection re-tested when address/credentials change) |
 | DELETE | `/api/switches/{id}` | Remove switch and its local data (descriptions, LAG names, VLAN names, snapshots) |
 | PUT | `/api/switches/{id}/port-mapping` | `{"swap_sfp_9_10": bool, "move_descriptions"?: true}` — whether this unit's SFP+ cages 9/10 are numbered the other way round from the firmware's indexes. Changes labels only; nothing is written to the switch |

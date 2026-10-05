@@ -1,5 +1,6 @@
 import aiosqlite
 import csv
+import json
 import os
 
 from switch_client import default_swap_sfp
@@ -20,19 +21,44 @@ async def _columns(db, table: str) -> set[str]:
     return {row[1] for row in await cursor.fetchall()}
 
 
+SCHEMA_VERSION = 2  # PRAGMA user_version once every migration below has run
+
+
+async def _swap_descriptions_9_10(db, switch_id: int):
+    """Descriptions describe what is plugged into a cage, so they follow it when the numbering
+    changes. UNIQUE(switch_id, port) forbids a direct swap: go through -9."""
+    await db.execute("UPDATE port_descriptions SET port = -9 WHERE switch_id = ? AND port = 9", (switch_id,))
+    await db.execute("UPDATE port_descriptions SET port = 9 WHERE switch_id = ? AND port = 10", (switch_id,))
+    await db.execute("UPDATE port_descriptions SET port = 10 WHERE switch_id = ? AND port = -9", (switch_id,))
+
+
 async def _migrate(db):
-    """Add columns introduced after the first release (CREATE TABLE IF NOT EXISTS never does)."""
+    """Bring a database from any earlier release to SCHEMA_VERSION (CREATE TABLE IF NOT EXISTS
+    never adds columns to an existing table)."""
     if "swap_sfp_9_10" not in await _columns(db, "switches"):
+        # 1.x: every switch was shown with the 9/10 swap applied; record that, step 2 corrects it
         await db.execute("ALTER TABLE switches ADD COLUMN swap_sfp_9_10 INTEGER NOT NULL DEFAULT 0")
-        # Switches added before this setting existed were always shown with the 9/10 swap
-        # applied. That is right for 1.0.0.x firmware and keeps their labels; a switch recorded
-        # with 2.0.0.x firmware does not swap (issue #3), so it gets its correct numbering.
-        # Unknown firmware keeps the previous behaviour.
-        cursor = await db.execute("SELECT id, firmware FROM switches")
-        for switch_id, firmware in await cursor.fetchall():
+        await db.execute("UPDATE switches SET swap_sfp_9_10 = 1")
+        await db.commit()
+
+    version = (await (await db.execute("PRAGMA user_version")).fetchone())[0]
+    if version < 2:
+        # The 9/10 numbering follows the firmware line (1.0.0.x swapped, 2.0.0.x not; issue #3).
+        # 1.x showed every switch swapped and 2.1.0 started every new switch unswapped, so set each
+        # switch whose firmware is known to its line once, and move its 9/10 descriptions with
+        # the cages. Unknown firmware keeps its setting. Logged in the switch's change log.
+        cursor = await db.execute("SELECT id, firmware, swap_sfp_9_10 FROM switches")
+        for switch_id, firmware, current in await cursor.fetchall():
             suggested = default_swap_sfp(firmware)
-            swap = 1 if suggested is None else int(suggested)
-            await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?", (swap, switch_id))
+            if suggested is None or bool(current) == suggested:
+                continue
+            await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?", (int(suggested), switch_id))
+            await _swap_descriptions_9_10(db, switch_id)
+            await db.execute(
+                "INSERT INTO change_log (switch_id, user_id, action, details) VALUES (?, 0, 'port_mapping', ?)",
+                (switch_id, json.dumps({"swap_sfp_9_10": suggested, "moved_descriptions": True,
+                                        "reason": f"firmware {firmware}", "automatic": True})))
+        await db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         await db.commit()
 
 

@@ -11,11 +11,14 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   and an SKS3200-8E2X-P on 2.0.0.x, both hardware A0; issue #3). Adding a switch now picks the
   numbering from its firmware (the Add Switch dialog offers Automatic / Swapped / As numbered by
   the firmware); before, new switches always started unswapped, which was wrong on 1.0.0.x.
-- The one-time upgrade migration marks switches recorded with 2.0.0.x firmware as not swapped
-  (switches on 1.0.0.x or an unknown version keep the previous swapped behaviour), so 2.0.0.x
-  units are corrected without a manual step.
-- The System page warns when a switch's setting does not match what its firmware usually needs
-  (for example after changing firmware line). `GET /status` reports `swap_sfp_suggested`.
+- On its first start, 2.1.1 sets every existing switch whose firmware is known to the numbering
+  of its firmware line, once, whether the database comes from the first release or from 2.1.0
+  (a schema version is now recorded with `PRAGMA user_version`). This fixes 2.0.0.x switches
+  shown swapped and 1.0.0.x switches added under 2.1.0 shown unswapped. Port 9/10 descriptions
+  move with the cages, and each change is logged in the switch's change log as made by
+  "SwitchPilot". Switches with an unknown firmware version keep their setting.
+- The System page warns when a switch's setting does not match what its firmware usually needs.
+  `GET /status` reports `swap_sfp_suggested`.
 
 ### Documentation
 - Windows installation: start Docker Desktop / WSL 2 first, check the engine, troubleshooting.

@@ -107,16 +107,24 @@ Earlier versions assumed that on every SKS3200 the firmware's index 9 was the SF
 SKS3200-8E2X 1.0.0.4 and an SKS3200-8E2X-P 2.0.0.x, both hardware A0). The switch's API does not
 say it, so it is a setting on each switch, chosen from the firmware version.
 
-- **Existing switches recorded with 1.0.0.x firmware (or an unknown version) keep the old
-  behaviour**: the upgrade marks them as "swapped", so the Ports page shows exactly what it showed
-  before. Descriptions, VLAN and LAG assignments stay where you left them.
-- **Existing switches recorded with 2.0.0.x firmware are corrected**: the upgrade marks them as
-  not swapped, which fixes ports 9 and 10 being shown (and configured) the wrong way round on
-  them (issue #3). Check them once as described below.
+- **On the first start of 2.1.1, each existing switch gets the numbering of its firmware line,
+  once** (whether you come from the first release or from 2.1.0):
+  - switches recorded with **1.0.0.x** are swapped. Coming from the first release nothing
+    changes for them; a 1.0.0.x switch added under 2.1.0 (which started every new switch
+    unswapped) is corrected;
+  - switches recorded with **2.0.0.x** are not swapped, which fixes ports 9 and 10 being shown
+    (and configured) the wrong way round on them (issue #3);
+  - switches whose firmware version is unknown keep their setting.
+
+  When a switch is changed, its port 9 and 10 descriptions move with the cages and the change
+  appears in its change log (System and Overview) as made by "SwitchPilot". VLAN, LAG and other
+  settings on the switch itself are not touched: only SwitchPilot's labels change. If you had
+  deliberately set a switch against its firmware line under 2.1.0, set it again under System.
 - **Switches you add from now on get the numbering of their firmware line automatically**
-  (Add Switch → "SFP+ ports 9 and 10": Automatic); you can force either choice there.
-- **If you change a switch's firmware line later**, the System page shows a warning when the
-  setting no longer matches the firmware: check and flip it.
+  (Add Switch → "SFP+ ports 9 and 10": Automatic; an unreadable version gives the firmware's own
+  numbering); you can force either choice there.
+- **The System page shows a warning** when a switch's setting does not match what its firmware
+  usually needs (a choice forced when adding it, or a unit that differs): check and flip it.
 - **Check each switch once:** plug a cable into the cage labelled **9** on the front panel and open
   the Ports page. The link must appear on port **9**. If it appears on port 10, go to
   **System → SFP+ Port Numbering** and flip the toggle. Leave "Move port descriptions with their
@@ -158,7 +166,7 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
 - `POST /api/switches/{id}/ports/config` refuses `enabled: false` on port 1 without
   `force: true`; `speed` must be one of the values the UI offers.
 - `POST /api/switches` takes `swap_sfp_9_10` as `true`, `false` or omitted/`null` (= chosen from the
-  switch's firmware line) and returns `swap_sfp_9_10` and `swap_auto`. `GET /api/switches/{id}/status`
+  switch's firmware line; unreadable version = not swapped) and returns `swap_sfp_9_10` and `swap_auto`. `GET /api/switches/{id}/status`
   adds `swap_sfp_suggested` (`true` for 1.0.0.x, `false` for 2.0.0.x, `null` if unknown).
 - `POST /api/switches/{id}/network` validates the addresses and returns the new `ip`, `accepted`
   and `note`. SwitchPilot's stored address only follows the change when the switch accepted it
@@ -211,7 +219,7 @@ Please open an issue with the `docker compose logs` output so it can be fixed.
 | `no such column: swap_sfp_9_10` in the logs | The startup migration did not run. Check the first lines of `docker compose logs` for an error before `Application startup complete`, make sure `./data` is writable by the container, then `docker compose restart`. |
 | Ports page still looks like the old version | Hard refresh the browser (Ctrl+Shift+R). |
 | `database is locked` at startup | Another SwitchPilot container is using the same `data/` folder. Stop it first. |
-| Ports 9 and 10 look inverted after the upgrade | Nothing changed for existing switches; see "Check each switch once" above and flip the setting under System. |
+| Ports 9 and 10 look inverted after the upgrade | Switches were set to the numbering of their firmware line (1.0.0.x swapped, 2.0.0.x not; see the change log). Check the cage labelled 9 as described above and flip the setting under System if your unit differs. |
 | Logged out right after the upgrade | Expected once: the session key changed. Log in again. |
 | `Too many failed logins` | 10 wrong passwords for that account within 10 minutes from the same client address (or 100 across accounts). Wait a few minutes; behind a reverse proxy set `TRUSTED_PROXIES` (section 3). |
 | Live stats stay on "Connecting" | Hard refresh the browser: the old frontend uses the old stream URL. |

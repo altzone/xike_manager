@@ -32,7 +32,7 @@ The stock Xikestor web UI is:
 - **System** — management IP (DHCP/static), clock and SNTP (hostnames resolved for you), STP, storm control, IGMP snooping, EEE, port mirroring, loop detection, configuration snapshots (save / download / import), reboot
 
 ### Platform
-- **Multi-switch** — all your Xikestor switches in one place, each with its own SFP+ 9/10 numbering setting (some units are wired the other way round from the firmware's indexes)
+- **Multi-switch** — all your Xikestor switches in one place, each with its own SFP+ 9/10 numbering, set automatically from the firmware line (1.0.0.x swaps the two cages, 2.0.0.x does not) and adjustable per switch
 - **Users** — admin and viewer roles, enforced by the backend on every request
 - **Change log** — who changed what and when, per switch
 - **VLAN sync** — copy VLAN definitions to every switch in one click
@@ -110,7 +110,8 @@ docker compose up -d                         # start
 
 Then hard-refresh the browser once (**Ctrl+Shift+R**, **Cmd+Shift+R** on macOS) so it drops the
 old cached frontend. Coming from the first release (before October 2026) you are logged out
-once, and you should check each switch's SFP+ port numbering under **System** (see the guide).
+once. After updating to 2.1.1, check each switch's SFP+ port numbering once under **System**: it is
+now set from the firmware line, and the page warns if a switch does not match (see the guide).
 
 Full details, what to check after the update, rollback and troubleshooting:
 **[docs/upgrade.md](docs/upgrade.md)**. What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.
