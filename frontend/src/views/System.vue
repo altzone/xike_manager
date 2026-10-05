@@ -18,6 +18,9 @@
             <p class="text-sm font-medium text-ink inline-flex items-center gap-1.5">{{ t('sys.portMap') }} <Tip :title="t('sys.portMap')" :text="t('sys.portMapTip')" /></p>
             <p class="hint mt-0.5">{{ t('sys.portMapDesc') }}</p>
             <p class="text-sm text-ink-2 mt-1.5">{{ t('sys.portMapCurrent', { a: swapSfp ? 10 : 9, b: swapSfp ? 9 : 10 }) }}</p>
+            <p v-if="portMapMismatch" role="status" class="text-sm text-warn-ink bg-warn-soft rounded-lg px-3 py-2 mt-2 flex items-start gap-2">
+              <Icon name="warning" :size="15" class="mt-0.5 shrink-0" /><span>{{ t('sys.portMapCheck', { fw: info.fw_ver }) }}</span>
+            </p>
             <label class="flex items-center gap-2 hint mt-2 cursor-pointer"><input type="checkbox" v-model="moveDescriptions" class="accent-accent"> {{ t('sys.portMapMoveDesc') }}</label>
           </div>
           <div class="flex flex-col items-end gap-1 shrink-0">
@@ -237,6 +240,8 @@ const busy = reactive({ net: false, sntp: false, time: false, mirror: false, sna
 const info = ref({})
 const net = reactive({ dhcp: false, ip: '', netmask: '', gateway: '' })
 const swapSfp = ref(false)
+// the firmware line usually decides the numbering (1.0.0.x swapped, 2.0.0.x not): flag a mismatch, e.g. after a firmware change
+const portMapMismatch = computed(() => typeof info.value.swap_sfp_suggested === 'boolean' && info.value.swap_sfp_suggested !== swapSfp.value)
 const moveDescriptions = ref(true)
 const timeData = ref({})
 const timeMode = ref('sntp')

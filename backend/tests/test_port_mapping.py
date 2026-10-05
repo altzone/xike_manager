@@ -6,7 +6,7 @@ import pytest
 
 import db as dbmod
 import sse
-from switch_client import SwitchClient, InvalidPortError, build_port_map
+from switch_client import SwitchClient, InvalidPortError, build_port_map, default_swap_sfp
 from conftest import add_switch
 
 
@@ -276,6 +276,8 @@ def test_migration_adds_column_and_keeps_legacy_swap(db_path):
             firmware TEXT DEFAULT '', mac_address TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
         INSERT INTO switches (name, ip, username, password) VALUES ('old', '10.0.0.1', 'admin', 'admin');
+        INSERT INTO switches (name, ip, username, password, firmware) VALUES ('v1', '10.0.0.3', 'a', 'b', '1.0.0.6');
+        INSERT INTO switches (name, ip, username, password, firmware) VALUES ('v2', '10.0.0.4', 'a', 'b', '2.0.0.2');
     """)
     con.commit()
     con.close()
@@ -286,6 +288,40 @@ def test_migration_adds_column_and_keeps_legacy_swap(db_path):
     con = sqlite3.connect(db_path)
     cols = {r[1] for r in con.execute("PRAGMA table_info(switches)")}
     assert "swap_sfp_9_10" in cols
-    assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='old'").fetchone() == (1,)
+    assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='old'").fetchone() == (1,)  # unknown: as before
+    assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='v1'").fetchone() == (1,)
+    assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='v2'").fetchone() == (0,)  # issue #3
     con.execute("INSERT INTO switches (name, ip, username, password) VALUES ('new', '10.0.0.2', 'a', 'b')")
     assert con.execute("SELECT swap_sfp_9_10 FROM switches WHERE name='new'").fetchone() == (0,)
+
+
+# ── Default numbering from the firmware line ──
+@pytest.mark.parametrize("fw, expected", [
+    ("1.0.0.4", True), ("1.0.0.6", True), ("V1.0.0.6", True),
+    ("2.0.0.2", False), ("2.0.0.3", False), ("", None), (None, None), ("unknown", None),
+])
+def test_default_swap_follows_the_firmware_line(fw, expected):
+    assert default_swap_sfp(fw) is expected
+
+
+@pytest.mark.parametrize("fw, expected", [("1.0.0.4", True), ("2.0.0.2", False), ("", False)])
+def test_adding_a_switch_picks_the_numbering_from_its_firmware(api, fw, expected):
+    api.mock.state["status.json"]["fw_ver"] = fw
+    r = api.post("/api/switches", json={"name": "auto", "ip": "10.0.0.2", "username": "admin", "password": "admin"})
+    assert r.status_code == 200, r.text
+    assert r.json()["swap_sfp_9_10"] is expected and r.json()["swap_auto"] is True
+    assert api.get(f"/api/switches/{r.json()['id']}/info").json()["swap_sfp_9_10"] is expected
+
+
+def test_an_explicit_choice_wins_over_the_firmware_line(api):
+    api.mock.state["status.json"]["fw_ver"] = "1.0.0.4"
+    r = api.post("/api/switches", json={"name": "x", "ip": "10.0.0.2", "username": "admin", "password": "admin",
+                                        "swap_sfp_9_10": False})
+    assert r.json()["swap_sfp_9_10"] is False and r.json()["swap_auto"] is False
+
+
+def test_status_reports_what_the_firmware_line_suggests(api):
+    sid = add_switch(api, swap=False)
+    assert api.get(f"/api/switches/{sid}/status").json()["swap_sfp_suggested"] is True  # fixture runs 1.0.0.6
+    api.mock.state["status.json"]["fw_ver"] = "2.0.0.2"
+    assert api.get(f"/api/switches/{sid}/status").json()["swap_sfp_suggested"] is False

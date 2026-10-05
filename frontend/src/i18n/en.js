@@ -289,14 +289,13 @@ export default {
   'common.failedLoad': 'Failed to load',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+ Port Numbering',
-  'sys.portMapTip': 'On some SKS3200 units the two SFP+ cages are wired the other way round from the firmware\'s own numbering: the switch\'s index 9 is the cage labelled 10 on the front panel. Turn this on if SwitchPilot shows the link on port 9 while your cable is in the cage labelled 10 (or the reverse). Nothing is written to the switch, only the labels move.',
+  'sys.portMapTip': 'On 1.0.0.x firmware the two SFP+ cages are numbered the other way round from the front panel (the switch\'s index 9 is the cage labelled 10); 2.0.0.x firmware numbers them like the front panel. SwitchPilot picks this from the firmware when you add a switch. Flip it if the link shows on port 9 while your cable is in the cage labelled 10 (or the reverse). Nothing is written to the switch, only the labels move.',
   'sys.portMapDesc': 'How ports 9 and 10 are labelled for this switch. Check against the front panel: the cage with the cable should be the one showing a link.',
   'sys.portMapCurrent': 'Port 9 = switch index {a}, port 10 = switch index {b}',
   'sys.portMapSwap': 'Ports 9 and 10 are swapped on this unit',
   'sys.portMapMoveDesc': 'Move port descriptions with their physical port',
   'sys.portMapUpdated': 'Port numbering updated',
-  'dash.swapSfp': 'SFP+ ports 9 and 10 are swapped on this unit',
-  'dash.swapSfpHint': 'Leave off unless the switch\'s own web UI numbers the SFP+ cages the other way round from the front panel. Can be changed later under System.',
+  'dash.swapSfpHint': '1.0.0.x firmware numbers the two SFP+ cages the other way round from the front panel, 2.0.0.x does not. Automatic picks the right one from the switch\'s firmware; it can be changed later under System.',
   'ports.internalIdx': 'Switch index {n}',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet changed',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch unreachable',
   'sys.portMapToggle': 'Swap ports 9 and 10',
   'sys.dangerDesc': 'Restart the switch. Management access drops for about a minute.',
+  'dash.swapMode': 'SFP+ ports 9 and 10',
+  'dash.swapAuto': 'Automatic (from the firmware version)',
+  'dash.swapOn': 'Swapped (usual on 1.0.0.x firmware)',
+  'dash.swapOff': 'As numbered by the firmware (usual on 2.0.0.x)',
+  'sys.portMapCheck': 'This setting differs from what firmware {fw} usually needs. Check: plug a cable into the cage labelled 9; if the link shows on port 10 here, flip the setting.',
 }

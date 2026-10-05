@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Modell',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+-Portnummerierung',
-  'sys.portMapTip': 'Bei manchen SKS3200-Geräten sind die beiden SFP+-Käfige umgekehrt zur Nummerierung der Firmware verdrahtet: Index 9 des Switches ist der auf der Front mit 10 beschriftete Käfig. Aktivieren Sie dies, wenn SwitchPilot den Link an Port 9 zeigt, obwohl das Kabel im Käfig 10 steckt (oder umgekehrt). Am Switch wird nichts geändert, nur die Beschriftung.',
+  'sys.portMapTip': 'Bei Firmware 1.0.0.x sind die beiden SFP+-Schächte umgekehrt zur Front nummeriert (Index 9 des Switches ist der mit 10 beschriftete Schacht); Firmware 2.0.0.x nummeriert sie wie die Front. SwitchPilot wählt dies beim Hinzufügen anhand der Firmware. Umschalten, wenn der Link auf Port 9 erscheint, obwohl das Kabel im Schacht 10 steckt (oder umgekehrt). Auf den Switch wird nichts geschrieben, nur die Beschriftung ändert sich.',
   'sys.portMapDesc': 'Wie die Ports 9 und 10 für diesen Switch beschriftet werden. Mit der Front vergleichen: Der Käfig mit dem Kabel sollte den Link anzeigen.',
   'sys.portMapCurrent': 'Port 9 = Switch-Index {a}, Port 10 = Switch-Index {b}',
   'sys.portMapSwap': 'Ports 9 und 10 sind an diesem Gerät vertauscht',
   'sys.portMapMoveDesc': 'Portbeschreibungen mit dem physischen Port mitnehmen',
   'sys.portMapUpdated': 'Portnummerierung aktualisiert',
-  'dash.swapSfp': 'SFP+-Ports 9 und 10 sind an diesem Gerät vertauscht',
-  'dash.swapSfpHint': 'Nur aktivieren, wenn die Weboberfläche des Switches die SFP+-Käfige umgekehrt zur Front nummeriert. Später unter System änderbar.',
+  'dash.swapSfpHint': 'Firmware 1.0.0.x nummeriert die beiden SFP+-Schächte umgekehrt zur Front, 2.0.0.x nicht. Automatisch wählt anhand der Firmware des Switches; später unter System änderbar.',
   'ports.internalIdx': 'Switch-Index {n}',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet geändert',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch nicht erreichbar',
   'sys.portMapToggle': 'Ports 9 und 10 vertauschen',
   'sys.dangerDesc': 'Startet den Switch neu. Der Verwaltungszugriff fällt etwa eine Minute aus.',
+  'dash.swapMode': 'SFP+-Ports 9 und 10',
+  'dash.swapAuto': 'Automatisch (nach Firmware-Version)',
+  'dash.swapOn': 'Vertauscht (üblich bei Firmware 1.0.0.x)',
+  'dash.swapOff': 'Wie von der Firmware nummeriert (üblich bei 2.0.0.x)',
+  'sys.portMapCheck': 'Diese Einstellung weicht von dem ab, was Firmware {fw} üblicherweise braucht. Prüfen: ein Kabel in den mit 9 beschrifteten Schacht stecken; erscheint der Link hier auf Port 10, die Einstellung umschalten.',
 }

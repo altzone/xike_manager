@@ -289,14 +289,13 @@ export default {
   'swdash.model': '모델',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+ 포트 번호',
-  'sys.portMapTip': '일부 SKS3200 장비는 두 SFP+ 케이지가 펌웨어 번호와 반대로 배선되어 있습니다(스위치 인덱스 9가 전면 패널의 10번 케이지). 케이블을 10번 케이지에 꽂았는데 SwitchPilot이 9번 포트에 링크를 표시한다면(또는 그 반대) 이 옵션을 켜세요. 스위치에는 아무것도 기록되지 않으며 라벨만 바뀝니다.',
+  'sys.portMapTip': '1.0.0.x 펌웨어에서는 두 SFP+ 케이지가 전면 패널과 반대로 번호가 매겨집니다(스위치의 인덱스 9가 10으로 표시된 케이지). 2.0.0.x 펌웨어는 전면 패널과 같습니다. SwitchPilot는 스위치를 추가할 때 펌웨어에 따라 선택합니다. 케이블이 10번 케이지에 있는데 링크가 포트 9에 표시되면(또는 반대) 바꾸세요. 스위치에는 아무것도 기록되지 않고 라벨만 바뀝니다.',
   'sys.portMapDesc': '이 스위치에서 포트 9와 10을 표시하는 방식입니다. 전면 패널과 비교하세요. 케이블이 꽂힌 케이지에 링크가 표시되어야 합니다.',
   'sys.portMapCurrent': '포트 9 = 스위치 인덱스 {a}, 포트 10 = 스위치 인덱스 {b}',
   'sys.portMapSwap': '이 장비에서는 포트 9와 10이 바뀌어 있음',
   'sys.portMapMoveDesc': '포트 설명을 물리 포트와 함께 이동',
   'sys.portMapUpdated': '포트 번호가 업데이트되었습니다',
-  'dash.swapSfp': '이 장비에서는 SFP+ 포트 9와 10이 바뀌어 있음',
-  'dash.swapSfpHint': '스위치 자체 웹 UI가 SFP+ 케이지를 전면 패널과 반대로 번호 매기는 경우가 아니면 꺼 두세요. 나중에 시스템에서 변경할 수 있습니다.',
+  'dash.swapSfpHint': '1.0.0.x 펌웨어는 두 SFP+ 케이지를 전면 패널과 반대로 번호를 매기고, 2.0.0.x는 그렇지 않습니다. 자동은 스위치 펌웨어에 따라 선택하며, 나중에 시스템에서 변경할 수 있습니다.',
   'ports.internalIdx': '스위치 인덱스 {n}',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet 변경됨',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': '스위치에 연결할 수 없음',
   'sys.portMapToggle': '포트 9와 10 바꾸기',
   'sys.dangerDesc': '스위치를 재시작합니다. 관리 접속이 약 1분간 끊깁니다.',
+  'dash.swapMode': 'SFP+ 포트 9와 10',
+  'dash.swapAuto': '자동 (펌웨어 버전 기준)',
+  'dash.swapOn': '바뀜 (1.0.0.x 펌웨어에서 일반적)',
+  'dash.swapOff': '펌웨어 번호 그대로 (2.0.0.x에서 일반적)',
+  'sys.portMapCheck': '이 설정은 펌웨어 {fw}에 보통 필요한 설정과 다릅니다. 확인: 9로 표시된 케이지에 케이블을 꽂고, 여기서 링크가 포트 10에 표시되면 설정을 바꾸세요.',
 }

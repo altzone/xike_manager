@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Model',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+ Port Numaralandırması',
-  'sys.portMapTip': 'Bazı SKS3200 cihazlarında iki SFP+ yuvası, yazılımın numaralandırmasının tersine bağlıdır: anahtarın 9 numaralı indeksi ön panelde 10 olarak etiketlenen yuvadır. Kablonuz 10 etiketli yuvadayken SwitchPilot bağlantıyı 9. portta gösteriyorsa (veya tersi) bunu açın. Anahtara hiçbir şey yazılmaz, yalnızca etiketler değişir.',
+  'sys.portMapTip': '1.0.0.x firmware\'de iki SFP+ yuvası ön panelin tersine numaralandırılır (switch\'in 9 numaralı indeksi, 10 etiketli yuvadır); 2.0.0.x firmware onları ön paneldeki gibi numaralandırır. SwitchPilot bunu switch eklenirken firmware\'e göre seçer. Kablo 10 etiketli yuvadayken bağlantı port 9\'da görünüyorsa (veya tersi) değiştirin. Switch\'e hiçbir şey yazılmaz, yalnızca etiketler değişir.',
   'sys.portMapDesc': 'Bu anahtarda 9 ve 10 numaralı portların nasıl etiketleneceği. Ön panelle karşılaştırın: kablonun takılı olduğu yuva bağlantıyı göstermelidir.',
   'sys.portMapCurrent': 'Port 9 = anahtar indeksi {a}, port 10 = anahtar indeksi {b}',
   'sys.portMapSwap': 'Bu cihazda 9 ve 10 numaralı portlar ters',
   'sys.portMapMoveDesc': 'Port açıklamalarını fiziksel portla birlikte taşı',
   'sys.portMapUpdated': 'Port numaralandırması güncellendi',
-  'dash.swapSfp': 'Bu cihazda SFP+ 9 ve 10 numaralı portlar ters',
-  'dash.swapSfpHint': 'Anahtarın kendi web arayüzü SFP+ yuvalarını ön panelin tersine numaralandırmıyorsa kapalı bırakın. Daha sonra Sistem bölümünden değiştirilebilir.',
+  'dash.swapSfpHint': '1.0.0.x firmware iki SFP+ yuvasını ön panelin tersine numaralandırır, 2.0.0.x numaralandırmaz. Otomatik, switch\'in firmware\'ine göre seçer; daha sonra Sistem altında değiştirilebilir.',
   'ports.internalIdx': 'Anahtar indeksi {n}',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet değiştirildi',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch\'e ulaşılamıyor',
   'sys.portMapToggle': '9 ve 10 numaralı portları değiştir',
   'sys.dangerDesc': 'Switch\'i yeniden başlatır. Yönetim erişimi yaklaşık bir dakika kesilir.',
+  'dash.swapMode': 'SFP+ portları 9 ve 10',
+  'dash.swapAuto': 'Otomatik (firmware sürümüne göre)',
+  'dash.swapOn': 'Ters (1.0.0.x firmware\'de olağan)',
+  'dash.swapOff': 'Firmware numaralandırması (2.0.0.x\'te olağan)',
+  'sys.portMapCheck': 'Bu ayar, {fw} firmware\'inin genellikle gerektirdiğinden farklı. Kontrol edin: 9 etiketli yuvaya bir kablo takın; bağlantı burada port 10\'da görünüyorsa ayarı değiştirin.',
 }

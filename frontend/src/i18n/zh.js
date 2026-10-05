@@ -289,14 +289,13 @@ export default {
   'swdash.model': '型号',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'SFP+ 端口编号',
-  'sys.portMapTip': '部分 SKS3200 设备的两个 SFP+ 插槽接线顺序与固件编号相反：交换机的索引 9 对应前面板标为 10 的插槽。如果线缆插在标为 10 的插槽，而 SwitchPilot 却在端口 9 显示链路（或相反），请开启此项。不会向交换机写入任何内容，仅更改标签。',
+  'sys.portMapTip': '在 1.0.0.x 固件中，两个 SFP+ 插槽的编号与前面板相反（交换机的索引 9 是标有 10 的插槽）；2.0.0.x 固件则与前面板一致。添加交换机时 SwitchPilot 会根据固件自动选择。如果线缆插在标有 10 的插槽而链路显示在端口 9（或相反），请切换。不会向交换机写入任何内容，只更改标签。',
   'sys.portMapDesc': '此交换机端口 9 和 10 的标注方式。请对照前面板：插有线缆的插槽应显示链路。',
   'sys.portMapCurrent': '端口 9 = 交换机索引 {a}，端口 10 = 交换机索引 {b}',
   'sys.portMapSwap': '本设备的端口 9 和 10 已互换',
   'sys.portMapMoveDesc': '端口描述随物理端口一起移动',
   'sys.portMapUpdated': '端口编号已更新',
-  'dash.swapSfp': '本设备的 SFP+ 端口 9 和 10 已互换',
-  'dash.swapSfpHint': '除非交换机自带 Web 界面对 SFP+ 插槽的编号与前面板相反，否则请保持关闭。之后可在“系统”中更改。',
+  'dash.swapSfpHint': '1.0.0.x 固件对两个 SFP+ 插槽的编号与前面板相反，2.0.0.x 则不会。自动模式会根据交换机固件选择；之后可在“系统”中修改。',
   'ports.internalIdx': '交换机索引 {n}',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': '已更改 Energy Efficient Ethernet',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': '交换机不可达',
   'sys.portMapToggle': '交换端口 9 和 10',
   'sys.dangerDesc': '重启交换机。管理访问将中断约一分钟。',
+  'dash.swapMode': 'SFP+ 端口 9 和 10',
+  'dash.swapAuto': '自动（根据固件版本）',
+  'dash.swapOn': '互换（1.0.0.x 固件通常如此）',
+  'dash.swapOff': '按固件编号（2.0.0.x 通常如此）',
+  'sys.portMapCheck': '此设置与固件 {fw} 通常需要的不一致。请检查：将线缆插入标有 9 的插槽；如果此处链路显示在端口 10 上，请切换此设置。',
 }

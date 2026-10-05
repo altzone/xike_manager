@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import json
+import re
 import time
 
 import httpx
@@ -32,13 +33,33 @@ def default_bridge(vlan_id: int) -> int:
     return vlan_id if 0 < vlan_id <= MAX_FID else 0
 
 
+def firmware_line(fw_ver: str | None) -> int | None:
+    """Major version of a firmware string ("1.0.0.4" -> 1, "V2.0.0.2" -> 2), None if unreadable."""
+    m = re.match(r"\D*(\d+)\.", str(fw_ver or "").strip())
+    return int(m.group(1)) if m else None
+
+
+def default_swap_sfp(fw_ver: str | None) -> bool | None:
+    """Whether a switch running this firmware numbers the SFP+ cages the other way round.
+
+    Observed so far: 1.0.0.x (V1) firmware swaps them (SKS3200-8E2X 1.0.0.4 hw A0, and the two
+    other V1 tools hardcode it), 2.0.0.x (V2) does not (SKS3200-8E2X-P 2.0.0.x hw A0, issue #3;
+    no V2 tool swaps). None when the version is unknown: the caller decides.
+    """
+    line = firmware_line(fw_ver)
+    if line is None:
+        return None
+    return line == 1
+
+
 def build_port_map(swap_sfp: bool) -> dict[int, int]:
     """user-facing port -> internal index used in the switch's JSON.
 
     On some units the two SFP+ cages are wired the other way round from the
     firmware's own numbering (JSON index 9 is the cage labelled 10 on the front
-    panel), on others they match (issue #3). The firmware exposes nothing that
-    tells which is which, so the swap is a per-switch setting.
+    panel), on others they match (issue #3). It follows the firmware line as far as we
+    know (see default_swap_sfp), but is kept as a per-switch setting so a unit that
+    differs can be corrected.
     """
     mapping = {p: p for p in range(1, NUM_PORTS + 1)}
     if swap_sfp:

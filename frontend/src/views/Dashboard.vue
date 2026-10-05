@@ -67,10 +67,15 @@
             <input id="switch-password" v-model="form.password" type="password" :required="!editing" class="input" autocomplete="new-password" :placeholder="editing ? t('dash.passwordKeep') : ''" />
           </div>
         </div>
-        <label v-if="!editing" class="flex items-start gap-2.5 text-sm cursor-pointer pt-1">
-          <input type="checkbox" v-model="form.swap_sfp_9_10" class="mt-1 accent-accent">
-          <span><span class="text-ink-2">{{ t('dash.swapSfp') }}</span><span class="block hint">{{ t('dash.swapSfpHint') }}</span></span>
-        </label>
+        <div v-if="!editing">
+          <label class="label" for="switch-swap">{{ t('dash.swapMode') }}</label>
+          <select id="switch-swap" v-model="form.swap_sfp_9_10" class="select">
+            <option :value="null">{{ t('dash.swapAuto') }}</option>
+            <option :value="true">{{ t('dash.swapOn') }}</option>
+            <option :value="false">{{ t('dash.swapOff') }}</option>
+          </select>
+          <p class="hint mt-1">{{ t('dash.swapSfpHint') }}</p>
+        </div>
         <p v-if="formError" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ formError }}</p>
       </form>
       <template #footer>
@@ -106,7 +111,8 @@ const modal = ref(false)
 const editing = ref(null)
 const saving = ref(false)
 const formError = ref('')
-const form = reactive({ name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
+// swap_sfp_9_10: null = decided by the backend from the switch's firmware line
+const form = reactive({ name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: null })
 
 async function load() {
   try {
@@ -119,7 +125,7 @@ async function load() {
 
 function openAdd() {
   editing.value = null
-  Object.assign(form, { name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: false })
+  Object.assign(form, { name: '', ip: '', username: 'admin', password: 'admin', swap_sfp_9_10: null })
   formError.value = ''
   modal.value = true
 }

@@ -4,7 +4,7 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.1.1-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 Already running SwitchPilot? Jump to **[Updating](#updating)**.
 
@@ -53,8 +53,12 @@ Other Xikestor models using the same web API should also work.
 **Firmware:** SwitchPilot targets the **1.0.0.x** firmware line (V1). Xikestor also ships a
 **2.0.0.x** line (V2) with a different web API for VLANs, STP, loop detection, storm control and
 EEE. V2 support is **coming soon**; until then, on a V2 switch the dashboard, ports and port
-statistics work but the VLAN and System pages will not. The two lines cannot be flashed over
-each other, so check `fw_ver` on the switch's status page before updating.
+statistics work but the VLAN and System pages will not.
+
+The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
+unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check
+`fw_ver` on the switch's status page before updating and only install firmware from the same
+line and for your exact model.
 
 ## Quick Start
 
@@ -215,7 +219,7 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Tagged VLAN ID | 1 - 4094 | Standard 802.1Q |
 | Tag VLAN entries | 111 max | Counter in header |
 | Management VLAN | Not supported | Info tooltip |
-| Port 9/10 mapping | Differs between units | Per-switch setting (System → SFP+ Port Numbering) |
+| Port 9/10 mapping | Swapped on 1.0.0.x firmware, not on 2.0.0.x | Set automatically from the firmware; per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |

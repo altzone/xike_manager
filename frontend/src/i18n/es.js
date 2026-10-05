@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Modelo',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'Numeración de puertos SFP+',
-  'sys.portMapTip': 'En algunas unidades SKS3200 las dos jaulas SFP+ están cableadas al revés de la numeración del firmware: el índice 9 del switch es la jaula marcada como 10 en el frontal. Actívalo si SwitchPilot muestra el enlace en el puerto 9 cuando el cable está en la jaula 10 (o al revés). No se escribe nada en el switch, solo cambian las etiquetas.',
+  'sys.portMapTip': 'Con firmware 1.0.0.x las dos jaulas SFP+ se numeran al revés que el panel frontal (el índice 9 del switch es la jaula marcada 10); el firmware 2.0.0.x las numera como el panel. SwitchPilot lo elige según el firmware al añadir el switch. Inviértalo si el enlace aparece en el puerto 9 con el cable en la jaula marcada 10 (o al revés). No se escribe nada en el switch, solo cambian las etiquetas.',
   'sys.portMapDesc': 'Cómo se etiquetan los puertos 9 y 10 en este switch. Compara con el frontal: la jaula con el cable debe ser la que muestra enlace.',
   'sys.portMapCurrent': 'Puerto 9 = índice {a} del switch, puerto 10 = índice {b}',
   'sys.portMapSwap': 'Los puertos 9 y 10 están invertidos en esta unidad',
   'sys.portMapMoveDesc': 'Mover las descripciones con su puerto físico',
   'sys.portMapUpdated': 'Numeración de puertos actualizada',
-  'dash.swapSfp': 'Los puertos SFP+ 9 y 10 están invertidos en esta unidad',
-  'dash.swapSfpHint': 'Déjalo desactivado salvo que la interfaz web del switch numere las jaulas SFP+ al revés del frontal. Se puede cambiar después en Sistema.',
+  'dash.swapSfpHint': 'El firmware 1.0.0.x numera las dos jaulas SFP+ al revés que el panel frontal, el 2.0.0.x no. Automático elige según el firmware del switch; se puede cambiar después en Sistema.',
   'ports.internalIdx': 'Índice {n} del switch',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet modificado',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch inaccesible',
   'sys.portMapToggle': 'Intercambiar los puertos 9 y 10',
   'sys.dangerDesc': 'Reinicia el switch. El acceso de gestión se interrumpe durante aproximadamente un minuto.',
+  'dash.swapMode': 'Puertos SFP+ 9 y 10',
+  'dash.swapAuto': 'Automático (según la versión del firmware)',
+  'dash.swapOn': 'Intercambiados (habitual en firmware 1.0.0.x)',
+  'dash.swapOff': 'Según el firmware (habitual en 2.0.0.x)',
+  'sys.portMapCheck': 'Este ajuste no coincide con lo que suele necesitar el firmware {fw}. Compruébelo: conecte un cable en la jaula marcada 9; si el enlace aparece aquí en el puerto 10, invierta el ajuste.',
 }

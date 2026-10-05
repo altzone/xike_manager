@@ -102,14 +102,21 @@ Disabling port 1 from the Ports page asks for confirmation. Scripts must send
 ### SFP+ ports 9 and 10 can be numbered per switch (issue #3)
 
 Earlier versions assumed that on every SKS3200 the firmware's index 9 was the SFP+ cage labelled
-10 on the front panel, and swapped the two. That is true for some units and wrong for others
-(and nothing in the switch's API tells which is which), so it is now a setting on each switch.
+10 on the front panel, and swapped the two. As far as we know this follows the firmware line:
+**1.0.0.x firmware swaps the two SFP+ cages, 2.0.0.x firmware does not** (confirmed on an
+SKS3200-8E2X 1.0.0.4 and an SKS3200-8E2X-P 2.0.0.x, both hardware A0). The switch's API does not
+say it, so it is a setting on each switch, chosen from the firmware version.
 
-- **Your existing switches keep the old behaviour.** The upgrade marks them as "swapped", so the
-  Ports page shows exactly what it showed before. Descriptions, VLAN and LAG assignments stay
-  where you left them.
-- **Switches you add from now on start in the firmware's own numbering** (what the switch's web UI
-  shows), with the swap off.
+- **Existing switches recorded with 1.0.0.x firmware (or an unknown version) keep the old
+  behaviour**: the upgrade marks them as "swapped", so the Ports page shows exactly what it showed
+  before. Descriptions, VLAN and LAG assignments stay where you left them.
+- **Existing switches recorded with 2.0.0.x firmware are corrected**: the upgrade marks them as
+  not swapped, which fixes ports 9 and 10 being shown (and configured) the wrong way round on
+  them (issue #3). Check them once as described below.
+- **Switches you add from now on get the numbering of their firmware line automatically**
+  (Add Switch → "SFP+ ports 9 and 10": Automatic); you can force either choice there.
+- **If you change a switch's firmware line later**, the System page shows a warning when the
+  setting no longer matches the firmware: check and flip it.
 - **Check each switch once:** plug a cable into the cage labelled **9** on the front panel and open
   the Ports page. The link must appear on port **9**. If it appears on port 10, go to
   **System → SFP+ Port Numbering** and flip the toggle. Leave "Move port descriptions with their
@@ -150,6 +157,9 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   `GET /api/switches/{id}/vlans` entries carry `in_use` and `defined` and nothing is written.
 - `POST /api/switches/{id}/ports/config` refuses `enabled: false` on port 1 without
   `force: true`; `speed` must be one of the values the UI offers.
+- `POST /api/switches` takes `swap_sfp_9_10` as `true`, `false` or omitted/`null` (= chosen from the
+  switch's firmware line) and returns `swap_sfp_9_10` and `swap_auto`. `GET /api/switches/{id}/status`
+  adds `swap_sfp_suggested` (`true` for 1.0.0.x, `false` for 2.0.0.x, `null` if unknown).
 - `POST /api/switches/{id}/network` validates the addresses and returns the new `ip`, `accepted`
   and `note`. SwitchPilot's stored address only follows the change when the switch accepted it
   and SwitchPilot was talking to the switch's own address (not a hostname or a NAT address);

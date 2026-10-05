@@ -3,6 +3,25 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.1.1] - 2026-10-05
+
+### Changed
+- **SFP+ port 9/10 numbering follows the firmware line.** 1.0.0.x firmware numbers the two SFP+
+  cages the other way round from the front panel, 2.0.0.x does not (an SKS3200-8E2X on 1.0.0.4
+  and an SKS3200-8E2X-P on 2.0.0.x, both hardware A0; issue #3). Adding a switch now picks the
+  numbering from its firmware (the Add Switch dialog offers Automatic / Swapped / As numbered by
+  the firmware); before, new switches always started unswapped, which was wrong on 1.0.0.x.
+- The one-time upgrade migration marks switches recorded with 2.0.0.x firmware as not swapped
+  (switches on 1.0.0.x or an unknown version keep the previous swapped behaviour), so 2.0.0.x
+  units are corrected without a manual step.
+- The System page warns when a switch's setting does not match what its firmware usually needs
+  (for example after changing firmware line). `GET /status` reports `swap_sfp_suggested`.
+
+### Documentation
+- Windows installation: start Docker Desktop / WSL 2 first, check the engine, troubleshooting.
+- Firmware note: Xikestor forbids flashing 2.0.0.x onto 1.0.0.x units and the reverse, and the
+  -P model has its own images.
+
 ## [2.1.0] - 2026-10-01
 
 ### Security

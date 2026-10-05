@@ -33,13 +33,13 @@ Body: {"username": "admin", "password": "yourpass"}
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/switches` | List all switches |
-| POST | `/api/switches` | Add switch `{"name","ip","username","password","swap_sfp_9_10"?}` |
+| POST | `/api/switches` | Add switch `{"name","ip","username","password","swap_sfp_9_10"?}`; `swap_sfp_9_10` omitted or `null` = chosen from the firmware line (1.0.0.x swapped, 2.0.0.x not). Returns `{"id","model","firmware","swap_sfp_9_10","swap_auto"}` |
 | PUT | `/api/switches/{id}` | Edit switch `{"name"?,"ip"?,"username"?,"password"?}` (connection re-tested when address/credentials change) |
 | DELETE | `/api/switches/{id}` | Remove switch and its local data (descriptions, LAG names, VLAN names, snapshots) |
 | PUT | `/api/switches/{id}/port-mapping` | `{"swap_sfp_9_10": bool, "move_descriptions"?: true}` — whether this unit's SFP+ cages 9/10 are numbered the other way round from the firmware's indexes. Changes labels only; nothing is written to the switch |
 | GET | `/api/switches/{id}/info` | Switch name, IP, model, `swap_sfp_9_10` |
 | GET | `/api/switches/{id}/ping` | Quick online check |
-| GET | `/api/switches/{id}/status` | Full system status |
+| GET | `/api/switches/{id}/status` | Full system status, plus `swap_sfp_suggested` (what the firmware line usually needs: `true` 1.0.0.x, `false` 2.0.0.x, `null` unknown) |
 | GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats); `token` from `POST /api/auth/stream-token` (5 min) |
 | GET | `/api/switches/{id}/changes?limit=50` | Audit log of configuration changes |
 

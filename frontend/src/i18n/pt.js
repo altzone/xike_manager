@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Modelo',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'Numeração das portas SFP+',
-  'sys.portMapTip': 'Em algumas unidades SKS3200 as duas gaiolas SFP+ estão ligadas ao contrário da numeração do firmware: o índice 9 do switch é a gaiola marcada como 10 no painel frontal. Ative se o SwitchPilot mostrar o link na porta 9 quando o cabo está na gaiola 10 (ou o inverso). Nada é gravado no switch, só as etiquetas mudam.',
+  'sys.portMapTip': 'No firmware 1.0.0.x os dois slots SFP+ são numerados ao contrário do painel frontal (o índice 9 do switch é o slot marcado 10); o firmware 2.0.0.x numera-os como o painel. O SwitchPilot escolhe pelo firmware ao adicionar o switch. Inverta se o link aparecer na porta 9 com o cabo no slot marcado 10 (ou o contrário). Nada é gravado no switch, apenas os rótulos mudam.',
   'sys.portMapDesc': 'Como as portas 9 e 10 são etiquetadas neste switch. Compare com o painel frontal: a gaiola com o cabo deve ser a que mostra link.',
   'sys.portMapCurrent': 'Porta 9 = índice {a} do switch, porta 10 = índice {b}',
   'sys.portMapSwap': 'As portas 9 e 10 estão invertidas nesta unidade',
   'sys.portMapMoveDesc': 'Mover as descrições com a porta física',
   'sys.portMapUpdated': 'Numeração das portas atualizada',
-  'dash.swapSfp': 'As portas SFP+ 9 e 10 estão invertidas nesta unidade',
-  'dash.swapSfpHint': 'Deixe desativado, a menos que a interface web do switch numere as gaiolas SFP+ ao contrário do painel frontal. Pode ser alterado depois em Sistema.',
+  'dash.swapSfpHint': 'O firmware 1.0.0.x numera os dois slots SFP+ ao contrário do painel frontal, o 2.0.0.x não. Automático escolhe pelo firmware do switch; pode ser alterado depois em Sistema.',
   'ports.internalIdx': 'Índice {n} do switch',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet alterado',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch inacessível',
   'sys.portMapToggle': 'Trocar as portas 9 e 10',
   'sys.dangerDesc': 'Reinicia o switch. O acesso de gestão fica indisponível durante cerca de um minuto.',
+  'dash.swapMode': 'Portas SFP+ 9 e 10',
+  'dash.swapAuto': 'Automático (pela versão do firmware)',
+  'dash.swapOn': 'Trocadas (habitual no firmware 1.0.0.x)',
+  'dash.swapOff': 'Como numeradas pelo firmware (habitual no 2.0.0.x)',
+  'sys.portMapCheck': 'Esta configuração difere do que o firmware {fw} costuma exigir. Verifique: ligue um cabo no slot marcado 9; se o link aparecer aqui na porta 10, inverta a configuração.',
 }

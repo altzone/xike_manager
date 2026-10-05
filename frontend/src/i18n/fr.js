@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Modèle',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'Numérotation des ports SFP+',
-  'sys.portMapTip': 'Sur certains SKS3200, les deux cages SFP+ sont câblées à l\'inverse de la numérotation du firmware : l\'index 9 du switch correspond à la cage marquée 10 en façade. Activez cette option si SwitchPilot affiche le lien sur le port 9 alors que votre câble est dans la cage marquée 10 (ou l\'inverse). Rien n\'est écrit sur le switch, seules les étiquettes changent.',
+  'sys.portMapTip': 'En firmware 1.0.0.x, les deux cages SFP+ sont numérotées à l\'inverse de la façade (l\'index 9 du switch est la cage marquée 10) ; le firmware 2.0.0.x les numérote comme la façade. SwitchPilot choisit selon le firmware à l\'ajout du switch. Inversez si le lien apparaît sur le port 9 alors que le câble est dans la cage marquée 10 (ou l\'inverse). Rien n\'est écrit sur le switch, seuls les libellés changent.',
   'sys.portMapDesc': 'Comment les ports 9 et 10 sont étiquetés pour ce switch. Vérifiez avec la façade : la cage qui a le câble doit être celle qui affiche un lien.',
   'sys.portMapCurrent': 'Port 9 = index {a} du switch, port 10 = index {b}',
   'sys.portMapSwap': 'Les ports 9 et 10 sont inversés sur cet appareil',
   'sys.portMapMoveDesc': 'Déplacer les descriptions avec leur port physique',
   'sys.portMapUpdated': 'Numérotation des ports mise à jour',
-  'dash.swapSfp': 'Les ports SFP+ 9 et 10 sont inversés sur cet appareil',
-  'dash.swapSfpHint': 'À laisser désactivé sauf si l\'interface web du switch numérote les cages SFP+ à l\'inverse de la façade. Modifiable plus tard dans Système.',
+  'dash.swapSfpHint': 'Le firmware 1.0.0.x numérote les deux cages SFP+ à l\'inverse de la façade, le 2.0.0.x non. Automatique choisit selon le firmware du switch ; modifiable plus tard dans Système.',
   'ports.internalIdx': 'Index {n} du switch',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet modifié',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch injoignable',
   'sys.portMapToggle': 'Inverser les ports 9 et 10',
   'sys.dangerDesc': 'Redémarre le switch. L\'accès de gestion est coupé pendant environ une minute.',
+  'dash.swapMode': 'Ports SFP+ 9 et 10',
+  'dash.swapAuto': 'Automatique (selon la version du firmware)',
+  'dash.swapOn': 'Inversés (habituel en firmware 1.0.0.x)',
+  'dash.swapOff': 'Numérotation du firmware (habituel en 2.0.0.x)',
+  'sys.portMapCheck': 'Ce réglage ne correspond pas à ce que demande habituellement le firmware {fw}. Vérifiez : branchez un câble dans la cage marquée 9 ; si le lien apparaît ici sur le port 10, inversez le réglage.',
 }

@@ -289,14 +289,13 @@ export default {
   'swdash.model': 'Modello',
   // SFP+ port numbering (issue #3)
   'sys.portMap': 'Numerazione porte SFP+',
-  'sys.portMapTip': 'Su alcune unità SKS3200 le due gabbie SFP+ sono cablate al contrario rispetto alla numerazione del firmware: l\'indice 9 dello switch è la gabbia etichettata 10 sul frontale. Attivalo se SwitchPilot mostra il link sulla porta 9 mentre il cavo è nella gabbia 10 (o viceversa). Nulla viene scritto sullo switch, cambiano solo le etichette.',
+  'sys.portMapTip': 'Con il firmware 1.0.0.x i due slot SFP+ sono numerati al contrario rispetto al pannello (l\'indice 9 dello switch è lo slot marcato 10); il firmware 2.0.0.x li numera come il pannello. SwitchPilot lo sceglie dal firmware quando aggiungi lo switch. Invertilo se il link compare sulla porta 9 con il cavo nello slot marcato 10 (o viceversa). Sullo switch non viene scritto nulla, cambiano solo le etichette.',
   'sys.portMapDesc': 'Come vengono etichettate le porte 9 e 10 su questo switch. Confronta con il frontale: la gabbia con il cavo deve essere quella che mostra il link.',
   'sys.portMapCurrent': 'Porta 9 = indice {a} dello switch, porta 10 = indice {b}',
   'sys.portMapSwap': 'Le porte 9 e 10 sono invertite su questa unità',
   'sys.portMapMoveDesc': 'Sposta le descrizioni insieme alla porta fisica',
   'sys.portMapUpdated': 'Numerazione porte aggiornata',
-  'dash.swapSfp': 'Le porte SFP+ 9 e 10 sono invertite su questa unità',
-  'dash.swapSfpHint': 'Lascia disattivato a meno che l\'interfaccia web dello switch numeri le gabbie SFP+ al contrario del frontale. Modificabile in seguito in Sistema.',
+  'dash.swapSfpHint': 'Il firmware 1.0.0.x numera i due slot SFP+ al contrario rispetto al pannello frontale, il 2.0.0.x no. Automatico sceglie in base al firmware dello switch; modificabile in seguito in Sistema.',
   'ports.internalIdx': 'Indice {n} dello switch',
   // Rebuilt UI (shell, overview, change log, confirmations)
   'changes.eee': 'Energy Efficient Ethernet modificato',
@@ -403,4 +402,9 @@ export default {
   'ui.offline': 'Switch irraggiungibile',
   'sys.portMapToggle': 'Scambia le porte 9 e 10',
   'sys.dangerDesc': 'Riavvia lo switch. L\'accesso di gestione si interrompe per circa un minuto.',
+  'dash.swapMode': 'Porte SFP+ 9 e 10',
+  'dash.swapAuto': 'Automatico (dalla versione del firmware)',
+  'dash.swapOn': 'Invertite (tipico del firmware 1.0.0.x)',
+  'dash.swapOff': 'Come numerate dal firmware (tipico del 2.0.0.x)',
+  'sys.portMapCheck': 'Questa impostazione non corrisponde a ciò che di solito richiede il firmware {fw}. Verifica: collega un cavo allo slot marcato 9; se il link compare qui sulla porta 10, inverti l\'impostazione.',
 }

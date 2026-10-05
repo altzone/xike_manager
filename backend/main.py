@@ -21,6 +21,7 @@ from auth import (hash_password_async, verify_password_async, validate_password,
                   check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH,
                   load_user, password_version)
 from switch_client import (SwitchClient, SwitchError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
+                           default_swap_sfp,
                            MAX_VLAN_ID, NUM_PORTS, MANAGEMENT_PORT)
 from sse import get_switch_client, drop_switch_client, sse_endpoint
 
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="SwitchPilot", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="SwitchPilot", version="2.1.1", lifespan=lifespan)
 if CORS_ORIGINS:
     # The UI is served from the same origin by nginx; CORS is only for external tooling.
     app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
@@ -83,7 +84,7 @@ class SwitchAdd(BaseModel):
     ip: str
     username: str = "admin"
     password: str = "admin"
-    swap_sfp_9_10: bool = False
+    swap_sfp_9_10: Optional[bool] = None  # None = decide from the firmware line (default_swap_sfp)
 
 class SwitchUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=64)
@@ -323,15 +324,18 @@ async def list_switches(user=Depends(get_current_user)):
 async def add_switch(req: SwitchAdd, user=Depends(require_admin)):
     ip = validate_host(req.ip)
     status = await _probe_switch(ip, req.username, req.password)
+    auto = req.swap_sfp_9_10 is None
+    # unknown firmware line: the firmware's own numbering (no translation)
+    swap = bool(default_swap_sfp(status.get("fw_ver"))) if auto else req.swap_sfp_9_10
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "INSERT INTO switches (name, ip, username, password, model, firmware, mac_address, swap_sfp_9_10) VALUES (?,?,?,?,?,?,?,?)",
             (req.name.strip(), ip, req.username, req.password,
              status.get("modle", ""), status.get("fw_ver", ""), status.get("sys_macaddr", ""),
-             int(req.swap_sfp_9_10)))
+             int(swap)))
         await db.commit()
         return {"id": cursor.lastrowid, "model": status.get("modle"), "firmware": status.get("fw_ver"),
-                "swap_sfp_9_10": req.swap_sfp_9_10}
+                "swap_sfp_9_10": swap, "swap_auto": auto}
 
 @app.put("/api/switches/{switch_id}")
 async def update_switch(switch_id: int, req: SwitchUpdate, user=Depends(require_admin)):
@@ -489,6 +493,9 @@ async def switch_status(switch_id: int, user=Depends(get_current_user)):
     status = await client.get_status()
     network = await client.get_network()
     status["modle"] = status.get("modle") or status.get("des", "")
+    # what this firmware line usually needs, so the UI can flag a setting that no longer matches
+    # (e.g. after a 1.0.0.x -> 2.0.0.x upgrade); None when the version is unknown
+    status["swap_sfp_suggested"] = default_swap_sfp(status.get("fw_ver"))
     return {**status, **network}
 
 

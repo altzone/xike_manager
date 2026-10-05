@@ -2,6 +2,8 @@ import aiosqlite
 import csv
 import os
 
+from switch_client import default_swap_sfp
+
 DB_PATH = os.environ.get("DB_PATH", "/opt/switchpilot/data/switchpilot.db")
 OUI_CSV = os.path.join(os.path.dirname(__file__), "oui.csv")
 
@@ -22,9 +24,15 @@ async def _migrate(db):
     """Add columns introduced after the first release (CREATE TABLE IF NOT EXISTS never does)."""
     if "swap_sfp_9_10" not in await _columns(db, "switches"):
         await db.execute("ALTER TABLE switches ADD COLUMN swap_sfp_9_10 INTEGER NOT NULL DEFAULT 0")
-        # Switches added before this setting existed were always shown with the
-        # 9/10 swap applied; keep that so an upgrade does not relabel their ports.
-        await db.execute("UPDATE switches SET swap_sfp_9_10 = 1")
+        # Switches added before this setting existed were always shown with the 9/10 swap
+        # applied. That is right for 1.0.0.x firmware and keeps their labels; a switch recorded
+        # with 2.0.0.x firmware does not swap (issue #3), so it gets its correct numbering.
+        # Unknown firmware keeps the previous behaviour.
+        cursor = await db.execute("SELECT id, firmware FROM switches")
+        for switch_id, firmware in await cursor.fetchall():
+            suggested = default_swap_sfp(firmware)
+            swap = 1 if suggested is None else int(suggested)
+            await db.execute("UPDATE switches SET swap_sfp_9_10 = ? WHERE id = ?", (swap, switch_id))
         await db.commit()
 
 
