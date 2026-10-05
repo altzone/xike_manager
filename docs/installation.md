@@ -23,17 +23,32 @@ Open **http://YOUR_SERVER_IP:8880**
 ## Install on Windows
 
 1. Download and install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
-2. Open PowerShell or Command Prompt:
+2. **Start Docker Desktop** from the Start menu and wait until it shows **"Engine running"**.
+   The first start asks to install or update **WSL 2**: run `wsl --update` (or `wsl --install`)
+   in an administrator PowerShell, then reboot.
+3. Open PowerShell or Command Prompt and check that the engine answers: `docker version` must
+   show a **`Server:`** section.
+4. Install and start SwitchPilot:
 
 ```powershell
 git clone https://github.com/altzone/xike_manager.git
 cd xike_manager
-docker compose up -d
+docker compose up -d --build
+docker compose ps        # wait for "healthy" (the first build takes a few minutes)
 ```
 
 Open **http://localhost:8880**
 
 > **Note:** If you don't have git, download the ZIP from GitHub and extract it.
+
+**Troubleshooting on Windows**
+
+| Message | Fix |
+|---|---|
+| `failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine` | Docker Desktop is not running: start it and wait for "Engine running", then run the command again. |
+| Docker Desktop does not start | Enable virtualization: Task Manager → Performance → CPU must show "Virtualization: Enabled" (otherwise turn on Intel VT-x / AMD SVM in the BIOS), and update WSL (`wsl --update`). |
+| `docker version` shows `OS/Arch: windows/amd64` under `Server:` | Right-click the Docker icon in the taskbar → **Switch to Linux containers**. |
+| The switch cannot be reached | A factory-new Xikestor switch is at `192.168.10.12`. Give the PC an extra address in that network on the Ethernet adapter connected to it (for example `192.168.10.100` / `255.255.255.0`); the container uses the PC's network. |
 
 ## Install on macOS
 
