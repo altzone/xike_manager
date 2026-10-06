@@ -125,4 +125,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LATEST: ${{ needs.image.outputs.latest }}  # a fix for an older line is not the latest release
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --latest="$LATEST" --title "SwitchPilot ${GITHUB_REF_NAME#v}" --notes-file notes.md
+        run: |
+          title="SwitchPilot ${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # made by hand on GitHub (which also creates the tag): give it the change log's notes
+            gh release edit "$GITHUB_REF_NAME" --latest="$LATEST" --title "$title" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --latest="$LATEST" --title "$title" --notes-file notes.md
+          fi

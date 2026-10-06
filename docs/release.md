@@ -21,6 +21,10 @@ image, then the GitHub release. Everything runs in GitHub Actions (`.github/work
    git push origin v2.3.0
    ```
 
+   Or, without git: on GitHub, **Releases → Draft a new release**, type the tag `v2.3.0`, target
+   `master`, and publish it (title and text do not matter). GitHub creates the tag, the CI starts
+   the same way and replaces the release's title and notes with the change log's.
+
 4. The tag's CI run then:
    - checks the tag matches `backend/version.py` (else it stops, nothing published);
    - runs the tests again and builds the image for amd64 and arm64;
