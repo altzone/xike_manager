@@ -93,13 +93,13 @@
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
       <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="storm.v2 ? t('sys.stormTipV2') : t('sys.stormTip')" compact :locked="locked('storm')">
-        <template #actions><Toggle v-model="storm.enabled" :disabled="!can('storm')" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
+        <template #actions><Toggle v-model="storm.enabled" :disabled="!can('storm') || busy.storm" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
         <div v-if="storm.enabled" class="space-y-2.5">
-          <div><label class="label" for="sys-storm-rate">{{ storm.v2 ? t('sys.stormRateMbps') : t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm')" class="input input-sm num" /></div>
+          <div><label class="label" for="sys-storm-rate">{{ storm.v2 ? t('sys.stormRateMbps') : t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm') || busy.storm" class="input input-sm num" /></div>
           <!-- 2.0.0.x: a limit per traffic type (SwitchPilot sets the same one on every port) -->
           <div v-if="storm.v2" class="space-y-1.5" role="group" :aria-label="t('sys.stormTypes')">
             <p class="label">{{ t('sys.stormTypes') }}</p>
-            <label v-for="ty in STORM_TYPES" :key="ty" class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" :value="ty" v-model="storm.types" @change="applyStorm" :disabled="!can('storm') || (storm.types.length === 1 && storm.types[0] === ty)" class="accent-accent"> {{ t('sys.storm_' + ty) }}</label>
+            <label v-for="ty in STORM_TYPES" :key="ty" class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" :value="ty" v-model="storm.types" @change="applyStorm" :disabled="!can('storm') || busy.storm || (storm.types.length === 1 && storm.types[0] === ty)" class="accent-accent"> {{ t('sys.storm_' + ty) }}</label>
           </div>
           <p v-if="storm.v2 && !storm.uniform" class="text-xs text-warn-ink bg-warn-soft rounded-lg px-2.5 py-1.5">{{ t('sys.stormMixed') }}</p>
         </div>
@@ -152,16 +152,16 @@
       </Section>
 
       <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="loopV2 ? t('sys.loopTipV2') : t('sys.loopTip')" :locked="locked('loop')">
-        <template v-if="loopV2" #actions><Toggle :model-value="loopCfg.enabled" :disabled="!can('loop')" :label="t('sys.loop')" @update:model-value="v => applyLoop({ enabled: v })" /></template>
+        <template v-if="loopV2" #actions><Toggle :model-value="loopCfg.enabled" :disabled="!can('loop')" :label="t('sys.loop')" @update:model-value="v => applyLoop(v ? { enabled: true, interval: loopCfg.interval, recovery: loopCfg.recovery } : { enabled: false })" /></template>
         <!-- 2.0.0.x: one setting for the whole switch; the ports only show where a loop was seen -->
         <template v-if="loopV2">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label class="sm:col-span-2 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="loopCfg.prevention" @change="applyLoop({ prevention: loopCfg.prevention })" :disabled="!can('loop')" class="accent-accent"> {{ t('sys.loopPrevention') }}</label>
-            <!-- the switch only shows its timers while detection runs (they read 0 otherwise) -->
-            <template v-if="loopCfg.enabled">
-              <div><label class="label" for="sys-loop-interval">{{ t('sys.loopInterval') }}</label><input id="sys-loop-interval" v-model.number="loopCfg.interval" type="number" min="0" max="100" @change="applyLoop({ interval: loopCfg.interval })" :disabled="!can('loop')" class="input input-sm num" /></div>
-              <div><label class="label" for="sys-loop-recovery">{{ t('sys.loopRecovery') }}</label><input id="sys-loop-recovery" v-model.number="loopCfg.recovery" type="number" min="0" max="100" @change="applyLoop({ recovery: loopCfg.recovery })" :disabled="!can('loop')" class="input input-sm num" /></div>
-            </template>
+            <!-- the switch only shows its timers while detection runs (they read 0 otherwise): while it is off
+                 they are kept here and sent with the toggle that turns it on -->
+            <div><label class="label" for="sys-loop-interval">{{ t('sys.loopInterval') }}</label><input id="sys-loop-interval" v-model.number="loopCfg.interval" type="number" min="0" max="100" @change="loopCfg.enabled && applyLoop({ interval: loopCfg.interval })" :disabled="!can('loop')" class="input input-sm num" /></div>
+            <div><label class="label" for="sys-loop-recovery">{{ t('sys.loopRecovery') }}</label><input id="sys-loop-recovery" v-model.number="loopCfg.recovery" type="number" min="0" max="100" @change="loopCfg.enabled && applyLoop({ recovery: loopCfg.recovery })" :disabled="!can('loop')" class="input input-sm num" /></div>
+            <p v-if="!loopCfg.enabled" class="hint sm:col-span-2">{{ t('sys.loopTimersOff') }}</p>
           </div>
           <div class="grid grid-cols-5 gap-2 mt-4">
             <div v-for="lp in loopCfg.ports" :key="lp.port" class="rounded-lg border-2 py-2 text-center text-xs font-semibold"
@@ -269,7 +269,7 @@ const base = `/api/switches/${props.switchId}`
 
 // per-section load state: loading | ok | unsupported | error
 const st = reactive({ status: 'loading', time: 'loading', stp: 'loading', storm: 'loading', igmp: 'loading', eee: 'loading', mirror: 'loading', loop: 'loading', snapshots: 'loading', changes: 'loading' })
-const busy = reactive({ net: false, sntp: false, time: false, mirror: false, snapshot: false })
+const busy = reactive({ net: false, sntp: false, time: false, mirror: false, snapshot: false, storm: false })
 
 const info = ref({})
 const net = reactive({ dhcp: false, ip: '', netmask: '', gateway: '' })
@@ -383,7 +383,9 @@ async function loadStorm() {
 async function loadIgmp() {
   const d = await api(`${base}/igmp`)
   igmp.enabled = d.config?.igmp === 'on'; igmp.fast_leave = d.config?.fast_leave === 'on'; igmp.querier = d.config?.snoop_querier === 'on'
-  igmp.v2 = 'report_flood' in (d.config || {}); igmp.report_flood = d.config?.report_flood === 'on'
+  const line = sw.current?.firmware_line
+  igmp.v2 = line != null ? line >= 2 : 'report_flood' in (d.config || {})
+  igmp.report_flood = d.config?.report_flood === 'on'
 }
 async function loadEee() { const d = await api(`${base}/eee`); if (d.supported === false) return 'unsupported'; eee.enabled = d.enabled ?? d.eee === 'on' }
 async function loadMirror() {
@@ -455,15 +457,16 @@ async function applyStp() {
     ok(t('sys.stpUpdated')); warn(res)
     // 2.0.0.x: STP and loop detection are alternatives, as on the switch's own page
     if (res.loop_turned_off) { ok(t('sys.loopTurnedOff')); section('loop', loadLoop) }
-  } catch (e) { fail(e); section('stp', loadStp) }
+  } catch (e) { fail(e); section('stp', loadStp); section('loop', loadLoop) }
 }
 async function applyStorm() {
+  busy.storm = true
   try {
     const body = { enabled: storm.enabled, rate: storm.rate || 100, ...(storm.v2 ? { types: storm.types } : {}) }
     const res = await api(`${base}/storm`, { method: 'POST', body: JSON.stringify(body) })
     ok(t('sys.stormUpdated')); warn(res)
     if (storm.v2) storm.uniform = true
-  } catch (e) { fail(e); section('storm', loadStorm) }
+  } catch (e) { fail(e); section('storm', loadStorm) } finally { busy.storm = false }
 }
 async function applyIgmp() {
   try {
@@ -491,7 +494,7 @@ async function applyLoop(changes) {
     const res = await api(`${base}/loop`, { method: 'POST', body: JSON.stringify(changes) })
     ok(t('sys.loopUpdated')); warn(res)
     if (res.stp_turned_off) { ok(t('sys.stpTurnedOff')); section('stp', loadStp) }
-  } catch (e) { fail(e) }
+  } catch (e) { fail(e); section('stp', loadStp) }
   section('loop', loadLoop)
 }
 async function saveSnapshot() {

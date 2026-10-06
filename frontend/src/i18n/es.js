@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': 'El firmware 2.0.0.x ya no ofrece este ajuste en su propia interfaz web y el formato que espera no está confirmado, así que SwitchPilot lo muestra sin cambiarlo.',
   'vlans.vlanCount': 'VLANs: {used}/{max}',
   'vlans.vlanCountTip': 'El firmware 2.0.0.x guarda hasta {max} VLAN en una tabla 802.1Q, cada una con un nombre almacenado en el switch. Cualquier VLAN de 1 a 4094 puede ser VLAN de acceso o nativa.',
-  'vlans.nameV2Hint': 'El switch conserva los primeros 16 caracteres del nombre; SwitchPilot muestra el nombre completo.',
+  'vlans.nameV2Hint': 'El switch guarda los primeros 16 bytes del nombre (16 letras latinas, menos en otras escrituras); SwitchPilot muestra el nombre completo.',
   'vlans.appliedV2': 'Aplicado: {ports} puerto(s) modificado(s), {vlans} VLAN actualizada(s)',
   'sys.stormTipV2': 'Limita el tráfico broadcast, multicast y desconocido en cada puerto, en Mbps, para proteger la red contra inundaciones de tráfico. Elige qué tipos de tráfico se limitan.',
   'sys.stormRateMbps': 'Tasa (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'ID de VLAN (1-4094)',
   'mac.truncated': 'Solo se pudo leer parte de la tabla del switch: pueden faltar entradas.',
   'mac.cpu': 'El propio switch',
+  'vlans.deleteV2': 'Esto elimina la VLAN {id} del switch: los puertos que la llevan etiquetada dejan de llevarla y el cambio se guarda en el switch.',
+  'vlans.pvidTipV2': 'En modo Access: la VLAN a la que pertenece este puerto. En modo Trunk: la VLAN nativa (tráfico sin etiquetar). Cualquier ID de VLAN de 1 a 4094 en este firmware.',
+  'sys.loopTimersOff': 'El switch solo muestra estos tiempos mientras la detección de bucles está activa: ajústalos antes de activarla.',
 }

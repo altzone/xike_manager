@@ -39,11 +39,11 @@ Docker: single container (nginx + supervisor + uvicorn)
 ### Firmware 2.0.0.x (V2)
 - A different web API for almost every setting; `SwitchClient.is_v2()` (from status.json `fw_ver`) picks the format. Formats follow the native web UI built into the official 2.0.0.x image (port settings also verified on a 2.0.0.3 unit)
 - Writes are allowed per feature by `V2_WRITABLE` / `_require_writable` (501 before anything is sent); EEE and time/SNTP stay read-only
-- Every V2 write: the native request, then a read-back (the firmware answers 200 even when it ignores a request; a mismatch is `_not_applied`, 502, nothing saved), then `save_all()` (`save_all_configs.json`, the only persistence on V2)
+- Every V2 write goes through `_write_v2` (or `_apply_vlans_v2`): the native request, a read-back (the firmware answers 200 even when it ignores a request), on a mismatch or an error the previous state put back and checked (502, nothing saved), else `save_all()` (`save_all_configs.json`, the only persistence on V2). Not read back: port settings, the management address, MAC table clear
 - VLANs: one 802.1Q table (`tag_vlan.json`: GET is an SSE stream, POST `updatedVlans`/`deletedVlans`), PVID + frame type via `port_vlan.json`. STP: `stp_rstp_mode` + `psel_cbox<N>`, every POST resets enable/mode/edges. Loop detection is global (timers read 0 while off) and exclusive with STP. Storm control per port and type, JSON numbers, Mbps. IGMP reads `fast-leave`/`report-flood` (missing = off). Static MACs keyed by VLAN; the dynamic table comes 50 entries at a time
 - Never on V2: `mac_save_static_mac_entries.json` (erases the saved static MACs), `logout.json` (logs out every session); never probe unknown URLs (`system_reboot.json`, `factory_reset.json` and `/exit` act on any method)
 - One request at a time per V2 switch (`_gate`); MAC reads and `save_all()` share `_mac_lock` (one MAC read position per switch)
-- 2.0.0.3 reads `port_states` back with 10 entries (entry 0 = port 1) instead of 11; its own page still writes 11 (entry p = port p). `vlan_write_layout()` confirms the write layout once per switch with a temporary VLAN before any real VLAN write
+- 2.0.0.3 reads `port_states` back with 10 entries (entry 0 = port 1) instead of 11; its own page still writes 11 (entry p = port p). `vlan_write_layout()` confirms the write layout once per switch with a temporary VLAN (4094 or the highest free ID) before any real VLAN write
 - Tests: `backend/tests/v2_mock.py` simulates the V2 handlers (`V2Vlans`, `V2L2`)
 
 ### Hardware Limits (MaxLinear MxL86282S)
@@ -64,7 +64,7 @@ Docker: single container (nginx + supervisor + uvicorn)
 Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, oui, vlan_profiles, change_log
 
 ### i18n
-- 12 languages, ~345 keys each; every key must exist in all 12 files (fallback to English is only for safety)
+- 12 languages, ~390 keys each; every key must exist in all 12 files (fallback to English is only for safety)
 - Composable useI18n() with t('key', {params}) function; `{param}` placeholders, every occurrence replaced
 - Technical terms (VLAN, LACP, STP, etc.) stay in English in all languages
 - Arabic has RTL support: use logical utilities (ps-/pe-/ms-/me-/start/end), never left/right; the Faceplate keeps physical order (dir="ltr")

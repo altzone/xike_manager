@@ -209,3 +209,52 @@ def test_no_vlan_is_changed_when_the_check_is_inconclusive(api, v2):
     assert r.status_code == 502 and "does not change VLANs" in r.json()["detail"], r.text
     assert [b for b in tag_posts(m) if b not in layout_posts(m)] == []  # only the check was sent
     assert m.posted("port_vlan.json") == [] and 10 not in m.v2.table and m.v2.pvids[5] == 1
+
+
+
+# ── What the review found ──
+def test_a_trunk_tagged_in_its_own_pvid_vlan_is_left_alone(api, v2):
+    """A tagged-only uplink set up on the switch's own page: writing it back as a trunk would turn
+    its PVID VLAN untagged, so it reads as unknown and is not touched when another port changes."""
+    m = api.mock
+    m.v2.table[10] = {"name": "A", "states": {p: (2 if p == 9 else 0) for p in range(1, 11)}}
+    m.v2.table[20] = {"name": "B", "states": {p: (2 if p == 9 else 0) for p in range(1, 11)}}
+    m.v2.table[1]["states"][9] = 0
+    m.v2.pvids[9] = 10
+    row = ports_of(api, v2)[9]
+    assert row["mode"] == "unknown" and row["trunk_vlans"] == [10, 20]
+    assert api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 20}]).status_code == 200
+    assert m.v2.table[10]["states"][9] == 2 and m.v2.table[1]["states"][9] == 0 and m.v2.pvids[9] == 10
+
+
+def test_a_frame_type_that_would_block_the_new_mode_is_reset(api, v2):
+    m = api.mock
+    m.v2.frames[5] = 1  # tagged frames only, set on the switch: an access port would drop everything
+    m.v2.frames[6] = 2  # untagged only: still fine for an access port
+    r = api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 10},
+                                                          {"port": 6, "mode": "access", "access_vlan": 10}])
+    assert r.status_code == 200, r.text
+    assert (m.v2.frames[5], m.v2.frames[6]) == (0, 2)
+    # same mode again: the setting is kept (it may be deliberate)
+    m.v2.frames[6] = 1
+    assert api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 6, "mode": "access", "access_vlan": 10}]).status_code == 200
+    assert m.v2.frames[6] == 1
+
+
+def test_memberships_are_not_dropped_when_a_pvid_was_not_taken(api, v2):
+    m = api.mock
+    m.v2.refuse_pvid.add(5)
+    r = api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 10}])
+    assert r.status_code == 502 and "PVID" in r.json()["detail"] and "put back" in r.json()["detail"], r.text
+    # port 5 was never sent out of VLAN 1, and VLAN 10 (created for it) is gone again
+    assert not any(e["vlan_id"] == "1" and e["port_states"][5] == 0 for b in tag_posts(m) for e in b["updatedVlans"])
+    assert m.v2.table[1]["states"][5] == 1 and 10 not in m.v2.table and m.v2.pvids[5] == 1
+    assert "save_all_configs.json" not in [ep for ep, _ in m.posts]
+
+
+def test_a_vlan_table_in_an_unknown_layout_is_refused(api, v2):
+    m = api.mock
+    original = m.v2.stream
+    m.v2.stream = lambda: original().replace('"port_states":[0,1,1,1,1,1,1,1,1,1,1]', '"port_states":[1,1,1]')
+    r = api.get(f"/api/switches/{v2}/vlans/assignments")
+    assert r.status_code == 502 and "port states" in r.json()["detail"]

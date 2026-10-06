@@ -34,9 +34,12 @@ Xikestor switches run one of two firmware lines with different web APIs: **1.0.0
 **2.0.0.x**. SwitchPilot speaks both. `firmware_line` in the switch details tells which one a
 switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. On 2.0.0.x:
 
-- **Read-back:** every write is read back from the switch (the firmware answers OK even when it
-  ignores a request).
-  - A difference is a `502` ("... did not apply ... Nothing was saved").
+- **Read-back:** writes are read back from the switch, because the firmware answers OK even when it
+  ignores a request. The exceptions are port settings, the management address and clearing the MAC
+  table.
+  - A difference or an error is a `502`. SwitchPilot first puts the setting it read before the
+    write back and checks it; the message says whether that worked ("... was put back; nothing was
+    saved").
   - Otherwise the change is saved on the switch (`save_all_configs.json`), and the answer's
     `warnings` lists a save that did not complete.
 - **Read-only:** settings in `read_only` (EEE and `time` on 2.0.0.x) answer `501` and nothing is
@@ -44,7 +47,8 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 - **One request at a time:** SwitchPilot sends one request at a time to the switch.
 - **VLAN layout check (2.0.0.3):** that firmware reads its VLAN table back with 10 port entries
   instead of 11. Before its first VLAN write on such a switch, SwitchPilot creates a temporary
-  VLAN 4094 "SwitchPilot test" with one tagged port, reads it back and deletes it. If the result is
+  VLAN "SwitchPilot test" (4094, or the highest free ID) with one tagged port, reads it back and
+  deletes it. If the result is
   unclear, VLAN writes answer `502` and nothing else is written.
 
 ## Switches
@@ -75,12 +79,12 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/switches/{id}/vlans` | VLANs `[{"vlan_id","name","defined","in_use","on_switch","deletable"}]`. On 2.0.0.x they come from the switch's 802.1Q table (names stored on the switch) plus the ones defined in SwitchPilot |
+| GET | `/api/switches/{id}/vlans` | VLANs `[{"vlan_id","name","defined","in_use","deletable","on_switch"}]` (`on_switch` on 2.0.0.x only). On 2.0.0.x they come from the switch's 802.1Q table (names stored on the switch) plus the ones defined in SwitchPilot |
 | POST | `/api/switches/{id}/vlans` | Create VLAN `{"vlan_id","name"}`. On 2.0.0.x the VLAN is also created on the switch (name cut to 16 bytes there) |
-| PUT | `/api/switches/{id}/vlans/{vid}` | Rename VLAN `{"name"}` (1-64 chars, trimmed) → `{"ok"}`; the ID and port assignments are untouched; `404` when that VLAN is not defined for this switch (a VLAN that is only in use on the switch must be created first); logged as a `vlans` change |
+| PUT | `/api/switches/{id}/vlans/{vid}` | Rename VLAN `{"name"}` (1-64 chars, trimmed) → `{"ok","warnings"}`; the ID and port assignments are untouched. 1.0.0.x: `404` when that VLAN is not defined for this switch (a VLAN only in use on the switch must be created first). 2.0.0.x: a VLAN on the switch is renamed there too (16 bytes kept), checked and saved. Logged as a `vlans` change |
 | DELETE | `/api/switches/{id}/vlans/{vid}` | Delete VLAN. On 2.0.0.x also from the switch: `400` for VLAN 1, `409` while it is a port's access/native VLAN |
 | GET | `/api/switches/{id}/vlans/assignments` | Port VLAN assignments |
-| POST | `/api/switches/{id}/vlans/apply` | Apply assignments `[{"port","mode","access_vlan","native_vlan","trunk_vlans"}]`; `mode` is `access`, `trunk`, `flat` or `unknown` (= leave as is); ports not listed keep their configuration. 1.0.0.x: tagged entries are written to their VLAN's bridge (VLANs above 63 get a free bridge), answers `{"ok","port_vlans","tag_entries","warnings"}`. 2.0.0.x: memberships and PVIDs (any VLAN 1-4094, missing VLANs are created), read back, the previous configuration put back on a refusal (`502`), then saved; answers `{"ok","port_vlans","vlans","created","warnings"}` |
+| POST | `/api/switches/{id}/vlans/apply` | Apply assignments `[{"port","mode","access_vlan","native_vlan","trunk_vlans"}]`; `mode` is `access`, `trunk`, `flat` or `unknown` (= leave as is; on 2.0.0.x a port whose native VLAN is tagged, set up on the switch, reads as `unknown`); ports not listed keep their configuration. 1.0.0.x: tagged entries are written to their VLAN's bridge (VLANs above 63 get a free bridge), answers `{"ok","port_vlans","tag_entries","warnings"}`. 2.0.0.x: memberships and PVIDs (any VLAN 1-4094, missing VLANs are created; a port whose mode changes gets "all frames" back when its accepted frame types would drop the new traffic), read back, the previous configuration put back and checked on a refusal (`502`), then saved; answers `{"ok","port_vlans","vlans","created","warnings"}` |
 | GET | `/api/switches/{id}/vlans/limits` | Limits: 1.0.0.x `{"model":"bridge","max_fid":63,"max_tag_entries":111,"used_tag_entries","max_vlan_id":4094,"max_pvid":63}`; 2.0.0.x `{"model":"8021q","max_vlans":100,"used_vlans","max_vlan_id":4094,"max_pvid":4094}` |
 | POST | `/api/switches/{id}/vlans/sync` | Sync VLANs to all switches |
 
@@ -89,7 +93,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/switches/{id}/lag` | LAG config + group names |
-| POST | `/api/switches/{id}/lag` | Apply LAG `{"system_priority","ports":[{"port","type","timeout","priority","group"}],"group_names"}` → `{"ok","warnings"}` |
+| POST | `/api/switches/{id}/lag` | Apply LAG `{"system_priority","ports":[{"port","type","timeout","priority","group"}],"group_names"}` → `{"ok","warnings"}`. `group` 0-31; `system_priority` 1-65535 on 1.0.0.x, 0-65535 on 2.0.0.x |
 
 ## System
 
@@ -101,7 +105,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | GET | `/api/switches/{id}/sntp/check` | Check SNTP sync status |
 | POST | `/api/switches/{id}/network` | Set IP `{"dhcp","ip","netmask","gateway"}` → `{"ok","dhcp","ip","accepted","note"}`; `502` when the switch refuses. SwitchPilot follows the new address only when it was talking to the switch's own address |
 | GET | `/api/switches/{id}/stp` | STP config |
-| POST | `/api/switches/{id}/stp` | Set STP `{"enabled","mode","edge_ports"?}` (`mode` `stp`/`rstp`; `edge_ports` omitted = kept) → `{"ok","warnings"}`. 2.0.0.x adds `loop_turned_off`: turning STP on turns loop detection off, as the switch's own page does |
+| POST | `/api/switches/{id}/stp` | Set STP `{"enabled","mode","edge_ports"?}` (`mode` `stp`/`rstp`; `edge_ports` omitted = kept) → `{"ok","warnings"}`. 2.0.0.x adds `loop_turned_off`: once STP runs, loop detection is turned off, as the switch's own page does |
 | GET | `/api/switches/{id}/storm` | Storm control. 1.0.0.x: the switch's `{"sctrl_state","sctrl_rate"}`. 2.0.0.x: `{"model":"per_port","enabled","rate","types","uniform","ports":[{"port","broadcast","multicast","unknown_unicast","unknown_multicast"}]}` (Mbps, 0 = no limit; `rate`/`types` summarise the ports, `uniform` is false when they differ) |
 | POST | `/api/switches/{id}/storm` | Set storm `{"enabled","rate"}` (1.0.0.x: packets/s). 2.0.0.x: `rate` in Mbps (1-1000) and `types` (`broadcast`, `multicast`, `unknown_unicast`, `unknown_multicast`; default `["broadcast"]`), the same limit on every port → `{"ok","warnings","requests"}` |
 | GET | `/api/switches/{id}/igmp` | IGMP config `{"config","entries"}`; `config` has `snoop_querier` on 1.0.0.x, `report_flood` on 2.0.0.x |
@@ -111,7 +115,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | GET | `/api/switches/{id}/mirror` | Port mirror config `{"monitoring_port","enabled","ports":[{"port","ingress","egress"}]}` |
 | POST | `/api/switches/{id}/mirror` | Set mirror `{"monitoring_port","ingress","egress","mirrored_ports"}`; `monitoring_port: 0` turns mirroring off. Two requests reach the switch, as the native UI does: the sources, then every other port (destination included) with both directions off |
 | GET | `/api/switches/{id}/loop` | Loop detection. 1.0.0.x: `[{"port","enabled","violation"}]`. 2.0.0.x: one setting for the switch, `{"model":"global","enabled","prevention","interval","recovery","ports":[{"port","violation"}]}` (`interval` in tenths of a second, `recovery` in seconds; both read 0 while detection is off) |
-| POST | `/api/switches/{id}/loop` | 1.0.0.x: `{"ports": {1: true, 2: false}}`. 2.0.0.x: `{"enabled"?,"prevention"?,"interval"?,"recovery"?}` (0-100, omitted = kept) → `{"ok","warnings","stp_turned_off"}`: turning detection on turns STP off, as the switch's own page does |
+| POST | `/api/switches/{id}/loop` | 1.0.0.x: `{"ports": {1: true, 2: false}}`. 2.0.0.x: `{"enabled"?,"prevention"?,"interval"?,"recovery"?}` (0-100). An omitted field keeps its value; the timers are only known while detection runs, so turning detection on without them sends 0, as the switch's own page does when its fields show 0. Answers `{"ok","warnings","stp_turned_off"}`: once detection runs, STP is turned off, as the switch's own page does |
 | POST | `/api/switches/{id}/reboot` | Reboot switch |
 
 ## MAC Table
@@ -123,7 +127,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | POST | `/api/switches/{id}/mac/clear` | Clear dynamic MACs |
 | GET | `/api/switches/{id}/mac/static` | Static MAC entries |
 | POST | `/api/switches/{id}/mac/static/add` | Add static `{"mac","port","fid"}` (1.0.0.x) or `{"mac","port","vlan_id"}` (2.0.0.x, VLAN 1-4094, default 1) → `{"ok","warnings"}` (a flash-save timeout is a warning, the entry is applied) |
-| POST | `/api/switches/{id}/mac/static/delete` | Delete static, same body as add (`port` is the user-facing number) → `{"ok","warnings"}`. 1.0.0.x: the backend builds the firmware payload with the add form's field names (`mac-input`, `port-input`, `fid-input`), the only shape captured on that firmware. 2.0.0.x: by MAC and VLAN, checked on the switch afterwards |
+| POST | `/api/switches/{id}/mac/static/delete` | Delete static, same body as add (`port` is the user-facing number; not needed on 2.0.0.x, where `vlan_id` may also be left out when the address has one static entry; `404` when there is none) → `{"ok","warnings"}`. 1.0.0.x: the backend builds the firmware payload with the add form's field names (`mac-input`, `port-input`, `fid-input`), the only shape captured on that firmware. 2.0.0.x: by MAC and VLAN, checked on the switch afterwards |
 
 ## Config Snapshots
 

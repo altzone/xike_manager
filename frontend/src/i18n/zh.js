@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': '固件 2.0.0.x 的自带网页界面已不再提供此设置，其所需格式也未经确认，因此 SwitchPilot 只显示而不修改它。',
   'vlans.vlanCount': 'VLAN：{used}/{max}',
   'vlans.vlanCountTip': '2.0.0.x 固件在一张 802.1Q 表中最多保存 {max} 个 VLAN，每个 VLAN 的名称都存储在交换机上。1 到 4094 之间的任何 VLAN 都可以用作 Access 或 Native VLAN。',
-  'vlans.nameV2Hint': '交换机只保存名称的前 16 个字符；SwitchPilot 显示完整名称。',
+  'vlans.nameV2Hint': '交换机只保留名称的前 16 个字节（16 个拉丁字母，其他文字更少）；SwitchPilot 显示完整名称。',
   'vlans.appliedV2': '已应用：更改了 {ports} 个端口，更新了 {vlans} 个 VLAN',
   'sys.stormTipV2': '在每个端口上限制广播、组播和未知流量（单位 Mbps），保护网络免受流量洪泛。可选择要限制的流量类型。',
   'sys.stormRateMbps': '速率（1-1000 Mbps）',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'VLAN ID（1-4094）',
   'mac.truncated': '只能从交换机读取部分表项：可能缺少一些条目。',
   'mac.cpu': '交换机本身',
+  'vlans.deleteV2': '将从交换机删除 VLAN {id}：以带标签方式承载它的端口将不再承载它，此更改会保存到交换机上。',
+  'vlans.pvidTipV2': 'Access 模式下：该端口所属的 VLAN。Trunk 模式下：原生 VLAN（无标记流量）。在此固件上可使用 1-4094 的任意 VLAN ID。',
+  'sys.loopTimersOff': '交换机仅在环路检测运行时显示这些时间：请在开启前设置。',
 }

@@ -173,7 +173,7 @@ async function createGroup() {
     toast.success(t('lag.created'))
     for (const w of res.warnings || []) toast.error(w)
     await load()
-  } catch (e) { toast.error(e.message) }
+  } catch (e) { toast.error(e.message); load() }  // a refused change may still have reached the switch
   finally { applying.value = false }
 }
 
@@ -185,7 +185,7 @@ async function removeGroup(id) {
     toast.success(t('lag.removed'))
     for (const w of res.warnings || []) toast.error(w)
     await load()
-  } catch (e) { toast.error(e.message) }
+  } catch (e) { toast.error(e.message); load() }
 }
 
 async function rename(id) {
@@ -202,7 +202,7 @@ async function applyPriority() {
     const res = await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: rowsPayload(() => null) }) })
     toast.success(t('lag.priorityUpdated'))
     for (const w of res.warnings || []) toast.error(w)
-  } catch (e) { toast.error(e.message) }
+  } catch (e) { toast.error(e.message); load() }
 }
 
 onMounted(load)

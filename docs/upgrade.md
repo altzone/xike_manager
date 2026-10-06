@@ -136,10 +136,17 @@ say it, so it is a setting on each switch, chosen from the firmware version.
 
 On switches running **2.0.0.x** firmware, SwitchPilot can now change VLANs, link aggregation,
 STP, loop detection, storm control, IGMP snooping, port mirroring and the MAC table, using the
-requests the switch's own web pages send. Every change is read back from the switch and then
-saved on it. If the switch does not apply a change, you get an error and nothing is saved:
-restarting the switch brings back its saved configuration. EEE and the clock (time/SNTP) stay
-read-only, because that firmware's own web interface no longer offers them.
+requests the switch's own web pages send. Only port settings have been confirmed on a real switch
+so far (a 2.0.0.3 unit); the rest was checked against the firmware's code and a simulated switch,
+so please report anything that does not behave as expected.
+
+After each change SwitchPilot reads the setting back from the switch and saves it on the switch
+only if it matches. The exceptions are port settings, the management address and clearing the MAC
+table. If the switch does not apply a change, SwitchPilot puts the previous setting back, checks
+it, and reports an error; nothing is saved.
+
+EEE and the clock (time/SNTP) stay read-only, because that firmware's own web interface no longer
+offers them.
 
 Things that work differently on 2.0.0.x, as on the switch's own pages:
 - VLANs live in one table of up to 100 VLANs, with their names stored on the switch (16
@@ -150,8 +157,8 @@ Things that work differently on 2.0.0.x, as on the switch's own pages:
 - IGMP has report flooding instead of a querier.
 - Static MAC entries are keyed by VLAN ID.
 
-The first VLAN change SwitchPilot makes on a **2.0.0.3** switch creates a VLAN 4094 named
-"SwitchPilot test" for a moment and deletes it right away. That firmware reads its VLAN table back
+The first VLAN change SwitchPilot makes on a **2.0.0.3** switch creates a VLAN named
+"SwitchPilot test" (VLAN 4094, or the highest free ID) for a moment and deletes it right away. That firmware reads its VLAN table back
 in a different layout from earlier 2.0.0.x builds, and this one-time check confirms how it stores
 VLAN members before any real VLAN is written.
 
@@ -234,12 +241,17 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   - `POST /storm` takes `types` (default `["broadcast"]`), and its `rate` is in Mbps (1-1000).
   - `POST /igmp` takes `report_flood`; `querier` does not exist there.
   - `POST /stp` answers `loop_turned_off`.
-  - Static MAC add/delete take `vlan_id` instead of `fid`.
+  - Static MAC add/delete take `vlan_id` instead of `fid`. A delete needs no port (the entry's VLAN
+    is looked up when it has only one), and an entry that does not exist is a `404`.
+  - `GET /mac/dynamic` carries `truncated` when not all of the table could be read.
+  - `GET /vlans/limits` returns `max_vlans`/`used_vlans`, and the `POST /vlans/apply` answer has
+    `vlans`/`created` instead of `tag_entries`.
+  - LAG groups go up to 31.
   - A write the switch answered but did not apply is a `502` ("did not apply", nothing saved).
     `warnings` lists a save that did not complete.
 - 2.2.0, every switch:
-  - MAC entries carry `vlan` (`null` on 1.0.0.x), and `GET /mac/dynamic` carries `truncated`.
-  - `GET /vlans` entries carry `on_switch` and `deletable`.
+  - MAC entries carry `vlan` (`null` on 1.0.0.x).
+  - `GET /vlans` entries carry `deletable`; on 2.0.0.x also `on_switch`.
   - `GET /switches`, `/info` and `/status` carry `firmware_line` and `read_only`.
   - A write a firmware cannot take answers `501` and nothing is sent.
 

@@ -174,6 +174,11 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
     return entries
 
 
+def v2_vlan_name(name: str) -> str:
+    """A VLAN name as a 2.0.0.x switch keeps it: its first 16 bytes (UTF-8, never half a character)."""
+    return (name or "").encode("utf-8")[:V2_VLAN_NAME_MAX].decode("utf-8", "ignore")
+
+
 def _mac_hex(text: str) -> str | None:
     """Lower-case hex digits of a MAC address or fragment, any separators; None if not hex."""
     digits = re.sub(r"[\s:.\-]", "", text.lower())
@@ -233,8 +238,9 @@ class SwitchClient:
         self._vlan_layout_lock = asyncio.Lock()
 
     def _gate(self):
-        """The one-request-at-a-time gate on 2.0.0.x (known once status.json was read), else no gate."""
-        return self._v2_gate if (firmware_line(self.fw_ver) or 1) >= 2 else contextlib.nullcontext()
+        """One request at a time, unless the switch is known to run 1.0.0.x (until status.json was
+        read the firmware is unknown, and a 2.0.0.x switch would drop a burst of connections)."""
+        return contextlib.nullcontext() if firmware_line(self.fw_ver) == 1 else self._v2_gate
 
     # ── Configuration ──
     def configure(self, ip: str, username: str, password: str):
@@ -471,6 +477,9 @@ class SwitchClient:
             states = ev.get("port_states") or []
             # PortNum+1 entries, entry p for port p (the image's own page); 2.0.0.3 sends PortNum
             # entries, entry 0 for port 1 (its page puts the unused entry 0 back before reading)
+            if len(states) not in (port_num, port_num + 1):
+                raise SwitchFormatError(f"tag_vlan.json: VLAN {ev['vlan_id']} lists {len(states)} port states "
+                                        f"for {port_num} ports")
             offset = 0 if len(states) == port_num else 1
             self._vlan_states_len = len(states)
             ports = {}
@@ -509,15 +518,24 @@ class SwitchClient:
             probe = 5
             states = [0] * (NUM_PORTS + 1)
             states[probe] = 2
-            try:
-                await self._post("tag_vlan.json", {"deletedVlans": [], "updatedVlans": [
-                    {"port_states": states, "vlan_id": str(free), "vlan_name": "SwitchPilot test"}]})
-                seen = (await self.get_vlan_table_v2()).get(free, {}).get("ports", {})
-            finally:
-                await self._post("tag_vlan.json", {"deletedVlans": [free], "updatedVlans": []})
-            if free in await self.get_vlan_table_v2():
+            seen, error = {}, None
+            async with self._mac_lock:  # holds back save_all(), which would keep the temporary VLAN
+                try:
+                    await self._post("tag_vlan.json", {"deletedVlans": [], "updatedVlans": [
+                        {"port_states": states, "vlan_id": str(free), "vlan_name": "SwitchPilot test"}]})
+                    seen = (await self.get_vlan_table_v2()).get(free, {}).get("ports", {})
+                except (SwitchError, httpx.HTTPError, json.JSONDecodeError) as e:
+                    error = e
+                try:
+                    await self._post("tag_vlan.json", {"deletedVlans": [free], "updatedVlans": []})
+                except (SwitchError, httpx.HTTPError):
+                    pass  # looked for just below
+                leftover = free in await self.get_vlan_table_v2()
+            if leftover:
                 raise SwitchError(f"tag_vlan.json: SwitchPilot could not delete VLAN {free}, created for a moment "
                                   "to check how this firmware stores VLAN members: delete it on the switch")
+            if error is not None:
+                raise error
             tagged = sorted(self.to_internal(p) for p, state in seen.items() if state == 2)
             if tagged == [probe]:
                 self._vlan_layout = "padded"
@@ -543,8 +561,7 @@ class SwitchClient:
                 states[self.to_internal(port)] = int(state)
             if plain:
                 states = states[1:]
-            name = (e.get("name") or "").encode("utf-8")[:V2_VLAN_NAME_MAX].decode("utf-8", "ignore")
-            items.append({"port_states": states, "vlan_id": str(int(e["vlan_id"])), "vlan_name": name})
+            items.append({"port_states": states, "vlan_id": str(int(e["vlan_id"])), "vlan_name": v2_vlan_name(e.get("name"))})
         for chunk in _chunks_within(items, lambda c: {"deletedVlans": [], "updatedVlans": c}, V2_BODY_MAX):
             await self._post("tag_vlan.json", {"deletedVlans": [], "updatedVlans": chunk})
 
@@ -793,8 +810,7 @@ class SwitchClient:
             "ports": ports,
         }
 
-    async def set_stp(self, enabled: bool, mode: str = "stp", edge_ports: list[int] | None = None) -> bool:
-        """Returns True when loop detection was turned off to make way for STP (2.0.0.x only)."""
+    async def set_stp(self, enabled: bool, mode: str = "stp", edge_ports: list[int] | None = None):
         if await self.is_v2():
             return await self._set_stp_v2(enabled, mode, edge_ports)
         data = {"stp_enable": "1" if enabled else "0", "stp_mode": "1" if mode == "rstp" else "0"}
@@ -802,26 +818,35 @@ class SwitchClient:
             edges = {self.to_internal(p) for p in edge_ports}
             for i in range(1, NUM_PORTS + 1):
                 data[f"Stp_Edge_{i}"] = "1" if i in edges else "0"
-        await self._post("stp.json", data)
-        return False
+        return await self._post("stp.json", data)
 
-    async def _set_stp_v2(self, enabled: bool, mode: str, edge_ports: list[int] | None) -> bool:
+    async def _set_stp_v2(self, enabled: bool, mode: str, edge_ports: list[int] | None):
         """2.0.0.x: every stp.json write sets the whole edge-port list (a port left out loses its
-        flag), so the current edge ports are sent again unless new ones are given. Its own page
-        has loop detection and STP as alternatives: applying STP turns detection off first."""
+        flag), so the current edge ports are sent again unless new ones are given."""
         if edge_ports is None:
             edge_ports = [p["port"] for p in (await self.get_stp())["ports"] if p["edge"]]
-        loop_off = False
-        if enabled:
-            loop = await self.get_loop_config()
-            if str(loop.get("detect_enable")) == "1":
-                await self._post("port_lock_cfg.json", {**_loop_form_v2(loop), "detect_enable": "0"})
-                loop_off = True
         body = {"stp_enable": "1" if enabled else "0", "stp_rstp_mode": "RSTP" if mode == "rstp" else "STP"}
         for port in sorted({self.to_internal(p) for p in edge_ports}):
             body[f"psel_cbox{port}"] = "on"
-        await self._post("stp.json", body)
-        return loop_off
+        return await self._post("stp.json", body)
+
+    async def stp_off_v2(self) -> bool:
+        """2.0.0.x: turn STP off, keeping its mode and edge ports in the request as its own page does
+        (loop detection replaces it there). True when it was on."""
+        stp = await self.get_stp()
+        if not stp["enabled"]:
+            return False
+        await self._set_stp_v2(False, stp["mode"], [p["port"] for p in stp["ports"] if p["edge"]])
+        return True
+
+    async def loop_detection_off_v2(self) -> bool:
+        """2.0.0.x: turn loop detection off, keeping prevention and the timers (STP replaces it on the
+        switch's own page). True when it was on."""
+        loop = await self.get_loop_config()
+        if str(loop.get("detect_enable")) != "1":
+            return False
+        await self._post("port_lock_cfg.json", {**_loop_form_v2(loop), "detect_enable": "0"})
+        return True
 
     # ── Loop Detection ──
     async def get_loop_status(self):
@@ -871,11 +896,9 @@ class SwitchClient:
                 data[f"checkbox_{internal}"] = "on"
         return await self._post("port_lock_cfg.json", data)
 
-    async def set_loop_v2(self, enabled: bool, prevention: bool, interval: int | None, recovery: int | None) -> bool:
-        """2.0.0.x loop detection, as its own page applies it: detection turned on turns STP off
-        (the page offers the two as alternatives). A timer given as None is left out, which keeps
-        the stored value; detection must be started with both (a missing one would run as 0).
-        Returns True when STP was turned off."""
+    async def set_loop_v2(self, enabled: bool, prevention: bool, interval: int | None, recovery: int | None):
+        """2.0.0.x loop detection. A timer given as None is left out, which keeps the stored value;
+        detection must be started with both (a missing one would run as 0)."""
         body = {"detect_enable": "1" if enabled else "0"}
         for key, value in (("time_interval", interval), ("recover_time", recovery)):
             if value is not None:
@@ -884,13 +907,7 @@ class SwitchClient:
                 raise ValueError(f"{key} is needed to start loop detection")
         if prevention:
             body["cPrev"] = "on"
-        await self._post("port_lock_cfg.json", body)
-        if enabled:
-            stp = await self.get_stp()
-            if stp["enabled"]:
-                await self._set_stp_v2(False, stp["mode"], [p["port"] for p in stp["ports"] if p["edge"]])
-                return True
-        return False
+        return await self._post("port_lock_cfg.json", body)
 
     # ── IGMP ──
     async def get_igmp_config(self):
@@ -939,16 +956,21 @@ class SwitchClient:
 
     async def set_storm_v2(self, enabled: bool, rate: int, types: list[str]) -> int:
         """2.0.0.x: the same limit on every port for the given traffic types, none for the others.
-        One request per port and type (numbers, as the native page sends them), only where the
-        setting changes. Returns the number of requests sent."""
+        Returns the number of requests sent."""
         current = await self.get_storm_control()
+        return await self.set_storm_ports_v2({p["port"]: {t: int(rate) if enabled and t in types else 0
+                                                          for t in STORM_TYPES} for p in current["ports"]}, current)
+
+    async def set_storm_ports_v2(self, target: dict, current: dict | None = None) -> int:
+        """2.0.0.x: target {user_port: {storm_type: Mbps, 0 = no limit}}. One request per port and type
+        (numbers, as the native page sends them), only where the setting changes."""
+        current = current or await self.get_storm_control()
         sent = 0
         for p in current["ports"]:
-            for storm_type in STORM_TYPES:
-                want = int(rate) if enabled and storm_type in types else 0
+            for storm_type, want in target.get(p["port"], {}).items():
                 if p[storm_type] == want:
                     continue
-                await self._post("storm_ctrl_cfg.json", {"port": self.to_internal(p["port"]), "rate": want,
+                await self._post("storm_ctrl_cfg.json", {"port": self.to_internal(p["port"]), "rate": int(want),
                                                          "state": 1 if want else 0, "storm_type": storm_type})
                 sent += 1
         return sent
@@ -1011,6 +1033,17 @@ class SwitchClient:
         if others:
             await self._post_mirror(dest, others, False, False)
         return result
+
+    async def set_mirror_ports_v2(self, monitoring_port: int, flags: dict):
+        """2.0.0.x: a destination and every other port's own (ingress, egress) flags, one request per
+        pair of flags (used to put a previous state back exactly)."""
+        dest = self.to_internal(monitoring_port)
+        groups: dict[tuple, list] = {}
+        for port, (ingress, egress) in flags.items():
+            if int(port) != int(monitoring_port):
+                groups.setdefault((bool(ingress), bool(egress)), []).append(self.to_internal(port))
+        for (ingress, egress), ports in sorted(groups.items()):
+            await self._post_mirror(dest, ports, ingress, egress)
 
     # ── EEE ──
     async def get_eee(self):
@@ -1097,10 +1130,9 @@ class SwitchClient:
         })
         return await self._save_static_macs()
 
-    async def delete_static_mac(self, mac: str, port: int, fid: int = 0, vlan: int | None = None):
+    async def delete_static_mac(self, mac: str, port: int | None, fid: int = 0, vlan: int | None = None):
         """Delete one static entry: by MAC + port + FID on 1.0.0.x (the add form's keys, the only
         shape captured there), by MAC + VLAN ID on 2.0.0.x (its own page's request)."""
-        internal = self.to_internal(port)
         if await self.is_v2():
             vid = int(vlan or 1)
             await self._post("mac_delete_static_mac_entries.json", {"mac_addr_txt": [mac], "vlan_text": [str(vid)]})
@@ -1109,6 +1141,7 @@ class SwitchClient:
                 raise SwitchError(f"mac_delete_static_mac_entries.json: the switch answered OK but still has "
                                   f"{mac} in VLAN {vid}")
             return await self._save_static_macs()
+        internal = self.to_internal(port)
         await self._post("mac_delete_static_mac_entries.json", {
             "mac-input": mac,
             "port-input": str(internal),

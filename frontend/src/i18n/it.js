@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': 'Il firmware 2.0.0.x non offre più questa impostazione nella propria interfaccia web e il formato atteso non è confermato, quindi SwitchPilot la mostra senza modificarla.',
   'vlans.vlanCount': 'VLAN: {used}/{max}',
   'vlans.vlanCountTip': 'Il firmware 2.0.0.x gestisce fino a {max} VLAN in una tabella 802.1Q, ciascuna con un nome salvato sullo switch. Qualsiasi VLAN da 1 a 4094 può essere VLAN di accesso o nativa.',
-  'vlans.nameV2Hint': 'Lo switch conserva i primi 16 caratteri del nome; SwitchPilot mostra il nome completo.',
+  'vlans.nameV2Hint': 'Lo switch conserva i primi 16 byte del nome (16 lettere latine, meno in altre scritture); SwitchPilot mostra il nome completo.',
   'vlans.appliedV2': 'Applicato: {ports} porta/e modificata/e, {vlans} VLAN aggiornata/e',
   'sys.stormTipV2': 'Limita il traffico broadcast, multicast e sconosciuto su ogni porta, in Mbps, per proteggere la rete da inondazioni di traffico. Scegli quali tipi di traffico limitare.',
   'sys.stormRateMbps': 'Velocità (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'ID VLAN (1-4094)',
   'mac.truncated': 'È stato possibile leggere solo una parte della tabella dallo switch: alcune voci potrebbero mancare.',
   'mac.cpu': 'Lo switch stesso',
+  'vlans.deleteV2': 'La VLAN {id} viene eliminata dallo switch: le porte che la trasportano con tag smettono di trasportarla e la modifica viene salvata sullo switch.',
+  'vlans.pvidTipV2': 'In modalità Access: la VLAN a cui appartiene questa porta. In modalità Trunk: la VLAN nativa (traffico non taggato). Qualsiasi ID VLAN da 1 a 4094 su questo firmware.',
+  'sys.loopTimersOff': 'Lo switch mostra questi tempi solo mentre il rilevamento loop è attivo: impostali prima di attivarlo.',
 }

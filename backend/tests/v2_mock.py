@@ -22,6 +22,7 @@ class V2Vlans:
         self.frames = {p: 0 for p in PORTS}
         self.max_vlans = max_vlans
         self.refuse = set()  # VLAN IDs the switch silently refuses to write (still answers 200)
+        self.refuse_pvid = set()  # ports whose PVID writes it silently ignores (still answers 200)
         for name in ("tag_vlan.json", "tag_vlan_cfg.json"):
             mock.responders[name] = self.tag_vlan
         for name in ("port_vlan.json", "port_vlan_cfg.json"):
@@ -86,9 +87,11 @@ class V2Vlans:
         if not isinstance(body[keys[2]], list) or not all(isinstance(body[k], str) for k in keys[:2]):
             return httpx.Response(400, text="Invalid JSON format")
         pvid, frame = int(body[keys[1]]), int(body[keys[0]])
+        if not all(isinstance(port, str) for port in body[keys[2]]):  # checked before anything is applied
+            return httpx.Response(400, text="Invalid port value")
         for port in body[keys[2]]:
-            if not isinstance(port, str):
-                return httpx.Response(400, text="Invalid port value")
+            if int(port) in self.refuse_pvid:
+                continue  # "Failed to config for port": logged, still 200
             self.pvids[int(port)] = pvid
             self.frames[int(port)] = frame
         return None
@@ -124,6 +127,7 @@ class V2L2:
         self.cursor = 0  # one read position for the whole switch
         self.has_next = True  # mac_get_next_dynamic_mac_entries.json exists on this build
         self.ignore = set()  # endpoints that answer 200 but change nothing
+        self.storm_refuse = set()  # storm types the switch answers 200 for but does not apply
         self.saved = 0
         self.static_flash_wiped = False
         for name, fn in (("port_trunk_cfg.json", self.trunk), ("stp.json", self.stp_json),
@@ -230,7 +234,7 @@ class V2L2:
             return httpx.Response(400, text="Invalid storm_type")
         if not all(isinstance(body[k], int) for k in ("port", "rate", "state")):
             return httpx.Response(400, text="Bad Request")  # a string reads as 0 on the switch
-        if self._skip(request):
+        if self._skip(request) or body["storm_type"] in self.storm_refuse:
             return None
         self.storm[body["port"]][self.STORM_KEYS[body["storm_type"]]] = body["rate"] if body["state"] else 0
         return None

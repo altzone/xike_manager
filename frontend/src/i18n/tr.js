@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': 'Firmware 2.0.0.x bu ayarı kendi web arayüzünde artık sunmuyor ve beklediği biçim doğrulanmadı; bu yüzden SwitchPilot ayarı değiştirmeden gösterir.',
   'vlans.vlanCount': 'VLAN\'lar: {used}/{max}',
   'vlans.vlanCountTip': '2.0.0.x firmware\'i tek bir 802.1Q tablosunda en fazla {max} VLAN tutar; her birinin adı switch\'te saklanır. 1-4094 arasındaki her VLAN erişim veya native VLAN olabilir.',
-  'vlans.nameV2Hint': 'Switch adın ilk 16 karakterini saklar; SwitchPilot tam adı gösterir.',
+  'vlans.nameV2Hint': 'Switch adın ilk 16 baytını saklar (16 Latin harfi, diğer yazılarda daha az); SwitchPilot adın tamamını gösterir.',
   'vlans.appliedV2': 'Uygulandı: {ports} port değişti, {vlans} VLAN güncellendi',
   'sys.stormTipV2': 'Ağı trafik taşkınlarından korumak için her porttaki yayın, çok noktaya yayın ve bilinmeyen trafiği Mbps cinsinden sınırlar. Hangi trafik türlerinin sınırlanacağını seçin.',
   'sys.stormRateMbps': 'Hız (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'VLAN ID (1-4094)',
   'mac.truncated': 'Tablonun yalnızca bir kısmı switch\'ten okunabildi: bazı kayıtlar eksik olabilir.',
   'mac.cpu': 'Switch\'in kendisi',
+  'vlans.deleteV2': 'VLAN {id} switch\'ten silinir: onu etiketli taşıyan portlar artık taşımaz ve değişiklik switch\'e kaydedilir.',
+  'vlans.pvidTipV2': 'Access modu: bu portun ait olduğu VLAN. Trunk modu: yerel VLAN (etiketsiz trafik). Bu firmware\'de 1-4094 arasındaki her VLAN ID kullanılabilir.',
+  'sys.loopTimersOff': 'Switch bu süreleri yalnızca döngü algılama çalışırken gösterir: açmadan önce ayarlayın.',
 }

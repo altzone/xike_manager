@@ -51,7 +51,7 @@ def test_a_lag_change_the_switch_ignores_is_reported_and_not_saved(api, v2):
     m = api.mock
     m.l2.ignore.add("port_trunk_cfg.json")
     r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": [{"port": 4, "type": 1, "group": 3}]})
-    assert r.status_code == 502 and "did not apply" in r.json()["detail"] and "Nothing was saved" in r.json()["detail"]
+    assert r.status_code == 502 and "did not apply" in r.json()["detail"] and "nothing was saved" in r.json()["detail"]
     assert saves(m) == 0
 
 
@@ -157,7 +157,10 @@ def test_turning_loop_detection_on_turns_stp_off_and_keeps_its_settings(api, v2)
     r = api.post(url(v2, "loop"), json={"enabled": True})
     assert r.status_code == 200, r.text
     assert r.json()["stp_turned_off"] is True
-    assert m.l2.stp == {"enable": 0, "mode": "STP", "edges": {4}}
+    # sent as the switch's own page does (mode and edge ports kept in the request); the switch itself
+    # then forgets the edge ports while STP is off
+    assert m.posted("stp.json")[-1] == {"stp_enable": "0", "stp_rstp_mode": "STP", "psel_cbox4": "on"}
+    assert m.l2.stp["enable"] == 0
 
 
 def test_loop_settings_out_of_range_are_refused(api, v2):
@@ -289,8 +292,9 @@ def test_a_static_delete_the_switch_skips_is_reported(api, v2):
     r = api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:01", "port": 4, "vlan_id": 20})
     assert r.status_code == 502 and "still has" in r.json()["detail"]
     assert len(api.get(url(v2, "mac/static")).json()) == 1
-    m.l2.ignore.clear()  # an entry that is not there (another VLAN) counts as deleted
-    assert api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:01", "port": 4, "vlan_id": 30}).status_code == 200
+    m.l2.ignore.clear()
+    r = api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:01", "port": 4, "vlan_id": 30})
+    assert r.status_code == 404  # no entry for it in VLAN 30
 
 
 def test_a_static_add_the_switch_drops_is_reported(api, v2):
@@ -372,3 +376,62 @@ def test_a_static_entry_left_on_another_port_is_reported(api, v2):
     m.l2.ignore.add("mac_add_static_mac_entries.json")  # answers 200, keeps the entry on port 3
     r = api.post(url(v2, "mac/static/add"), json={"mac": "AA:BB:CC:DD:EE:01", "port": 4, "vlan_id": 20})
     assert r.status_code == 502 and "port 4" in r.json()["detail"]
+
+
+# ── What the review found: no protection lost, nothing half-done, no silent change ──
+def test_stp_that_does_not_start_leaves_loop_detection_running(api, v2):
+    m = api.mock
+    m.l2.loop.update(cPrev="on", detect=1, interval=20, recover=30)
+    m.l2.ignore.add("stp.json")  # answers 200, STP stays off
+    r = api.post(url(v2, "stp"), json={"enabled": True, "mode": "rstp"})
+    assert r.status_code == 502 and "put back" in r.json()["detail"], r.text
+    assert m.posted("port_lock_cfg.json") == [] and m.l2.loop["detect"] == 1 and saves(m) == 0
+
+
+def test_loop_detection_that_does_not_start_leaves_stp_running(api, v2):
+    m = api.mock
+    m.l2.stp.update(enable=1, mode="RSTP", edges={2})
+    m.l2.ignore.add("port_lock_cfg.json")
+    r = api.post(url(v2, "loop"), json={"enabled": True, "interval": 10, "recovery": 10})
+    assert r.status_code == 502, r.text
+    assert m.posted("stp.json") == [] and m.l2.stp["enable"] == 1 and saves(m) == 0
+
+
+def test_storm_limits_half_applied_are_put_back(api, v2):
+    m = api.mock
+    m.l2.storm[2]["sctrl_bcast"] = 30  # set on the switch
+    m.l2.storm_refuse.add("multicast")
+    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 100, "types": ["broadcast", "multicast"]})
+    assert r.status_code == 502 and "put back" in r.json()["detail"], r.text
+    assert m.l2.storm[2]["sctrl_bcast"] == 30 and all(m.l2.storm[p]["sctrl_bcast"] == 0 for p in range(3, 11))
+    assert saves(m) == 0
+
+
+def test_mirroring_the_switch_ignores_is_put_back(api, v2):
+    m = api.mock
+    m.l2.mirror["dest"] = 7
+    m.l2.mirror["flags"][3] = [True, False]
+    m.l2.ignore.add("port_mirror.json")
+    r = api.post(url(v2, "mirror"), json={"monitoring_port": 8, "mirrored_ports": [2], "ingress": True, "egress": True})
+    assert r.status_code == 502 and "put back" in r.json()["detail"], r.text
+    assert m.l2.mirror["dest"] == 7 and m.l2.mirror["flags"][3] == [True, False] and saves(m) == 0
+
+
+def test_lag_groups_up_to_31_are_accepted(api, v2):
+    r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": [{"port": 4, "type": 1, "group": 20}]})
+    assert r.status_code == 200, r.text
+    assert api.mock.l2.lag[4]["group"] == 20
+
+
+def test_a_static_entry_is_deleted_by_its_vlan_whatever_its_ports(api, v2):
+    m = api.mock
+    m.l2.macs += [("AA:BB:CC:DD:EE:07", 20, "1, 2", True), ("AA:BB:CC:DD:EE:08", 1, 3, True),
+                  ("AA:BB:CC:DD:EE:08", 30, 3, True)]
+    # an entry on several ports, deleted without a port and without its VLAN (looked up)
+    r = api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:07"})
+    assert r.status_code == 200, r.text
+    assert m.posted("mac_delete_static_mac_entries.json")[-1] == {"mac_addr_txt": ["AA:BB:CC:DD:EE:07"], "vlan_text": ["20"]}
+    # in two VLANs: the VLAN is needed
+    assert api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:08"}).status_code == 400
+    assert api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:08", "vlan_id": 30}).status_code == 200
+    assert api.post(url(v2, "mac/static/delete"), json={"mac": "AA:BB:CC:DD:EE:09"}).status_code == 404

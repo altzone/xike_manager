@@ -52,11 +52,14 @@ Other Xikestor models using the same web API should also work.
 
 **Firmware:** SwitchPilot supports both firmware lines: **1.0.0.x** (V1) and, since 2.2.0,
 **2.0.0.x** (V2), whose web API differs for almost every setting. The 2.0.0.x support follows the
-requests the switch's own web pages send. Port settings were confirmed on a 2.0.0.3 unit; every
-other change is read back from the switch before it is saved, so anything the switch does not
-apply is reported instead of being silently lost. Please open an issue if something does not
-behave as expected on your 2.0.0.x switch. EEE and time/SNTP are read-only on 2.0.0.x: the vendor
-removed them from that firmware's own web interface.
+requests the switch's own web pages send. Only port settings have been confirmed on a real switch so
+far (a 2.0.0.3 unit); the rest was checked against the firmware's code and a simulated switch.
+
+After each change SwitchPilot reads the setting back from the switch and saves it only if it matches
+(port settings, the management address and clearing the MAC table excepted). A change the switch
+does not apply is reported and put back. Please open an issue if something does not behave as
+expected on your 2.0.0.x switch. EEE and time/SNTP are read-only on 2.0.0.x: the vendor removed them
+from that firmware's own web interface.
 
 The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
 unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check

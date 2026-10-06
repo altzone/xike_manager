@@ -56,7 +56,7 @@
               <tr>
                 <th>{{ t('ports.port') }}</th>
                 <th><span class="inline-flex items-center gap-1">{{ t('vlans.mode') }} <Tip :title="t('vlans.mode')" :text="t('vlans.modeTip')" /></span></th>
-                <th><span class="inline-flex items-center gap-1">{{ t('vlans.pvid') }} <Tip :title="t('vlans.pvid')" :text="t('vlans.pvidTip')" /></span></th>
+                <th><span class="inline-flex items-center gap-1">{{ t('vlans.pvid') }} <Tip :title="t('vlans.pvid')" :text="dot1q ? t('vlans.pvidTipV2') : t('vlans.pvidTip')" /></span></th>
                 <th><span class="inline-flex items-center gap-1">{{ t('vlans.allowed') }} <Tip :title="t('vlans.allowed')" :text="t('vlans.allowedTip')" /></span></th>
               </tr>
             </thead>
@@ -133,7 +133,7 @@
           <input id="vlan-form-name" v-model.trim="form.name" required maxlength="64" class="input" :placeholder="t('vlans.namePlaceholder')" />
         </div>
         <p v-if="!dot1q && form.id > 63" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg">{{ t('vlans.vlanIdWarn', { id: form.id }) }}</p>
-        <p v-if="dot1q && form.name.length > 16" class="hint">{{ t('vlans.nameV2Hint') }}</p>
+        <p v-if="dot1q && nameBytes(form.name) > 16" class="hint">{{ t('vlans.nameV2Hint') }}</p>
         <p v-if="formError" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ formError }}</p>
       </form>
       <template #footer>
@@ -187,6 +187,8 @@ const formError = ref('')
 const pvidVlans = computed(() => dot1q.value ? vlans.value : vlans.value.filter(v => v.vlan_id <= 63))
 function editable(r) { return can('vlans') && r.port !== 1 && !applying.value }
 const clone = x => JSON.parse(JSON.stringify(x))
+// 2.0.0.x keeps 16 bytes of a VLAN name, not 16 characters
+const nameBytes = s => new TextEncoder().encode(s || '').length
 
 function norm(r) {
   return JSON.stringify({ m: r.mode, a: r.mode === 'access' ? r.access_vlan : null, n: r.mode === 'trunk' ? r.native_vlan : null, t: r.mode === 'trunk' ? [...r.trunk_vlans].sort((a, b) => a - b) : [] })
@@ -277,9 +279,18 @@ async function refreshVlans() {
   try { await loadVlans() } catch (e) { toast.error(e.message) }
 }
 async function deleteVlan(v) {
-  const msg = t('vlans.deleteConfirm', { id: v.vlan_id }) + (v.in_use ? '\n' + t('vlans.deleteInUse', { id: v.vlan_id }) : '')
+  // 1.0.0.x: only SwitchPilot's name goes; 2.0.0.x: the VLAN is deleted from the switch, tagged ports included
+  const note = dot1q.value ? t('vlans.deleteV2', { id: v.vlan_id }) : (v.in_use ? t('vlans.deleteInUse', { id: v.vlan_id }) : '')
+  const msg = t('vlans.deleteConfirm', { id: v.vlan_id }) + (note ? '\n' + note : '')
   if (!await confirm({ title: t('common.delete'), message: msg, danger: true, confirmText: t('common.delete') })) return
   try { await api(`/api/switches/${props.switchId}/vlans/${v.vlan_id}`, { method: 'DELETE' }) } catch (e) { toast.error(e.message); return }
+  if (dot1q.value) {
+    // the ports no longer carry it: an apply must not bring it back
+    if (!dirty.value) return load()
+    const drop = r => { r.trunk_vlans = r.trunk_vlans.filter(id => id !== v.vlan_id) }
+    rows.value.forEach(drop); baseline.value.forEach(drop)
+    original.value = Object.fromEntries(baseline.value.map(r => [r.port, norm(r)]))
+  }
   await refreshVlans()
 }
 async function syncVlans() {

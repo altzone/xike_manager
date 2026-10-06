@@ -19,7 +19,7 @@
       <div class="overflow-x-auto">
         <table v-if="macs.length" class="table">
           <thead><tr>
-            <th>#</th><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.vendor') }}</th><th>{{ t('mac.port') }}</th><th>{{ v2 ? 'VLAN' : t('mac.vlanGroup') }}</th><th class="!text-end">{{ t('mac.age') }}</th>
+            <th>#</th><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.vendor') }}</th><th>{{ t('mac.port') }}</th><th>{{ v2 ? t('vlans.vlanId') : t('mac.vlanGroup') }}</th><th class="!text-end">{{ t('mac.age') }}</th>
           </tr></thead>
           <tbody>
             <tr v-for="m in macs" :key="m.idx + m.mac">
@@ -52,7 +52,7 @@
       </form>
       <div class="overflow-x-auto">
         <table v-if="statics.length" class="table">
-          <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ v2 ? 'VLAN' : t('mac.vlanGroup') }}</th><th v-if="can('static_mac')" class="w-12"></th></tr></thead>
+          <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ v2 ? t('vlans.vlanId') : t('mac.vlanGroup') }}</th><th v-if="can('static_mac')" class="w-12"></th></tr></thead>
           <tbody>
             <tr v-for="m in statics" :key="`${m.mac}-${m.port}-${m.vlan ?? m.fid}`">
               <td class="mono font-medium">{{ m.mac }}</td>
@@ -153,8 +153,10 @@ async function addStatic() {
 async function deleteStatic(m) {
   if (!await confirm({ title: t('common.delete'), message: t('mac.deleteStatic', { mac: m.mac }), danger: true, confirmText: t('common.delete') })) return
   try {
+    // 2.0.0.x deletes by MAC and VLAN; an entry on several ports has a port list ("1, 2") instead of a number
     const entry = v2.value ? { vlan_id: m.vlan ?? (Number(m.fid) || 1) } : { fid: m.fid }
-    const res = await api(`/api/switches/${props.switchId}/mac/static/delete`, { method: 'POST', body: JSON.stringify({ mac: m.mac, port: m.port, ...entry }) })
+    const port = typeof m.port === 'number' ? { port: m.port } : {}
+    const res = await api(`/api/switches/${props.switchId}/mac/static/delete`, { method: 'POST', body: JSON.stringify({ mac: m.mac, ...port, ...entry }) })
     toast.success(t('mac.staticDeleted'))
     for (const w of res.warnings || []) toast.error(w)
     await loadStatics()

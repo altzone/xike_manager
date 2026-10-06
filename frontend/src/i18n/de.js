@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': 'Firmware 2.0.0.x bietet diese Einstellung in ihrer eigenen Weboberfläche nicht mehr an und das erwartete Format ist unbestätigt, daher zeigt SwitchPilot sie an, ohne sie zu ändern.',
   'vlans.vlanCount': 'VLANs: {used}/{max}',
   'vlans.vlanCountTip': 'Firmware 2.0.0.x verwaltet bis zu {max} VLANs in einer 802.1Q-Tabelle, jeweils mit einem auf dem Switch gespeicherten Namen. Jede VLAN-ID von 1 bis 4094 kann Access- oder Native-VLAN sein.',
-  'vlans.nameV2Hint': 'Der Switch speichert die ersten 16 Zeichen des Namens; SwitchPilot zeigt den vollständigen Namen.',
+  'vlans.nameV2Hint': 'Der Switch behält die ersten 16 Bytes des Namens (16 lateinische Buchstaben, weniger in anderen Schriften); SwitchPilot zeigt den vollständigen Namen.',
   'vlans.appliedV2': 'Übernommen: {ports} Port(s) geändert, {vlans} VLAN(s) aktualisiert',
   'sys.stormTipV2': 'Begrenzt Broadcast-, Multicast- und unbekannten Datenverkehr auf jedem Port in Mbps, um das Netzwerk vor Datenfluten zu schützen. Wählen Sie, welche Verkehrsarten begrenzt werden.',
   'sys.stormRateMbps': 'Rate (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'VLAN-ID (1-4094)',
   'mac.truncated': 'Nur ein Teil der Tabelle konnte vom Switch gelesen werden: Einträge können fehlen.',
   'mac.cpu': 'Switch selbst',
+  'vlans.deleteV2': 'VLAN {id} wird vom Switch gelöscht: Ports, die es getaggt übertragen, übertragen es nicht mehr, und die Änderung wird auf dem Switch gespeichert.',
+  'vlans.pvidTipV2': 'Im Access-Modus: Das VLAN, zu dem dieser Port gehört. Im Trunk-Modus: Das native VLAN (ungetaggter Datenverkehr). Auf dieser Firmware jede VLAN-ID von 1 bis 4094.',
+  'sys.loopTimersOff': 'Der Switch zeigt diese Zeiten nur, solange die Schleifenerkennung läuft: Stellen Sie sie vor dem Einschalten ein.',
 }

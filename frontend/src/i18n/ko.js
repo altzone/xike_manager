@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': '펌웨어 2.0.0.x는 자체 웹 인터페이스에서 이 설정을 더 이상 제공하지 않으며 요구 형식도 확인되지 않아, SwitchPilot은 변경하지 않고 표시만 합니다.',
   'vlans.vlanCount': 'VLAN: {used}/{max}',
   'vlans.vlanCountTip': '펌웨어 2.0.0.x는 하나의 802.1Q 테이블에 최대 {max}개의 VLAN을 저장하며, 각 VLAN의 이름은 스위치에 저장됩니다. 1~4094의 모든 VLAN을 액세스 또는 네이티브 VLAN으로 사용할 수 있습니다.',
-  'vlans.nameV2Hint': '스위치는 이름의 처음 16자만 저장하며, SwitchPilot에는 전체 이름이 표시됩니다.',
+  'vlans.nameV2Hint': '스위치는 이름의 처음 16바이트(라틴 문자 16자, 다른 문자는 더 적음)를 저장합니다. SwitchPilot은 전체 이름을 표시합니다.',
   'vlans.appliedV2': '적용 완료: 포트 {ports}개 변경, VLAN {vlans}개 업데이트',
   'sys.stormTipV2': '각 포트의 브로드캐스트, 멀티캐스트, 알 수 없는 트래픽을 Mbps 단위로 제한하여 트래픽 폭주로부터 네트워크를 보호합니다. 제한할 트래픽 종류를 선택하세요.',
   'sys.stormRateMbps': '속도 (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'VLAN ID (1-4094)',
   'mac.truncated': '스위치에서 테이블의 일부만 읽을 수 있었습니다. 일부 항목이 누락되었을 수 있습니다.',
   'mac.cpu': '스위치 자체',
+  'vlans.deleteV2': 'VLAN {id}이(가) 스위치에서 삭제됩니다. 이 VLAN을 태그로 전달하던 포트는 더 이상 전달하지 않으며, 변경 사항은 스위치에 저장됩니다.',
+  'vlans.pvidTipV2': 'Access 모드: 이 포트가 소속될 VLAN입니다. Trunk 모드: 태그 없는 트래픽의 네이티브 VLAN입니다. 이 펌웨어에서는 1~4094의 모든 VLAN ID를 사용할 수 있습니다.',
+  'sys.loopTimersOff': '스위치는 루프 감지가 실행 중일 때만 이 시간을 표시합니다. 켜기 전에 설정하세요.',
 }

@@ -9,46 +9,61 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
 - **2.0.0.x (V2) firmware support.** Xikestor's 2.0.0.x firmware has a different web API from
   1.0.0.x for almost every setting. SwitchPilot now speaks it, using the requests the switch's
   own web pages send. They were decoded from the web interface built into Xikestor's official
-  2.0.0.x image and from its request handlers. Port settings were confirmed on an
-  SKS3200-8E2X-P running 2.0.0.3 (thanks to @tavalin, issue #3). The rest was checked against
-  a simulated switch built from the firmware's code.
+  2.0.0.x image and from its request handlers, then compared with a capture of the web interface
+  of an SKS3200-8E2X-P running 2.0.0.3 (thanks to @tavalin, issue #3). Only port settings have
+  been confirmed on a real switch so far; everything else was checked against the firmware's code
+  and a simulated switch built from it.
 
-  The firmware answers OK even when it ignores a request, so every change is read back from the
-  switch, then saved with the switch's single Save (`save_all_configs.json`). A change the switch
-  did not apply is reported as an error and nothing is saved, so restarting the switch brings back
-  its saved configuration. What 2.0.0.x switches get:
+  The firmware answers OK even when it ignores a request. So after each change SwitchPilot reads
+  the setting back from the switch, and saves it with the switch's single Save
+  (`save_all_configs.json`) only when it matches. The exceptions are port settings, the
+  management address and clearing the MAC table.
+
+  When a change was not applied, SwitchPilot puts the previous setting back, checks it and reports
+  the error; nothing is saved. What 2.0.0.x switches get:
   - **VLANs:** one 802.1Q table of up to 100 VLANs, each named on the switch (16 bytes).
     - Any VLAN ID from 1 to 4094 can be an access or native VLAN (no 0-63 limit).
-    - Applying port changes updates memberships and PVIDs in a safe order. If the switch refuses
-      part of it, the previous configuration is put back.
-    - A VLAN that is still a port's access or native VLAN cannot be deleted.
-    - 2.0.0.3 reads its VLAN table back in a different layout from the image this support was
-      built from (10 port entries instead of 11). Its own page still writes the original layout.
-      Before its first VLAN change on such a switch, SwitchPilot checks this with a temporary
-      VLAN 4094 named "SwitchPilot test" (one tagged port, deleted right away). If the result is
-      unclear, SwitchPilot changes no VLAN there.
-  - **Ports, management IP and reboot.** Port changes are saved, and a new management address is
-    saved at that address.
-  - **Link aggregation** and **port mirroring.**
+    - Applying port changes updates memberships and PVIDs in a safe order: a port only leaves a
+      VLAN once its new PVID is confirmed. If the switch refuses part of it, the previous
+      configuration is put back and checked.
+    - A port whose mode changes gets back "all frames" if the accepted frame types set on the switch
+      would drop its new traffic.
+    - A trunk set up on the switch's own page with its native VLAN tagged shows as "Unknown" and is
+      left as it is: writing it back as a SwitchPilot trunk would change it.
+    - A VLAN that is still a port's access or native VLAN cannot be deleted, and deleting a VLAN
+      deletes it from the switch (the confirmation says so).
+    - 2.0.0.3 reads its VLAN table back in a different layout from the image this support was built
+      from (10 port entries instead of 11), while its own page still writes the original layout.
+      Before its first VLAN change on such a switch, SwitchPilot checks this once with a temporary
+      VLAN "SwitchPilot test" (VLAN 4094, or the highest free ID), with one tagged port, deleted
+      right away. If the result is unclear, SwitchPilot changes no VLAN there.
+  - **Ports, management IP and reboot.**
+    - Port changes are saved.
+    - A new static management address is saved at that address when SwitchPilot follows it.
+      Otherwise, and with DHCP, the answer says how to keep it.
+  - **Link aggregation** (groups 1-31 accepted, as the switch stores them) and **port mirroring.**
   - **STP** and **loop detection.**
-    - STP: classic or rapid mode, edge ports.
+    - STP: classic or rapid mode; edge ports through the API.
     - Loop detection is a single setting for the whole switch on this firmware: block the looping
-      port, check interval, recovery time, plus the ports where a loop was seen.
-    - As on the switch's own page, STP and loop detection are alternatives: turning one on turns
-      the other off, and SwitchPilot tells you when it does.
+      port, check interval and recovery time (the switch only shows these while detection runs, so
+      the System page lets you set them before turning it on), plus the ports where a loop was seen.
+    - As on the switch's own page, STP and loop detection are alternatives. Turning one on turns
+      the other off, but only once the first is confirmed running, so the network is never left
+      with neither. SwitchPilot tells you when it does.
   - **Storm control** in Mbps (1-1000), per kind of traffic (broadcast, multicast, unknown
     unicast, unknown multicast), with the same limit on every port.
   - **IGMP snooping** with Fast Leave and report flooding (2.0.0.x has no global querier).
   - **MAC table:**
     - the whole dynamic table is read (the switch answers 50 entries at a time);
     - the search matches any part of an address, with or without separators;
-    - static entries are added and removed by VLAN ID and saved without the 1.0.0.x save request,
-      which on 2.0.0.x erases the saved static entries.
+    - static entries are added and removed by VLAN ID, including entries on several ports;
+    - they are saved without the 1.0.0.x save request, which on 2.0.0.x erases the saved static
+      entries.
 - EEE and time/SNTP stay read-only on 2.0.0.x. The vendor removed both pages from that firmware's
   web interface and their request format there is unconfirmed; their cards say so. Other writes
   that a firmware cannot take are refused with `501` before anything is sent.
-- On 2.0.0.x, SwitchPilot sends one request at a time to each switch, because that firmware
-  serves one connection at a time and queues only a few.
+- On 2.0.0.x, SwitchPilot sends one request at a time to each switch, because that firmware serves
+  one connection at a time and queues only a few.
 - `GET /api/switches`, `/info` and `/status` report `firmware_line` (1 or 2) and `read_only`.
 
 ### Fixed
@@ -56,25 +71,32 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   switches. Some were refused (storm control, EEE). Others were accepted and misread:
   - an IGMP change turned Fast Leave and report flooding off;
   - a loop detection change turned loop detection off;
-  - an STP change cleared the edge ports and the STP/RSTP mode;
-  - a VLAN created in SwitchPilot never reached the switch.
+  - an STP change cleared the edge ports and reset the mode to RSTP.
 
-  Nothing was saved on the switch either, so changes made there were lost at the next restart
-  (issue #3). See the upgrade guide for what to check on such a switch.
+  A VLAN created in SwitchPilot was never sent to the switch. Apart from port settings, nothing
+  was saved on the switch either, so changes were lost at its next restart (issue #3). See the
+  upgrade guide for what to check on such a switch.
 - Pages the switch formats differently answered `500 Internal Server Error`. They now return
   `502` naming the page and the firmware, and a snapshot keeps every section it could read
   (`meta.unavailable` lists the others).
 - The stored model and firmware of a switch are refreshed from its status page: switches added
   by the first release on 2.0.0.x firmware had no model.
-- LAG: a system priority of 0, which the switch's own page allows, was changed to 32768 the next
-  time a LAG was edited.
-- MAC table: the switch's own address shows as "Switch itself" instead of "Port 0".
+- LAG on 2.0.0.x: a system priority of 0, which the switch's own page allows, was changed to 32768
+  the next time a LAG was edited. 1.0.0.x still asks for 1-65535.
+- MAC table, every firmware: the switch's own address shows as "Switch itself" instead of
+  "Port 0".
 
 ### Changed
-- API: some reads and writes take a 2.0.0.x shape on 2.0.0.x switches (`GET`/`POST` of `loop` and
-  `storm`, `report_flood` for IGMP, `vlan_id` for static MAC entries, `truncated` and `vlan` in the
-  MAC table). Writes on 2.0.0.x return `warnings` when the save on the switch did not complete. See
-  [docs/api.md](docs/api.md).
+- API: some reads and writes take a 2.0.0.x shape on 2.0.0.x switches:
+  - `GET`/`POST` of `loop` and `storm`;
+  - `report_flood` for IGMP;
+  - `vlan_id` for static MAC entries; on 2.0.0.x a delete needs no port, and an unknown entry is
+    a `404`;
+  - `max_vlans`/`used_vlans` in `GET /vlans/limits`;
+  - `vlans`/`created` instead of `tag_entries` in the `POST /vlans/apply` answer.
+
+  Writes on 2.0.0.x return `warnings` when the save on the switch did not complete. MAC entries
+  carry `vlan` on every firmware. See [docs/api.md](docs/api.md).
 
 ## [2.1.1] - 2026-10-05
 

@@ -411,7 +411,7 @@ export default {
   'v2.readOnlyTip': 'ファームウェア 2.0.0.x は自身のWebインターフェースでこの設定を提供しておらず、期待される形式も未確認のため、SwitchPilot は変更せずに表示のみ行います。',
   'vlans.vlanCount': 'VLAN: {used}/{max}',
   'vlans.vlanCountTip': 'ファームウェア 2.0.0.x は 1 つの 802.1Q テーブルに最大 {max} 個の VLAN を保持し、それぞれの名前はスイッチに保存されます。1〜4094 の任意の VLAN をアクセス VLAN またはネイティブ VLAN にできます。',
-  'vlans.nameV2Hint': 'スイッチは名前の先頭 16 文字を保存します。SwitchPilot では完全な名前が表示されます。',
+  'vlans.nameV2Hint': 'スイッチは名前の先頭 16 バイト（ラテン文字で 16 文字、他の文字ではそれより少ない）を保持します。SwitchPilot は完全な名前を表示します。',
   'vlans.appliedV2': '適用完了: 変更したポート {ports} 件、更新した VLAN {vlans} 件',
   'sys.stormTipV2': '各ポートのブロードキャスト、マルチキャスト、不明なトラフィックを Mbps 単位で制限し、トラフィックフラッドからネットワークを保護します。制限するトラフィックの種類を選択してください。',
   'sys.stormRateMbps': 'レート (1-1000 Mbps)',
@@ -434,4 +434,7 @@ export default {
   'sys.macVlanId': 'VLAN ID (1-4094)',
   'mac.truncated': 'スイッチからテーブルの一部しか読み取れませんでした。一部のエントリが欠けている可能性があります。',
   'mac.cpu': 'スイッチ自身',
+  'vlans.deleteV2': 'VLAN {id} をスイッチから削除します。タグ付きで通していたポートはこの VLAN を通さなくなり、変更はスイッチに保存されます。',
+  'vlans.pvidTipV2': 'Accessモード: このポートが所属するVLANです。Trunkモード: タグなしトラフィックのネイティブVLANです。このファームウェアでは1〜4094の任意のVLAN IDを使用できます。',
+  'sys.loopTimersOff': 'スイッチはループ検出の実行中にのみこれらの時間を表示します。有効にする前に設定してください。',
 }
