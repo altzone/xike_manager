@@ -230,6 +230,7 @@ class SwitchClient:
         # 2.0.0.x serves one connection at a time and queues only a few (CivetWeb num_threads=1,
         # connection_queue=2, no keep-alive): its requests are sent one after another
         self._v2_gate = asyncio.Semaphore(1)
+        self._vlan_layout_lock = asyncio.Lock()
 
     def _gate(self):
         """The one-request-at-a-time gate on 2.0.0.x (known once status.json was read), else no gate."""
@@ -251,6 +252,8 @@ class SwitchClient:
         if changed:
             self._logged_in = False
             self.fw_ver = None  # another switch may answer at the new address
+            self._vlan_layout = None  # see vlan_write_layout
+            self._vlan_states_len = None
 
     def set_port_mapping(self, swap_sfp: bool):
         self.swap_sfp = bool(swap_sfp)
@@ -466,9 +469,10 @@ class SwitchClient:
                 port_num = int(ev.get("PortNum", port_num))
                 continue
             states = ev.get("port_states") or []
-            # the native UI reads port_states[1..PortNum] (index 0 unused); a 0-indexed array of
-            # exactly PortNum entries is read as such
+            # PortNum+1 entries, entry p for port p (the image's own page); 2.0.0.3 sends PortNum
+            # entries, entry 0 for port 1 (its page puts the unused entry 0 back before reading)
             offset = 0 if len(states) == port_num else 1
+            self._vlan_states_len = len(states)
             ports = {}
             for i in range(1, port_num + 1):
                 j = i - 1 + offset
@@ -483,11 +487,53 @@ class SwitchClient:
         return {self.to_user(i): {"pvid": int(raw[f"Port_{i}"]["PVID"]), "frame_type": int(raw[f"Port_{i}"]["Frame_Type"])}
                 for i in range(1, int(raw["PortNum"]) + 1)}
 
+    async def vlan_write_layout(self) -> str:
+        """How a tag_vlan.json write places the ports in port_states. "padded": PortNum+1 entries,
+        entry p for port p, entry 0 unused, which is what the 2.0.0.x web page sends (its code is the
+        same on 2.0.0.3). 2.0.0.3 reads its table back with PortNum entries instead, and no write of
+        that build was ever captured, so on such a switch SwitchPilot checks it once before touching
+        a real VLAN: a VLAN nobody uses gets one tagged port, is read back and deleted ("plain":
+        entry p-1 for port p). A wrong guess here would move every port of every VLAN written."""
+        async with self._vlan_layout_lock:
+            if self._vlan_layout:
+                return self._vlan_layout
+            table = await self.get_vlan_table_v2()
+            if self._vlan_states_len != NUM_PORTS:
+                self._vlan_layout = "padded"
+                return self._vlan_layout
+            free = next((v for v in range(MAX_VLAN_ID, 1, -1) if v not in table), None)
+            if free is None or len(table) >= V2_MAX_VLANS:
+                raise SwitchError("tag_vlan.json: before its first VLAN change on this firmware SwitchPilot checks "
+                                  "how the switch stores VLAN members with a temporary VLAN, and the VLAN table "
+                                  "is full: delete one VLAN first")
+            probe = 5
+            states = [0] * (NUM_PORTS + 1)
+            states[probe] = 2
+            try:
+                await self._post("tag_vlan.json", {"deletedVlans": [], "updatedVlans": [
+                    {"port_states": states, "vlan_id": str(free), "vlan_name": "SwitchPilot test"}]})
+                seen = (await self.get_vlan_table_v2()).get(free, {}).get("ports", {})
+            finally:
+                await self._post("tag_vlan.json", {"deletedVlans": [free], "updatedVlans": []})
+            if free in await self.get_vlan_table_v2():
+                raise SwitchError(f"tag_vlan.json: SwitchPilot could not delete VLAN {free}, created for a moment "
+                                  "to check how this firmware stores VLAN members: delete it on the switch")
+            tagged = sorted(self.to_internal(p) for p, state in seen.items() if state == 2)
+            if tagged == [probe]:
+                self._vlan_layout = "padded"
+            elif tagged == [probe + 1]:
+                self._vlan_layout = "plain"
+            else:
+                raise SwitchError(f"tag_vlan.json: a test VLAN member written for port {probe} came back as "
+                                  f"{tagged or 'no port'}; SwitchPilot does not change VLANs on this firmware")
+            return self._vlan_layout
+
     async def set_vlans_v2(self, entries: list[dict]):
         """entries: [{"vlan_id": 10, "name": "Office", "ports": {user_port: 0|1|2}}]. Each entry
         creates the VLAN or replaces its whole membership and name, as the native VLAN page
         does; sent in as few bodies as the 1023-byte limit allows. The switch answers 200 even
         when it refuses an entry: read the table back to know."""
+        plain = await self.vlan_write_layout() == "plain"
         items = []
         for e in entries:
             states = [0] * (NUM_PORTS + 1)  # index 0 unused, like the native UI
@@ -495,6 +541,8 @@ class SwitchClient:
                 if state not in (0, 1, 2):
                     raise ValueError(f"Invalid VLAN membership {state!r} for port {port}")
                 states[self.to_internal(port)] = int(state)
+            if plain:
+                states = states[1:]
             name = (e.get("name") or "").encode("utf-8")[:V2_VLAN_NAME_MAX].decode("utf-8", "ignore")
             items.append({"port_states": states, "vlan_id": str(int(e["vlan_id"])), "vlan_name": name})
         for chunk in _chunks_within(items, lambda c: {"deletedVlans": [], "updatedVlans": c}, V2_BODY_MAX):

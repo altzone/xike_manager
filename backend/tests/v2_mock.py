@@ -8,8 +8,14 @@ PORTS = range(1, 11)
 
 
 class V2Vlans:
-    def __init__(self, mock, table=None, pvids=None, max_vlans=100):
+    def __init__(self, mock, table=None, pvids=None, max_vlans=100, read_layout="padded", write_layout="padded"):
         self.mock = mock
+        # port_states as read: "padded" = PortNum+1 entries, entry p for port p (the image's
+        # firmware); "plain" = PortNum entries, entry 0 for port 1 (2.0.0.3)
+        self.read_layout = read_layout
+        # where a write's port_states holds port p: entry p ("padded", the web page's layout) or
+        # entry p-1 ("plain", never seen; SwitchPilot must detect it rather than move every port)
+        self.write_layout = write_layout
         # {vid: {"name": str, "states": {port: 0|1|2}}}: 0 not a member, 1 untagged, 2 tagged
         self.table = table if table is not None else {1: {"name": "", "states": {p: 1 for p in PORTS}}}
         self.pvids = pvids if pvids is not None else {p: 1 for p in PORTS}
@@ -27,9 +33,11 @@ class V2Vlans:
         events = [{"PortNum": 10}]
         for vid in sorted(self.table):
             e = self.table[vid]
-            events.append({"vlan_id": vid, "vlan_name": e["name"],
-                           "port_states": [0] + [e["states"].get(p, 0) for p in PORTS],
-                           "port_pvids": [12345] + [self.pvids[p] for p in PORTS]})
+            states = [e["states"].get(p, 0) for p in PORTS]
+            pvids = [self.pvids[p] for p in PORTS]
+            if self.read_layout == "padded":
+                states, pvids = [0] + states, [12345] + pvids
+            events.append({"vlan_id": vid, "vlan_name": e["name"], "port_states": states, "port_pvids": pvids})
         return "".join(f"data: {json.dumps(ev, separators=(',', ':'))}\n\n" for ev in events)
 
     def tag_vlan(self, request):
@@ -53,8 +61,13 @@ class V2Vlans:
                 continue
             if vid not in self.table and len(self.table) >= self.max_vlans:
                 continue
-            states = item["port_states"]
-            new = {p: (states[p] if isinstance(states[p], int) else 0) for p in PORTS}
+            states = item.get("port_states") or []
+            shift = 0 if self.write_layout == "padded" else 1
+
+            def entry(p):  # a missing or non-number entry is "not a member"
+                i = p - shift
+                return states[i] if 0 <= i < len(states) and isinstance(states[i], int) else 0
+            new = {p: entry(p) for p in PORTS}
             old = self.table.get(vid, {}).get("states", {})
             for p in PORTS:  # a port is never dropped from the VLAN that is its PVID
                 if new[p] == 0 and self.pvids[p] == vid and old.get(p):

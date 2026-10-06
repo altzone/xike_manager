@@ -769,6 +769,8 @@ async def _apply_vlans_v2(switch_id: int, client: SwitchClient, requested: dict)
     previous = [{"vlan_id": v, "name": table[v]["name"], "ports": table[v]["ports"]} for v in sorted(affected) if v in table]
     previous_pvids = {p: cfg[p]["pvid"] for p in pvids if p in cfg}
 
+    # settled before any write: a firmware whose layout cannot be confirmed is left untouched
+    await client.vlan_write_layout()
     step = "VLAN memberships"
     try:
         await client.set_vlans_v2(gain)

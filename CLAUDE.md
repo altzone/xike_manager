@@ -43,6 +43,7 @@ Docker: single container (nginx + supervisor + uvicorn)
 - VLANs: one 802.1Q table (`tag_vlan.json`: GET is an SSE stream, POST `updatedVlans`/`deletedVlans`), PVID + frame type via `port_vlan.json`. STP: `stp_rstp_mode` + `psel_cbox<N>`, every POST resets enable/mode/edges. Loop detection is global (timers read 0 while off) and exclusive with STP. Storm control per port and type, JSON numbers, Mbps. IGMP reads `fast-leave`/`report-flood` (missing = off). Static MACs keyed by VLAN; the dynamic table comes 50 entries at a time
 - Never on V2: `mac_save_static_mac_entries.json` (erases the saved static MACs), `logout.json` (logs out every session); never probe unknown URLs (`system_reboot.json`, `factory_reset.json` and `/exit` act on any method)
 - One request at a time per V2 switch (`_gate`); MAC reads and `save_all()` share `_mac_lock` (one MAC read position per switch)
+- 2.0.0.3 reads `port_states` back with 10 entries (entry 0 = port 1) instead of 11; its own page still writes 11 (entry p = port p). `vlan_write_layout()` confirms the write layout once per switch with a temporary VLAN before any real VLAN write
 - Tests: `backend/tests/v2_mock.py` simulates the V2 handlers (`V2Vlans`, `V2L2`)
 
 ### Hardware Limits (MaxLinear MxL86282S)

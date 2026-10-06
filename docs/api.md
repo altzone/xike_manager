@@ -42,6 +42,10 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 - **Read-only:** settings in `read_only` (EEE and `time` on 2.0.0.x) answer `501` and nothing is
   sent to the switch.
 - **One request at a time:** SwitchPilot sends one request at a time to the switch.
+- **VLAN layout check (2.0.0.3):** that firmware reads its VLAN table back with 10 port entries
+  instead of 11. Before its first VLAN write on such a switch, SwitchPilot creates a temporary
+  VLAN 4094 "SwitchPilot test" with one tagged port, reads it back and deletes it. If the result is
+  unclear, VLAN writes answer `502` and nothing else is written.
 
 ## Switches
 

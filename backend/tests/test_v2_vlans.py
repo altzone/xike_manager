@@ -165,3 +165,47 @@ def test_1_0_0_x_still_limits_access_vlans_to_its_bridges(api):
     sid = add_switch(api)
     r = api.post(f"/api/switches/{sid}/vlans/apply", json=[{"port": 2, "mode": "access", "access_vlan": 64}])
     assert r.status_code == 422
+
+
+# ── 2.0.0.3: the table reads back with PortNum entries (entry 0 = port 1) ──
+def layout_posts(m):
+    return [b for b in tag_posts(m) if any(e.get("vlan_name") == "SwitchPilot test" for e in b["updatedVlans"])
+            or b["deletedVlans"] == [4094]]
+
+
+def test_2_0_0_3_writes_are_checked_once_with_a_temporary_vlan(api, v2):
+    m = api.mock
+    m.v2.read_layout = "plain"  # what tavalin's 2.0.0.3 answers; its web page still writes 11 entries
+    rows = ports_of(api, v2)
+    assert all(r["mode"] == "flat" and r["pvid"] == 1 for r in rows.values())
+    r = api.post(f"/api/switches/{v2}/vlans", json={"vlan_id": 10, "name": "Office"})
+    assert r.status_code == 200, r.text
+    probe, cleanup = layout_posts(m)
+    assert probe["updatedVlans"][0]["vlan_id"] == "4094" and probe["updatedVlans"][0]["port_states"][5] == 2
+    assert cleanup == {"deletedVlans": [4094], "updatedVlans": []}
+    assert 4094 not in m.v2.table and m.v2.table[10]["name"] == "Office"
+    assert tag_posts(m)[-1]["updatedVlans"][0]["port_states"] == [0] * 11  # the web page's own layout
+    r = api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 10}])
+    assert r.status_code == 200, r.text
+    assert len(layout_posts(m)) == 2  # checked once per switch
+    assert m.v2.table[10]["states"][5] == 1 and m.v2.table[1]["states"][5] == 0 and m.v2.table[1]["states"][1] == 1
+
+
+def test_a_firmware_that_writes_entry_0_as_port_1_gets_its_own_layout(api, v2):
+    m = api.mock
+    m.v2.read_layout = m.v2.write_layout = "plain"
+    r = api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 10}])
+    assert r.status_code == 200, r.text
+    assert all(len(e["port_states"]) == 10 for b in tag_posts(m)[2:] for e in b["updatedVlans"])
+    assert m.v2.table[10]["states"][5] == 1 and m.v2.pvids[5] == 10
+    assert m.v2.table[1]["states"][1] == 1 and m.v2.table[1]["states"][5] == 0  # port 1 never left VLAN 1
+
+
+def test_no_vlan_is_changed_when_the_check_is_inconclusive(api, v2):
+    m = api.mock
+    m.v2.read_layout = "plain"
+    m.v2.refuse.add(4094)  # the temporary VLAN never shows up
+    r = api.post(f"/api/switches/{v2}/vlans/apply", json=[{"port": 5, "mode": "access", "access_vlan": 10}])
+    assert r.status_code == 502 and "does not change VLANs" in r.json()["detail"], r.text
+    assert [b for b in tag_posts(m) if b not in layout_posts(m)] == []  # only the check was sent
+    assert m.posted("port_vlan.json") == [] and 10 not in m.v2.table and m.v2.pvids[5] == 1

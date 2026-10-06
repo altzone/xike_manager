@@ -22,6 +22,11 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
     - Applying port changes updates memberships and PVIDs in a safe order. If the switch refuses
       part of it, the previous configuration is put back.
     - A VLAN that is still a port's access or native VLAN cannot be deleted.
+    - 2.0.0.3 reads its VLAN table back in a different layout from the image this support was
+      built from (10 port entries instead of 11). Its own page still writes the original layout.
+      Before its first VLAN change on such a switch, SwitchPilot checks this with a temporary
+      VLAN 4094 named "SwitchPilot test" (one tagged port, deleted right away). If the result is
+      unclear, SwitchPilot changes no VLAN there.
   - **Ports, management IP and reboot.** Port changes are saved, and a new management address is
     saved at that address.
   - **Link aggregation** and **port mirroring.**
