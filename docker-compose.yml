@@ -3,6 +3,11 @@ services:
     build: .
     container_name: switchpilot
     restart: unless-stopped
+    # time to finish a change being sent to a switch when the container stops (usually 1-2 s)
+    stop_grace_period: 150s
+    labels:
+      # updated when you choose to, not by a Watchtower that updates every container
+      com.centurylinklabs.watchtower.enable: "false"
     ports:
       - "8880:80"
     volumes:

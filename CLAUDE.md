@@ -61,7 +61,9 @@ Docker: single container (nginx + supervisor + uvicorn)
 - `demo` - DEMO=true in docker-compose, simulated data, all logins accepted
 
 ### Database (SQLite)
-Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, oui, vlan_profiles, change_log
+Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, oui, vlan_profiles, change_log, meta (`last_version`)
+- Migrations in `db._migrate` (`SCHEMA_VERSION`, PRAGMA user_version; new switches columns listed in `NEW_COLUMNS`). Before a start that migrates or runs another version, `_backup_before_upgrade` copies the DB to `data/backups/` (0600, 5 kept, never migrates without it); `meta.backup_pending` marks the copy until the start completes, so retries of a failing start reuse it
+- `switches.vlan_layout` = `"<fw_ver>:<layout>"` once `vlan_write_layout()` confirmed it (reused while the firmware is the same)
 
 ### i18n
 - 12 languages, ~400 keys each; every key must exist in all 12 files (fallback to English is only for safety)
@@ -78,6 +80,11 @@ Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, 
 
 ## Version
 - One number, set in `backend/version.py` (served by `GET /api/version`, shown at the bottom of the side menu) and in `frontend/package.json` (built into the page as `__APP_VERSION__`; when the two differ the page offers a reload). Bump both, the README badge and a new CHANGELOG heading together: `tests/test_version.py` checks they agree
+
+## Releases and CI
+- `.github/workflows/ci.yml`: tests + frontend build + image build on every push to master (amd64 + arm64) and every PR (amd64); a tag `vX.Y.Z` (must equal `backend/version.py`) publishes `ghcr.io/altzone/switchpilot` (amd64, arm64; `X.Y`/`X`/`latest` move only for the newest version, `.github/scripts/moving_tags.py`), then the GitHub release from the CHANGELOG section. Routine in docs/release.md
+- Stopping: supervisord stops the backend before nginx (priority; nginx stops gracefully with QUIT and would otherwise wait on the live streams). `main.end_streams_on_exit` (chained in front of uvicorn's SIGTERM handler, which is installed before sse-starlette can hook it) ends SSE streams at their next pause (`sse.stop_streams`) and cuts stragglers after 2 s. uvicorn gives running requests 100 s (`--timeout-graceful-shutdown`); `FinishSwitchChanges` keeps non-GET `/api/switches…` requests running when uvicorn cancels them, still sends their own answer, and the lifespan waits `SWITCH_CHANGES_GRACE` for them. Keep supervisord `stopwaitsecs` (backend + nginx) under compose `stop_grace_period` (150 s)
+- The image and compose carry `com.centurylinklabs.watchtower.enable=false`. The Dockerfile must stay buildable by the legacy builder (no BuildKit-only syntax such as `--platform=$BUILDPLATFORM`): Synology and Debian 12 still use Docker 20.10
 
 ## Build & Deploy
 ```bash

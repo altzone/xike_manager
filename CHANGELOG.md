@@ -3,6 +3,41 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.3.0] - 2026-10-06
+
+First step towards simple updates: SwitchPilot is now published as a ready-made Docker image, the
+database is copied before an update changes it, and stopping the container no longer cuts a change
+being sent to a switch.
+
+### Added
+- **Docker images.** Each version is built, tested and published to
+  `ghcr.io/altzone/switchpilot` (amd64 and arm64, so 64-bit Raspberry Pi too), with a GitHub
+  release whose notes are this change log. Tags: the exact version (`2.3.0`), and `2.3`, `2` and
+  `latest`, which follow the newest version of their line. The default `docker-compose.yml` still
+  builds the image itself; it moves to the published image in the next version.
+- **The database is copied before an update changes it**, to `data/backups/`
+  (`switchpilot-<previous>-to-<new>-<date>.db`, readable by the container's user only, 5 kept).
+  If the copy cannot be written, the update does not touch the database and the start stops with
+  a clear message in `docker compose logs`.
+
+### Fixed
+- **Stopping or updating the container could cut a change being sent to a switch.** Docker gave
+  SwitchPilot 10 seconds, then killed it: a longer change (a slow or unreachable switch, several
+  VLAN changes on 2.0.0.x) stopped midway, for example after the VLAN table was written but before
+  it was saved, and without its previous settings being put back; the page got no answer either.
+  Now a change already under way is finished (read back, put back if refused, saved) and answered
+  before SwitchPilot stops, for up to about two minutes; live statistics streams end at once. The
+  container gets 150 seconds in all; a normal stop takes a second or two.
+- **On 2.0.0.3 switches, the check with a temporary VLAN 4094 ran again after every restart.** Its
+  result is now kept with the switch and reused while the switch runs the same firmware.
+
+### Changed
+- **Watchtower leaves SwitchPilot alone** (label `com.centurylinklabs.watchtower.enable=false`), so
+  a Watchtower that updates every container does not restart it in the middle of a switch change.
+  Automatic updates will be an explicit choice.
+- The image's web page is built with Node.js 22 (`npm ci`, exact dependency versions). The image
+  still builds with Docker 20.10 and docker-compose v1.
+
 ## [2.2.1] - 2026-10-06
 
 ### Added

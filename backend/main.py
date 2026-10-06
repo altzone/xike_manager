@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import re
+import signal
 import socket
+import threading
 from contextlib import asynccontextmanager
 from typing import Literal, Optional
 
@@ -14,6 +16,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sse_starlette.sse import AppStatus
 
 from db import init_db, DB_PATH
 from version import VERSION
@@ -24,19 +27,109 @@ from auth import (hash_password_async, verify_password_async, validate_password,
 from switch_client import (SwitchClient, SwitchError, SwitchFormatError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
                            default_swap_sfp, firmware_line, v2_vlan_name, V2_MAX_VLANS, V2_STORM_MAX, STORM_TYPES,
                            MAX_VLAN_ID, NUM_PORTS, MANAGEMENT_PORT)
-from sse import get_switch_client, drop_switch_client, sse_endpoint
+from sse import get_switch_client, drop_switch_client, sse_endpoint, stop_streams
 
 log = logging.getLogger("switchpilot")
+if not log.handlers:
+    # shown in `docker compose logs` next to uvicorn's lines (uvicorn only sets up its own loggers)
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)-9s %(message)s"))
+    log.addHandler(_handler)
+    log.setLevel(logging.INFO)
 
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+
+
+# ── Stopping cleanly (container stop, update) ──
+# How long the shutdown waits for changes still being sent to switches, once uvicorn's own
+# graceful time (--timeout-graceful-shutdown in supervisord.conf) is over and it has cancelled them.
+# supervisord's stopwaitsecs and compose's stop_grace_period are longer than both together.
+SWITCH_CHANGES_GRACE = 20
+_switch_changes: set = set()  # requests changing a switch, still running
+
+
+class FinishSwitchChanges:
+    """A request that changes a switch (write, read-back, restore, save) runs to its end even when
+    it is cancelled, which uvicorn does to the requests still open when its graceful shutdown time
+    is over: the shutdown then waits for it (lifespan). A restart or an update of SwitchPilot
+    never leaves a switch half-changed with its previous settings not put back."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if (scope["type"] != "http" or scope["method"] in ("GET", "HEAD", "OPTIONS")
+                or not scope["path"].startswith("/api/switches")):
+            return await self.app(scope, receive, send)
+        task = asyncio.ensure_future(self.app(scope, receive, send))
+        _switch_changes.add(task)
+        task.add_done_callback(_finished_switch_change)
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # uvicorn's graceful time is over: stay open, so the change's own answer still goes
+            # out (a 502 saying the previous settings could not be put back, for instance)
+            await asyncio.wait({task}, timeout=SWITCH_CHANGES_GRACE)
+            if not task.done():
+                raise
+            await task
+
+
+def _finished_switch_change(task):
+    _switch_changes.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        log.debug("switch change ended with %r", task.exception())  # already answered or logged
+
+
+async def wait_for_switch_changes(timeout: float = SWITCH_CHANGES_GRACE):
+    pending = set(_switch_changes)
+    if pending:
+        log.warning("Stopping: waiting for %d change(s) still being sent to switches", len(pending))
+        done, pending = await asyncio.wait(pending, timeout=timeout)
+        if pending:
+            log.error("Stopping with %d switch change(s) unfinished after %ss", len(pending), timeout)
+
+
+STREAMS_CUT_AFTER = 2  # seconds: a stream still waiting on its switch then is cut
+
+
+def end_streams_on_exit():
+    """Live streams end as soon as SIGTERM/SIGINT arrives, so they never hold the stop open (uvicorn
+    waits for open connections, then cancels whatever runs). They end cleanly at their next pause
+    (sse.stop_streams); one still waiting on its switch is cut after STREAMS_CUT_AFTER seconds through
+    sse-starlette's own exit signal. sse-starlette sets that signal from a hook on uvicorn's
+    Server.handle_exit, but uvicorn installs its signal handlers before it imports this app, so that
+    hook never runs: this handler is chained in front of uvicorn's instead."""
+    if threading.current_thread() is not threading.main_thread():
+        return  # signal handlers can only be set from the main thread (not the case under tests)
+    loop = asyncio.get_running_loop()
+
+    def cut_streams():
+        AppStatus.should_exit = True
+        if AppStatus.should_exit_event is not None:
+            AppStatus.should_exit_event.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        previous = signal.getsignal(sig)
+        if not callable(previous):
+            continue  # not under uvicorn: leave the default behaviour alone
+
+        def handler(signum, frame, previous=previous):
+            stop_streams()
+            loop.call_soon_threadsafe(loop.call_later, STREAMS_CUT_AFTER, cut_streams)
+            previous(signum, frame)
+        signal.signal(sig, handler)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    end_streams_on_exit()
     yield
+    await wait_for_switch_changes()
 
 app = FastAPI(title="SwitchPilot", version=VERSION, lifespan=lifespan)
+app.add_middleware(FinishSwitchChanges)
 if CORS_ORIGINS:
     # The UI is served from the same origin by nginx; CORS is only for external tooling.
     app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
@@ -244,7 +337,20 @@ async def _switch_row(switch_id: int):
 
 async def _get_client(switch_id: int) -> SwitchClient:
     sw = await _switch_row(switch_id)
-    return get_switch_client(sw["id"], sw["ip"], sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
+    client = get_switch_client(sw["id"], sw["ip"], sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
+    fw, _, layout = (sw["vlan_layout"] or "").rpartition(":")
+    if fw and layout:
+        client.vlan_layout_known = (fw, layout)
+    client.on_vlan_layout = lambda fw, layout, sid=sw["id"]: _store_vlan_layout(sid, fw, layout)
+    return client
+
+
+async def _store_vlan_layout(switch_id: int, fw_ver: str, layout: str):
+    """Keep how this switch's firmware stores VLAN members, once confirmed with a temporary VLAN,
+    so a restart of SwitchPilot does not check it again (see SwitchClient.vlan_write_layout)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE switches SET vlan_layout = ? WHERE id = ?", (f"{fw_ver}:{layout}", switch_id))
+        await db.commit()
 
 
 async def _probe_switch(ip: str, username: str, password: str) -> dict:

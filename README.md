@@ -4,9 +4,10 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.2.1-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.3.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
-Already running SwitchPilot? Jump to **[Updating](#updating)**.
+- **New to SwitchPilot?** [Install it](#install-new-users) in three commands.
+- **Already running it?** [Update it](#update-existing-users): your data and settings are kept.
 
 ---
 
@@ -68,64 +69,74 @@ line and for your exact model.
 
 ## Quick Start
 
-### Prerequisites
+### Install (new users)
 
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed
-- Network access to your Xikestor switch
-
-### Installation
+You need [Docker](https://docs.docker.com/get-docker/) with Docker Compose (included in Docker
+Desktop and in current Docker Engine packages), and a machine that can reach your switch over the
+network.
 
 ```bash
 git clone https://github.com/altzone/xike_manager.git
 cd xike_manager
-docker compose up -d
+docker compose up -d        # the first start builds the image: a few minutes
 ```
 
-Open **http://localhost:8880** in your browser.
+Open **http://localhost:8880** (or `http://<that machine's address>:8880`), then:
 
-That's it. No SSL certificates, no reverse proxy, no configuration files needed. More options
-(ports, NAS, Raspberry Pi, reverse proxy) are in **[docs/installation.md](docs/installation.md)**.
+1. **Create the admin account**: the username and password you will use for SwitchPilot (not the
+   switch's).
+2. **Add your switch**: **Add Switch**, its address and its own login. A new Xikestor switch answers
+   on `192.168.10.12` with `admin` / `admin`.
+3. **Manage it**: dashboard, ports, VLANs, LAG, monitoring and system settings are ready.
 
-### Xikestor Default Settings
+That's it: no certificates, reverse proxy or configuration file needed. Another port, a NAS,
+Windows, macOS, a Raspberry Pi or HTTPS behind a reverse proxy: see
+**[docs/installation.md](docs/installation.md)**.
 
-| Setting | Default |
-|---------|---------|
-| **IP Address** | `192.168.10.12` |
-| **Username** | `admin` |
-| **Password** | `admin` |
+### Update (existing users)
 
-### First Run
+Your data (`./data/`: users, switches, VLAN names, descriptions, snapshots) is kept. An update
+changes nothing on your switches.
 
-1. **Create admin account** — Enter your desired username and password (this is for SwitchPilot, not the switch)
-2. **Add your switch** — Click "Add Switch", enter the switch IP (default `192.168.10.12`), username `admin`, password `admin`
-3. **Start managing** — Dashboard, Ports, VLANs, and all features are immediately available
+**1. See which version you run.** From 2.2.1 it is shown at the bottom of the side menu. With an
+older version, or from the command line:
 
-### Updating
+```bash
+docker exec switchpilot grep -rhoE "VERSION = .[0-9.]+.|version=.[0-9.]+." /app/backend --include=main.py --include=version.py
+```
 
-Your data (`./data/`) is kept across updates; database changes are applied automatically at startup.
-Nothing is written to your switches by an update.
+**2. Update**, from the folder you installed SwitchPilot in:
 
 ```bash
 cd xike_manager
-docker compose down                          # stop (releases the database file)
-cp -r data/ data-backup-$(date +%Y%m%d)/     # backup, takes a second
+docker compose down                          # stop SwitchPilot (releases the database)
+cp -r data/ data-backup-$(date +%Y%m%d)/     # your own backup, takes a second
 git pull                                     # fetch the new version
-docker compose build --no-cache              # rebuild the image (frontend + backend)
-docker compose up -d                         # start
+docker compose build --no-cache              # rebuild the image
+docker compose up -d                         # start the new version
 ```
 
-Then hard-refresh the browser once (**Ctrl+Shift+R**, **Cmd+Shift+R** on macOS) so it drops the
-old cached frontend; from 2.2.1 on, the browser picks up a new version by itself. The version you
-run is shown at the bottom of the side menu (2.2.1 and later), with a **Reload** button when a page
-left open during the update is older than the server (it shows when you come back to the page).
-Coming from the first release (before October 2026) you are logged out once. After updating to
-2.1.1, check each switch's SFP+ port numbering once under **System**: it is now set from the
-firmware line, and the page warns if a switch does not match (see the guide). With 2.2.0,
-settings on 2.0.0.x switches become editable; if you changed IGMP, loop detection or STP on such a
-switch with an earlier version, check them once (see the guide).
+On Windows (PowerShell), make the backup with `Copy-Item -Recurse data data-backup` instead.
+From 2.3.0, SwitchPilot also copies its database to `data/backups/` by itself before an update
+changes it. `docker compose down` can take a little longer if a change is still being sent to a
+switch: SwitchPilot finishes it first (150 seconds at most).
 
-Full details, what to check after the update, rollback and troubleshooting:
-**[docs/upgrade.md](docs/upgrade.md)**. What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.
+**3. Open SwitchPilot again** and check that the side menu shows the new version. Coming from a
+version older than 2.2.1, refresh the page once without the cache (**Ctrl+Shift+R**,
+**Cmd+Shift+R** on macOS); later updates are picked up by the browser on its own, and a page left
+open during the update offers a **Reload** button.
+
+**4. Check what applies to the version you came from:**
+
+| You updated from | Once after the update |
+|---|---|
+| The first release (before October 2026) | You are logged out once: log in again. |
+| Before 2.1.1 | Check each switch's SFP+ port numbering under **System** (a link on the cage labelled 9 must show on port 9). |
+| Before 2.2.0, with a 2.0.0.x switch | Settings on 2.0.0.x become editable: check IGMP, loop detection and STP on that switch once. |
+| Any version | Nothing else: read the [CHANGELOG](CHANGELOG.md) to see what is new. |
+
+Something wrong? Rolling back, what changed in each version and troubleshooting are in
+**[docs/upgrade.md](docs/upgrade.md)**.
 
 ### Running on a Specific Port
 

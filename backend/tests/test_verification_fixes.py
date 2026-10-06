@@ -91,11 +91,11 @@ def test_sse_stream_ends_when_the_account_is_no_longer_allowed(mock_switch, monk
 def test_sse_backs_off_while_the_switch_refuses_the_login(mock_switch, monkeypatch):
     sleeps = []
 
-    async def fake_sleep(seconds):
+    async def fake_pause(seconds):
         sleeps.append(seconds)
         if len(sleeps) >= 2:
             await client.close()
-    monkeypatch.setattr(sse.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(sse, "_pause", fake_pause)
     mock_switch.reject_login = True
     client = switch_client.SwitchClient("10.0.0.2", "admin", "admin")
 

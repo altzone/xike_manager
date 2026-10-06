@@ -5,10 +5,13 @@ import contextlib
 import functools
 import hashlib
 import json
+import logging
 import re
 import time
 
 import httpx
+
+log = logging.getLogger("switchpilot")
 
 # Sentinel so _get can distinguish "no default supplied" from default=None
 _UNSET = object()
@@ -236,6 +239,10 @@ class SwitchClient:
         # connection_queue=2, no keep-alive): its requests are sent one after another
         self._v2_gate = asyncio.Semaphore(1)
         self._vlan_layout_lock = asyncio.Lock()
+        # a layout confirmed earlier, (fw_ver, layout), and where to keep a new one (both set by the
+        # API from the database, so a restart does not test it again with a temporary VLAN)
+        self.vlan_layout_known = None
+        self.on_vlan_layout = None
 
     def _gate(self):
         """One request at a time, unless the switch is known to run 1.0.0.x (until status.json was
@@ -510,6 +517,10 @@ class SwitchClient:
             if self._vlan_states_len != NUM_PORTS:
                 self._vlan_layout = "padded"
                 return self._vlan_layout
+            known = self.vlan_layout_known
+            if known and self.fw_ver and known[0] == self.fw_ver and known[1] in ("padded", "plain"):
+                self._vlan_layout = known[1]  # confirmed on this switch with this same firmware
+                return self._vlan_layout
             free = next((v for v in range(MAX_VLAN_ID, 1, -1) if v not in table), None)
             if free is None or len(table) >= V2_MAX_VLANS:
                 raise SwitchError("tag_vlan.json: before its first VLAN change on this firmware SwitchPilot checks "
@@ -544,6 +555,12 @@ class SwitchClient:
             else:
                 raise SwitchError(f"tag_vlan.json: a test VLAN member written for port {probe} came back as "
                                   f"{tagged or 'no port'}; SwitchPilot does not change VLANs on this firmware")
+            self.vlan_layout_known = (self.fw_ver, self._vlan_layout)
+            if self.on_vlan_layout is not None:
+                try:
+                    await self.on_vlan_layout(self.fw_ver, self._vlan_layout)
+                except Exception as e:  # only means the check runs again after a restart
+                    log.warning("Could not store the VLAN layout of %s: %s", self.ip, e)
             return self._vlan_layout
 
     async def set_vlans_v2(self, entries: list[dict]):

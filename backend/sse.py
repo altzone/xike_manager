@@ -12,6 +12,25 @@ POLL_INTERVAL = 3  # seconds
 ERROR_INTERVAL = 15  # seconds between attempts while the switch is unreachable or refuses the login
 ACCOUNT_CHECK_TICKS = 20  # re-check the viewer's account every N ticks (about a minute)
 
+# Set when the server is stopping (main.end_streams_on_exit): every stream ends cleanly at its
+# next pause, at most half a second later
+stopping = False
+
+
+def stop_streams():
+    global stopping
+    stopping = True
+
+
+async def _pause(seconds: float):
+    """Wait between two polls of the switch, cut short when the server is stopping."""
+    end = time.monotonic() + seconds
+    while not stopping:
+        left = end - time.monotonic()
+        if left <= 0:
+            return
+        await asyncio.sleep(min(0.5, left))
+
 
 def get_switch_client(switch_id: int, ip: str, username: str, password: str,
                       swap_sfp: bool = False) -> SwitchClient:
@@ -43,7 +62,7 @@ async def stats_generator(client: SwitchClient, check=None):
     prev = {}  # internal_port -> (tx_good, rx_good): keyed by physical port so a mapping change can't pair the wrong rows
     prev_time = None
     ticks = 0
-    while not client.closed:
+    while not client.closed and not stopping:
         if check is not None and ticks % ACCOUNT_CHECK_TICKS == 0 and not await check():
             break
         ticks += 1
@@ -79,7 +98,7 @@ async def stats_generator(client: SwitchClient, check=None):
             # not "error": EventSource would treat that as a connection failure and reconnect
             yield {"event": "switch_error", "data": json.dumps({"error": str(e) or e.__class__.__name__})}
         # back off while the switch is down or refuses the login (no /authorize every 3 s)
-        await asyncio.sleep(POLL_INTERVAL if ok else ERROR_INTERVAL)
+        await _pause(POLL_INTERVAL if ok else ERROR_INTERVAL)
 
 
 async def sse_endpoint(client: SwitchClient, check=None):
