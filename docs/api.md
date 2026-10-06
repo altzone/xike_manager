@@ -16,6 +16,13 @@ Use the token as Bearer header:
 Authorization: Bearer eyJ...
 ```
 
+### Version
+```
+GET /api/version
+Response: {"version": "2.2.1"}
+```
+The SwitchPilot version the server runs (signed-in users).
+
 ### Check Setup Status
 ```
 GET /api/setup/status

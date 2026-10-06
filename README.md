@@ -4,7 +4,7 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.2.1-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 Already running SwitchPilot? Jump to **[Updating](#updating)**.
 
@@ -115,11 +115,14 @@ docker compose up -d                         # start
 ```
 
 Then hard-refresh the browser once (**Ctrl+Shift+R**, **Cmd+Shift+R** on macOS) so it drops the
-old cached frontend. Coming from the first release (before October 2026) you are logged out
-once. After updating to 2.1.1, check each switch's SFP+ port numbering once under **System**: it is
-now set from the firmware line, and the page warns if a switch does not match (see the guide).
-With 2.2.0, settings on 2.0.0.x switches become editable; if you changed IGMP, loop detection or
-STP on such a switch with an earlier version, check them once (see the guide).
+old cached frontend; from 2.2.1 on, the browser picks up a new version by itself. The version you
+run is shown at the bottom of the side menu (2.2.1 and later), with a **Reload** button when a page
+left open during the update is older than the server (it shows when you come back to the page).
+Coming from the first release (before October 2026) you are logged out once. After updating to
+2.1.1, check each switch's SFP+ port numbering once under **System**: it is now set from the
+firmware line, and the page warns if a switch does not match (see the guide). With 2.2.0,
+settings on 2.0.0.x switches become editable; if you changed IGMP, loop detection or STP on such a
+switch with an earlier version, check them once (see the guide).
 
 Full details, what to check after the update, rollback and troubleshooting:
 **[docs/upgrade.md](docs/upgrade.md)**. What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.

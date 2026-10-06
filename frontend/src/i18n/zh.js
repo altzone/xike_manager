@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': '将从交换机删除 VLAN {id}：以带标签方式承载它的端口将不再承载它，此更改会保存到交换机上。',
   'vlans.pvidTipV2': 'Access 模式下：该端口所属的 VLAN。Trunk 模式下：原生 VLAN（无标记流量）。在此固件上可使用 1-4094 的任意 VLAN ID。',
   'sys.loopTimersOff': '交换机仅在环路检测运行时显示这些时间：请在开启前设置。',
+  'ui.versionTip': '服务器上运行的 SwitchPilot 版本。点击打开更新日志。',
+  'ui.updateReload': '重新加载',
+  'ui.updateReloadTip': '服务器运行的是 SwitchPilot {version}，但此页面来自 {page}：请重新加载。',
 }

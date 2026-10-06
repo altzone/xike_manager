@@ -64,7 +64,7 @@ Docker: single container (nginx + supervisor + uvicorn)
 Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, oui, vlan_profiles, change_log
 
 ### i18n
-- 12 languages, ~390 keys each; every key must exist in all 12 files (fallback to English is only for safety)
+- 12 languages, ~400 keys each; every key must exist in all 12 files (fallback to English is only for safety)
 - Composable useI18n() with t('key', {params}) function; `{param}` placeholders, every occurrence replaced
 - Technical terms (VLAN, LACP, STP, etc.) stay in English in all languages
 - Arabic has RTL support: use logical utilities (ps-/pe-/ms-/me-/start/end), never left/right; the Faceplate keeps physical order (dir="ltr")
@@ -75,6 +75,9 @@ Tables: users, switches, vlans, port_descriptions, lag_names, config_snapshots, 
 - Confirmations through useConfirm() (translated dialog), never window.confirm; feedback through useToast()
 - Admin-only controls are hidden or disabled for viewers (auth.isAdmin); the backend enforces roles anyway
 - Every user-facing string goes through t(); add new keys to all 12 i18n files
+
+## Version
+- One number, set in `backend/version.py` (served by `GET /api/version`, shown at the bottom of the side menu) and in `frontend/package.json` (built into the page as `__APP_VERSION__`; when the two differ the page offers a reload). Bump both, the README badge and a new CHANGELOG heading together: `tests/test_version.py` checks they agree
 
 ## Build & Deploy
 ```bash

@@ -3,6 +3,21 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.2.1] - 2026-10-06
+
+### Added
+- **The version you run is shown** at the bottom of the side menu (thanks to @tavalin for asking).
+  It is the version of the server, asked again when you come back to the page or open another
+  section; a click opens this change log. Scripts can read it from `GET /api/version` (signed in).
+- When SwitchPilot was updated while a page was open, a **Reload** button appears next to the
+  version once the page has asked again. Such a page also loads itself again, once, when it fails
+  to open a section because the update removed the files it needed.
+
+### Changed
+- Browsers now check for a new version of the page each time it is opened (`index.html` is sent with
+  `Cache-Control: no-cache`; the other files keep their content hash in their name). The hard
+  refresh after an update is no longer needed from the next update on; this once it still is.
+
 ## [2.2.0] - 2026-10-06
 
 ### Added

@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'Le VLAN {id} est supprimé du switch : les ports qui le transportent en taggé ne le transportent plus, et la modification est enregistrée sur le switch.',
   'vlans.pvidTipV2': 'En mode Access : le VLAN auquel ce port appartient. En mode Trunk : le VLAN natif (trafic non taggé). Tout identifiant de VLAN de 1 à 4094 sur ce firmware.',
   'sys.loopTimersOff': 'Le switch n\'affiche ces délais que pendant la détection de boucles : réglez-les avant de l\'activer.',
+  'ui.versionTip': 'Version de SwitchPilot qui tourne sur le serveur. Ouvre la liste des changements.',
+  'ui.updateReload': 'Recharger',
+  'ui.updateReloadTip': 'Le serveur exécute SwitchPilot {version}, mais cette page vient de la {page} : rechargez-la.',
 }

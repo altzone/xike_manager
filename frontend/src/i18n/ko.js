@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'VLAN {id}이(가) 스위치에서 삭제됩니다. 이 VLAN을 태그로 전달하던 포트는 더 이상 전달하지 않으며, 변경 사항은 스위치에 저장됩니다.',
   'vlans.pvidTipV2': 'Access 모드: 이 포트가 소속될 VLAN입니다. Trunk 모드: 태그 없는 트래픽의 네이티브 VLAN입니다. 이 펌웨어에서는 1~4094의 모든 VLAN ID를 사용할 수 있습니다.',
   'sys.loopTimersOff': '스위치는 루프 감지가 실행 중일 때만 이 시간을 표시합니다. 켜기 전에 설정하세요.',
+  'ui.versionTip': '서버에서 실행 중인 SwitchPilot 버전입니다. 변경 내역을 엽니다.',
+  'ui.updateReload': '새로고침',
+  'ui.updateReloadTip': '서버에서는 SwitchPilot {version}이(가) 실행 중이지만 이 페이지는 {page} 버전입니다. 새로고침하세요.',
 }

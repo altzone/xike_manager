@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'VLAN {id} wird vom Switch gelöscht: Ports, die es getaggt übertragen, übertragen es nicht mehr, und die Änderung wird auf dem Switch gespeichert.',
   'vlans.pvidTipV2': 'Im Access-Modus: Das VLAN, zu dem dieser Port gehört. Im Trunk-Modus: Das native VLAN (ungetaggter Datenverkehr). Auf dieser Firmware jede VLAN-ID von 1 bis 4094.',
   'sys.loopTimersOff': 'Der Switch zeigt diese Zeiten nur, solange die Schleifenerkennung läuft: Stellen Sie sie vor dem Einschalten ein.',
+  'ui.versionTip': 'Auf dem Server laufende SwitchPilot-Version. Öffnet die Liste der Änderungen.',
+  'ui.updateReload': 'Neu laden',
+  'ui.updateReloadTip': 'Auf dem Server läuft SwitchPilot {version}, diese Seite stammt aber von {page}: Laden Sie sie neu.',
 }

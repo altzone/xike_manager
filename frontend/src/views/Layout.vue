@@ -87,6 +87,7 @@ import { useAuthStore } from '../stores/auth.js'
 import { useSwitchesStore } from '../stores/switches.js'
 import { useToast } from '../composables/useToast.js'
 import { useTheme } from '../composables/useTheme.js'
+import { useVersion } from '../composables/useVersion.js'
 import { useI18n } from '../i18n/index.js'
 import Btn from '../components/ui/Btn.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -101,6 +102,8 @@ const toast = useToast()
 const i18n = useI18n()
 const { t } = i18n
 const { theme, cycle } = useTheme()
+const version = useVersion()
+const CHANGELOG_URL = 'https://github.com/altzone/xike_manager/blob/master/CHANGELOG.md'
 
 const drawer = ref(false)
 const showLang = ref(false)
@@ -112,9 +115,9 @@ const pageTitle = computed(() => route.meta.title ? t(route.meta.title) : 'Switc
 watchEffect(() => { document.title = route.meta.title ? `${pageTitle.value} · SwitchPilot` : 'SwitchPilot' })
 
 function onDocClick(e) { if (langRef.value && !langRef.value.contains(e.target)) showLang.value = false }
-onMounted(() => { document.addEventListener('click', onDocClick); auth.refresh(); sw.load().catch(() => {}) })
+onMounted(() => { document.addEventListener('click', onDocClick); auth.refresh(); sw.load().catch(() => {}); version.check() })
 onUnmounted(() => { document.removeEventListener('click', onDocClick); document.title = 'SwitchPilot' })
-watch(() => route.fullPath, () => { drawer.value = false })
+watch(() => route.fullPath, () => { drawer.value = false; version.check() })
 
 // ── Sidebar (shared between desktop and the mobile drawer) ──
 const NAV = [
@@ -212,6 +215,15 @@ const SidebarContent = defineComponent({
           h('p', { class: 'text-[11px] text-side-muted' }, auth.isAdmin ? t('users.roleAdmin') : t('users.roleViewer')),
         ]),
         h(Btn, { variant: 'ghost', icon: 'logout', iconOnly: true, size: 'sm', ariaLabel: t('nav.logout'), title: t('nav.logout'), class: 'text-side-muted hover:text-white hover:bg-side-2', onClick: doLogout }),
+      ]),
+      // version running on the server; a reload offered when this page is from an earlier one
+      h('div', { class: 'px-4 pb-3 -mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] whitespace-nowrap' }, [
+        h('a', { href: CHANGELOG_URL, target: '_blank', rel: 'noopener noreferrer', title: t('ui.versionTip'), class: 'text-side-muted hover:text-white transition' },
+          [h('bdi', { dir: 'ltr' }, ['SwitchPilot ', h('span', { class: 'mono' }, version.shown.value)])]),
+        version.stale.value ? h('button', {
+          type: 'button', class: 'ms-auto inline-flex items-center gap-1 font-medium text-warn hover:text-white transition',
+          title: t('ui.updateReloadTip', { version: version.server.value, page: version.app }), onClick: () => window.location.reload(),
+        }, [h(Icon, { name: 'refresh', size: 12 }), t('ui.updateReload')]) : null,
       ]),
     ])
   },

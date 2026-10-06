@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'VLAN {id} をスイッチから削除します。タグ付きで通していたポートはこの VLAN を通さなくなり、変更はスイッチに保存されます。',
   'vlans.pvidTipV2': 'Accessモード: このポートが所属するVLANです。Trunkモード: タグなしトラフィックのネイティブVLANです。このファームウェアでは1〜4094の任意のVLAN IDを使用できます。',
   'sys.loopTimersOff': 'スイッチはループ検出の実行中にのみこれらの時間を表示します。有効にする前に設定してください。',
+  'ui.versionTip': 'サーバーで動作している SwitchPilot のバージョンです。変更履歴を開きます。',
+  'ui.updateReload': '再読み込み',
+  'ui.updateReloadTip': 'サーバーでは SwitchPilot {version} が動作していますが、このページは {page} のものです。再読み込みしてください。',
 }

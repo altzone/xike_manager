@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from db import init_db, DB_PATH
+from version import VERSION
 from auth import (hash_password_async, verify_password_async, validate_password, validate_role,
                   create_token, create_stream_token, decode_token, get_current_user, require_admin,
                   check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH,
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="SwitchPilot", version="2.2.0", lifespan=lifespan)
+app = FastAPI(title="SwitchPilot", version=VERSION, lifespan=lifespan)
 if CORS_ORIGINS:
     # The UI is served from the same origin by nginx; CORS is only for external tooling.
     app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
@@ -376,6 +377,11 @@ async def login(req: LoginRequest, request: Request):
 @app.get("/api/auth/me")
 async def me(user=Depends(get_current_user)):
     return user
+
+@app.get("/api/version")
+async def version(user=Depends(get_current_user)):
+    """The SwitchPilot version this server runs (the web page compares it with its own build)."""
+    return {"version": VERSION}
 
 @app.post("/api/auth/stream-token")
 async def stream_token(user=Depends(get_current_user)):

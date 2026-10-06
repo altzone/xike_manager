@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'VLAN {id} switch\'ten silinir: onu etiketli taşıyan portlar artık taşımaz ve değişiklik switch\'e kaydedilir.',
   'vlans.pvidTipV2': 'Access modu: bu portun ait olduğu VLAN. Trunk modu: yerel VLAN (etiketsiz trafik). Bu firmware\'de 1-4094 arasındaki her VLAN ID kullanılabilir.',
   'sys.loopTimersOff': 'Switch bu süreleri yalnızca döngü algılama çalışırken gösterir: açmadan önce ayarlayın.',
+  'ui.versionTip': 'Sunucuda çalışan SwitchPilot sürümü. Değişiklik listesini açar.',
+  'ui.updateReload': 'Yeniden yükle',
+  'ui.updateReloadTip': 'Sunucuda SwitchPilot {version} çalışıyor, ancak bu sayfa {page} sürümünden: sayfayı yeniden yükleyin.',
 }

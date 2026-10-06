@@ -29,9 +29,20 @@ docker compose logs -f --tail=50                      # watch the first start, C
 A healthy start ends with `Application startup complete.` and `Uvicorn running on http://127.0.0.1:8000`.
 
 Then, in your browser, do a hard refresh (**Ctrl+Shift+R**, or **Cmd+Shift+R** on macOS) once so it
-drops the old cached frontend. Coming from a version before the session key change (section 3),
-you are asked to log in again once; after that, sessions survive upgrades as long as
+drops the old cached frontend (needed when updating to 2.2.1 or an earlier version; later updates
+are picked up by the browser on its own). Coming from a version before the session key change
+(section 3), you are asked to log in again once; after that, sessions survive upgrades as long as
 `data/secret_key` (or your own `SECRET_KEY`) is kept.
+
+**Which version is running?** From 2.2.1 it is shown at the bottom of the side menu. It comes from
+the server: the page asks when it is loaded, when you come back to it (other tab or window) and when
+you open another section, at most once a minute. When the page itself was loaded before the update,
+a **Reload** button appears next to it. From the command line, with any version (the container must
+be running):
+
+```bash
+docker exec switchpilot grep -rhoE "VERSION = .[0-9.]+.|version=.[0-9.]+." /app/backend --include=main.py --include=version.py
+```
 
 > **You edited `docker-compose.yml` (port, secret, volume path)?** `git pull` keeps your edits
 > unless the same lines changed upstream. If it refuses to pull, run `git stash`, then `git pull`,
@@ -279,7 +290,8 @@ Please open an issue with the `docker compose logs` output so it can be fixed.
 | Symptom | What to do |
 |---|---|
 | `no such column: swap_sfp_9_10` in the logs | The startup migration did not run. Check the first lines of `docker compose logs` for an error before `Application startup complete`, make sure `./data` is writable by the container, then `docker compose restart`. |
-| Ports page still looks like the old version | Hard refresh the browser (Ctrl+Shift+R). |
+| Ports page still looks like the old version | Hard refresh the browser (Ctrl+Shift+R). From 2.2.1, click **Reload** at the bottom of the side menu if it is shown. |
+| The side menu still shows the old version number | Reload the page (F5) first. If the number does not change, the new container is not running: check `docker compose ps` and that `docker compose build` ended without error, then `docker compose up -d` again. |
 | `database is locked` at startup | Another SwitchPilot container is using the same `data/` folder. Stop it first. |
 | Ports 9 and 10 look inverted after the upgrade | Switches were set to the numbering of their firmware line (1.0.0.x swapped, 2.0.0.x not; see the change log). Check the cage labelled 9 as described above and flip the setting under System if your unit differs. |
 | Logged out right after the upgrade | Expected once: the session key changed. Log in again. |

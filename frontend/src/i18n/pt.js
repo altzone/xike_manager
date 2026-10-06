@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'Isso exclui a VLAN {id} do switch: as portas que a transportam com tag deixam de transportá-la e a alteração é salva no switch.',
   'vlans.pvidTipV2': 'No modo Access: a VLAN à qual esta porta pertence. No modo Trunk: a VLAN nativa (tráfego sem tag). Qualquer ID de VLAN de 1 a 4094 neste firmware.',
   'sys.loopTimersOff': 'O switch só mostra estes tempos enquanto a detecção de loop está ativa: ajuste-os antes de ativá-la.',
+  'ui.versionTip': 'Versão do SwitchPilot em execução no servidor. Abre a lista de alterações.',
+  'ui.updateReload': 'Recarregar',
+  'ui.updateReloadTip': 'O servidor executa o SwitchPilot {version}, mas esta página é da {page}: recarregue-a.',
 }

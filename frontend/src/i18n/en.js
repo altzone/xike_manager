@@ -437,4 +437,7 @@ export default {
   'vlans.deleteV2': 'This deletes VLAN {id} from the switch: ports that carry it tagged stop carrying it, and the change is saved on the switch.',
   'vlans.pvidTipV2': 'For Access mode: the VLAN this port belongs to. For Trunk mode: the native VLAN (untagged traffic). Any VLAN ID from 1 to 4094 on this firmware.',
   'sys.loopTimersOff': 'The switch shows these timers only while loop detection runs: set them before turning it on.',
+  'ui.versionTip': 'SwitchPilot version running on the server. Opens the list of changes.',
+  'ui.updateReload': 'Reload',
+  'ui.updateReloadTip': 'The server runs SwitchPilot {version}, but this page was loaded from {page}: reload it.',
 }
