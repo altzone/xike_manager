@@ -1,5 +1,7 @@
 """Xikestor SKS3200-8E2X API Client"""
 import asyncio
+import collections
+import contextlib
 import functools
 import hashlib
 import json
@@ -17,6 +19,15 @@ SFP_PORTS = (9, 10)
 MAX_FID = 63           # PVID/native VLAN max
 MAX_TAG_ENTRIES = 111  # Tag VLAN table max entries
 MAX_VLAN_ID = 4094     # 802.1Q max usable VID
+V2_MAX_VLANS = 100      # 2.0.0.x: slots in the 802.1Q table
+V2_VLAN_NAME_MAX = 16   # 2.0.0.x: bytes kept of a VLAN name
+V2_BODY_MAX = 1023      # 2.0.0.x: bytes the VLAN handlers read from a request body
+V2_MAC_PAGE = 50        # 2.0.0.x: dynamic MAC entries per answer (mac_get_next_... gives the next ones)
+V2_MAC_MAX_PAGES = 40   # read at most this many pages of the dynamic table (2000 entries)
+V2_STORM_MAX = 1000     # 2.0.0.x: highest storm control rate, Mbps
+# 2.0.0.x storm control: traffic type as the switch names it in a request -> its key in the reading
+STORM_TYPES = {"broadcast": "sctrl_bcast", "multicast": "sctrl_mcast",
+               "unknown_unicast": "sctrl_unucast", "unknown_multicast": "sctrl_unmcast"}
 MANAGEMENT_PORT = 1    # the port SwitchPilot usually reaches the switch through
 
 
@@ -134,10 +145,10 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
         items = []
 
     def field(entry, *suffixes, default=""):
-        for key, value in entry.items():
-            lk = key.lower()
-            if any(lk.endswith(s) for s in suffixes):
-                return value
+        for suffix in suffixes:  # in order of preference
+            for key, value in entry.items():
+                if key.lower().endswith(suffix):
+                    return value
         return default
 
     entries = []
@@ -149,15 +160,47 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
         try:
             port = port_to_user(int(port_raw))
         except (TypeError, ValueError):
-            port = port_raw
+            port = port_raw  # 2.0.0.x writes "1, 2" for an entry on several ports
+        vlan = field(e, "vlan_id", default=None)
         entries.append({
             "idx": str(field(e, "_idx", default="")),
             "mac": mac,
             "port": port,
             "fid": str(field(e, "_fid", "vlan_id", default="0")),
+            # 2.0.0.x keys its entries by VLAN ID (static ones are added and deleted by it)
+            "vlan": int(vlan) if str(vlan).isdigit() else None,
             "age": str(field(e, "age_timer", default="")),
         })
     return entries
+
+
+def _mac_hex(text: str) -> str | None:
+    """Lower-case hex digits of a MAC address or fragment, any separators; None if not hex."""
+    digits = re.sub(r"[\s:.\-]", "", text.lower())
+    return digits if re.fullmatch(r"[0-9a-f]+", digits) else None
+
+
+def _loop_form_v2(cfg: dict) -> dict:
+    """The 2.0.0.x loop settings as its page posts them back: the prevention box (left out when
+    off, which the switch reads as off) and the two timers."""
+    form = {k: str(cfg[k]) for k in ("time_interval", "recover_time") if str(cfg.get(k, "")) != ""}
+    if cfg.get("cPrev") == "on":
+        form["cPrev"] = "on"
+    return form
+
+
+def _chunks_within(items: list, wrap, limit: int):
+    """Split items into consecutive lists whose wrapped compact JSON stays within limit bytes."""
+    chunk = []
+    for item in items:
+        if chunk and len(json.dumps(wrap(chunk + [item]), separators=(",", ":")).encode()) > limit:
+            yield chunk
+            chunk = []
+        if len(json.dumps(wrap([item]), separators=(",", ":")).encode()) > limit:
+            raise ValueError("A VLAN entry does not fit in one request")
+        chunk.append(item)
+    if chunk:
+        yield chunk
 
 
 def _alert_key(text: str) -> str | None:
@@ -181,6 +224,16 @@ class SwitchClient:
         self.closed = False
         self._login_lock = asyncio.Lock()
         self._last_login = 0.0
+        # 2.0.0.x keeps one read position for both MAC tables (per switch, not per session), which
+        # its save also moves
+        self._mac_lock = asyncio.Lock()
+        # 2.0.0.x serves one connection at a time and queues only a few (CivetWeb num_threads=1,
+        # connection_queue=2, no keep-alive): its requests are sent one after another
+        self._v2_gate = asyncio.Semaphore(1)
+
+    def _gate(self):
+        """The one-request-at-a-time gate on 2.0.0.x (known once status.json was read), else no gate."""
+        return self._v2_gate if (firmware_line(self.fw_ver) or 1) >= 2 else contextlib.nullcontext()
 
     # ── Configuration ──
     def configure(self, ip: str, username: str, password: str):
@@ -223,9 +276,10 @@ class SwitchClient:
     async def login(self) -> bool:
         usr_md5 = hashlib.md5(self.username.encode()).hexdigest()
         pwd_md5 = hashlib.md5(self.password.encode()).hexdigest()
-        r = await self.client.get(f"{self.base}/authorize", params={
-            "loginusr": usr_md5, "loginpwd": pwd_md5
-        })
+        async with self._gate():
+            r = await self.client.get(f"{self.base}/authorize", params={
+                "loginusr": usr_md5, "loginpwd": pwd_md5
+            })
         # Success is a redirect to setup.html (1.0.0.x) or index.html?page= (2.0.0.x);
         # a bad password is a 200 that redirects to login.html.
         self._logged_in = r.status_code == 200 and "login.html" not in r.text
@@ -249,14 +303,15 @@ class SwitchClient:
                 raise SwitchError(f"Login to switch {self.ip} failed (check its credentials)")
 
     async def _raw_get(self, endpoint: str, params: dict | None = None) -> httpx.Response:
-        try:
-            return await self.client.get(f"{self.base}/{endpoint}", params=params)
-        except httpx.TimeoutException:
-            raise
-        except httpx.TransportError:
-            # the switch drops the pooled connection after /authorize on some firmware;
-            # a GET is safe to send again on a fresh connection (a POST never is)
-            return await self.client.get(f"{self.base}/{endpoint}", params=params)
+        async with self._gate():
+            try:
+                return await self.client.get(f"{self.base}/{endpoint}", params=params)
+            except httpx.TimeoutException:
+                raise
+            except httpx.TransportError:
+                # the switch drops the pooled connection after /authorize on some firmware;
+                # a GET is safe to send again on a fresh connection (a POST never is)
+                return await self.client.get(f"{self.base}/{endpoint}", params=params)
 
     async def _get(self, endpoint: str, params: dict | None = None, default=_UNSET):
         await self._ensure_login()
@@ -286,10 +341,12 @@ class SwitchClient:
         # compact JSON, like the native UI's axios: some 2.0.0.x handlers read at most 47 or 255 bytes
         body = json.dumps(data, separators=(",", ":"))
         headers = {"Content-Type": "application/json"}
-        r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
+        async with self._gate():
+            r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
         if "login.html" in r.text:
             await self._relogin()
-            r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
+            async with self._gate():
+                r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
             if "login.html" in r.text:
                 # the write was dropped: never report it as applied
                 self._logged_in = False
@@ -317,8 +374,10 @@ class SwitchClient:
 
     async def save_all(self):
         """2.0.0.x: the native UI's single Save button (POST {} -> empty body). Every change made
-        on 2.0.0.x lives in the running configuration only until this is called."""
-        return await self._post("save_all_configs.json", {})
+        on 2.0.0.x lives in the running configuration only until this is called. It walks the MAC
+        table to save the static entries, which moves the one read position a MAC table read uses."""
+        async with self._mac_lock:
+            return await self._post("save_all_configs.json", {})
 
     async def get_network(self):
         return await self._get("network_settings.json")
@@ -379,6 +438,94 @@ class SwitchClient:
         "2500MbpsFull": "2500Mbps Full",
         "10GbpsFull": "10Gbps Full",
     }
+
+    # ── 2.0.0.x VLANs: one 802.1Q table (100 VLANs, a name each), a PVID and frame type per port ──
+    async def _get_events(self, endpoint: str) -> list:
+        """A 2.0.0.x Server-Sent-Events answer read to its end: one JSON object per `data:` line,
+        kept as a list (decode_payload merges objects, which would keep only the last VLAN)."""
+        await self._ensure_login()
+        r = await self._raw_get(endpoint)
+        if "login.html" in r.text:
+            await self._relogin()
+            r = await self._raw_get(endpoint)
+            if "login.html" in r.text:
+                self._logged_in = False
+                raise SwitchError(f"{endpoint}: the switch rejected the session right after login")
+        if r.status_code != 200:
+            raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
+        return [json.loads(line[5:].strip()) for line in r.text.splitlines()
+                if line.startswith("data:") and line[5:].strip()]
+
+    @_parsed("tag_vlan.json")
+    async def get_vlan_table_v2(self) -> dict:
+        """{vlan_id: {"name": str, "ports": {user_port: 0|1|2}}}: 0 not a member, 1 untagged, 2 tagged."""
+        port_num = NUM_PORTS
+        table = {}
+        for ev in await self._get_events("tag_vlan.json"):
+            if "vlan_id" not in ev:
+                port_num = int(ev.get("PortNum", port_num))
+                continue
+            states = ev.get("port_states") or []
+            # the native UI reads port_states[1..PortNum] (index 0 unused); a 0-indexed array of
+            # exactly PortNum entries is read as such
+            offset = 0 if len(states) == port_num else 1
+            ports = {}
+            for i in range(1, port_num + 1):
+                j = i - 1 + offset
+                ports[self.to_user(i)] = int(states[j]) if j < len(states) else 0
+            table[int(ev["vlan_id"])] = {"name": str(ev.get("vlan_name") or ""), "ports": ports}
+        return table
+
+    @_parsed("port_vlan.json")
+    async def get_port_vlan_cfg_v2(self) -> dict:
+        """{user_port: {"pvid": int, "frame_type": 0 all | 1 tagged only | 2 untagged only}}"""
+        raw = await self._get("port_vlan.json")
+        return {self.to_user(i): {"pvid": int(raw[f"Port_{i}"]["PVID"]), "frame_type": int(raw[f"Port_{i}"]["Frame_Type"])}
+                for i in range(1, int(raw["PortNum"]) + 1)}
+
+    async def set_vlans_v2(self, entries: list[dict]):
+        """entries: [{"vlan_id": 10, "name": "Office", "ports": {user_port: 0|1|2}}]. Each entry
+        creates the VLAN or replaces its whole membership and name, as the native VLAN page
+        does; sent in as few bodies as the 1023-byte limit allows. The switch answers 200 even
+        when it refuses an entry: read the table back to know."""
+        items = []
+        for e in entries:
+            states = [0] * (NUM_PORTS + 1)  # index 0 unused, like the native UI
+            for port, state in e.get("ports", {}).items():
+                if state not in (0, 1, 2):
+                    raise ValueError(f"Invalid VLAN membership {state!r} for port {port}")
+                states[self.to_internal(port)] = int(state)
+            name = (e.get("name") or "").encode("utf-8")[:V2_VLAN_NAME_MAX].decode("utf-8", "ignore")
+            items.append({"port_states": states, "vlan_id": str(int(e["vlan_id"])), "vlan_name": name})
+        for chunk in _chunks_within(items, lambda c: {"deletedVlans": [], "updatedVlans": c}, V2_BODY_MAX):
+            await self._post("tag_vlan.json", {"deletedVlans": [], "updatedVlans": chunk})
+
+    async def delete_vlans_v2(self, vlan_ids):
+        """Delete VLANs (never VLAN 1, which the switch keeps). Deletes go in their own request:
+        the switch ignores updatedVlans when deletedVlans is not empty."""
+        ids = sorted({int(v) for v in vlan_ids} - {1})
+        if ids:
+            await self._post("tag_vlan.json", {"deletedVlans": ids, "updatedVlans": []})
+
+    async def set_pvids_v2(self, pvids: dict, frame_types: dict | None = None):
+        """pvids {user_port: vid}. One request per (PVID, frame type), as the native Port VLAN page
+        sends one PVID for the selected ports. The switch writes the frame type with every PVID, so
+        a port missing from frame_types keeps the one it has (read from the switch)."""
+        frame_types = dict(frame_types or {})
+        if any(port not in frame_types for port in pvids):
+            current = await self.get_port_vlan_cfg_v2()
+            frame_types = {port: frame_types.get(port, current.get(port, {}).get("frame_type", 0)) for port in pvids}
+        groups: dict[tuple, list] = {}
+        for port, vid in pvids.items():
+            vid = int(vid)
+            if not 1 <= vid <= MAX_VLAN_ID:
+                raise ValueError(f"PVID {vid} on port {port} is outside 1-{MAX_VLAN_ID}")
+            frame = int(frame_types[port])
+            groups.setdefault((vid, frame), []).append(str(self.to_internal(port)))
+        for (vid, frame), ports in sorted(groups.items()):
+            await self._post("port_vlan.json", {"port_based_vlan_frame_type": str(frame),
+                                                "port_based_vlan_pvid_input": str(vid),
+                                                "port_based_vlan_selection": sorted(ports, key=int)})
 
     # ── Ports ──
     @_parsed("port_setting_load.json")
@@ -580,27 +727,53 @@ class SwitchClient:
     @_parsed("stp.json")
     async def get_stp(self):
         raw = await self._get("stp.json")
+        # 2.0.0.x names the mode "STP"/"RSTP" and reads a port's edge flag as its bit (2**i) or "0"
+        v2 = "stp_rstp_mode" in raw
         ports = []
         for i in range(1, int(raw["num_ports"]) + 1):
+            edge = str(raw[f"Port_{i}"][f"Stp_Edge_{i}"])
             ports.append({
                 "port": self.to_user(i),
-                "edge": raw[f"Port_{i}"][f"Stp_Edge_{i}"] == "1",
+                "edge": edge not in ("0", "") if v2 else edge == "1",
                 "status": raw[f"Port_{i}"][f"Stp_Status_{i}"],
             })
         ports.sort(key=lambda x: x["port"])
+        rstp = raw["stp_rstp_mode"] == "RSTP" if v2 else raw["stp_mode"] == "1"
         return {
-            "enabled": raw["stp_enable"] == "1",
-            "mode": "rstp" if raw["stp_mode"] == "1" else "stp",
+            "enabled": str(raw["stp_enable"]) == "1",
+            "mode": "rstp" if rstp else "stp",
             "ports": ports,
         }
 
-    async def set_stp(self, enabled: bool, mode: str = "stp", edge_ports: list[int] | None = None):
+    async def set_stp(self, enabled: bool, mode: str = "stp", edge_ports: list[int] | None = None) -> bool:
+        """Returns True when loop detection was turned off to make way for STP (2.0.0.x only)."""
+        if await self.is_v2():
+            return await self._set_stp_v2(enabled, mode, edge_ports)
         data = {"stp_enable": "1" if enabled else "0", "stp_mode": "1" if mode == "rstp" else "0"}
         if edge_ports is not None:
             edges = {self.to_internal(p) for p in edge_ports}
             for i in range(1, NUM_PORTS + 1):
                 data[f"Stp_Edge_{i}"] = "1" if i in edges else "0"
-        return await self._post("stp.json", data)
+        await self._post("stp.json", data)
+        return False
+
+    async def _set_stp_v2(self, enabled: bool, mode: str, edge_ports: list[int] | None) -> bool:
+        """2.0.0.x: every stp.json write sets the whole edge-port list (a port left out loses its
+        flag), so the current edge ports are sent again unless new ones are given. Its own page
+        has loop detection and STP as alternatives: applying STP turns detection off first."""
+        if edge_ports is None:
+            edge_ports = [p["port"] for p in (await self.get_stp())["ports"] if p["edge"]]
+        loop_off = False
+        if enabled:
+            loop = await self.get_loop_config()
+            if str(loop.get("detect_enable")) == "1":
+                await self._post("port_lock_cfg.json", {**_loop_form_v2(loop), "detect_enable": "0"})
+                loop_off = True
+        body = {"stp_enable": "1" if enabled else "0", "stp_rstp_mode": "RSTP" if mode == "rstp" else "STP"}
+        for port in sorted({self.to_internal(p) for p in edge_ports}):
+            body[f"psel_cbox{port}"] = "on"
+        await self._post("stp.json", body)
+        return loop_off
 
     # ── Loop Detection ──
     async def get_loop_status(self):
@@ -611,8 +784,12 @@ class SwitchClient:
 
     @_parsed("port_lock_cfg.json")
     async def get_loop(self):
+        """1.0.0.x: [{port, enabled, violation}] (enabled per port). 2.0.0.x: one setting for the
+        whole switch, {"model": "global", enabled, prevention, interval, recovery, ports}."""
         config = await self.get_loop_config()
         status = await self.get_loop_status()
+        if "detect_enable" in config:
+            return self._loop_v2(config, status)
         ports = []
         for i in range(1, NUM_PORTS + 1):
             cfg = config.get(f"Port_{i}", {})
@@ -624,14 +801,48 @@ class SwitchClient:
         ports.sort(key=lambda x: x["port"])
         return ports
 
+    def _loop_v2(self, cfg: dict, status: dict) -> dict:
+        """2.0.0.x: detection on or off for the whole switch (no per-port setting), prevention
+        (block the looping port), the check interval (tenths of a second) and the recovery time
+        (seconds); the per-port flag only says where a loop was seen."""
+        ports = []
+        for i in range(1, NUM_PORTS + 1):
+            flag = status.get(f"Violdetd_{i}", (cfg.get(f"Port_{i}") or {}).get(f"Violdetd_{i}", "0"))
+            ports.append({"port": self.to_user(i), "violation": str(flag) not in ("0", "")})
+        ports.sort(key=lambda x: x["port"])
+        return {"model": "global", "enabled": str(cfg["detect_enable"]) == "1", "prevention": cfg.get("cPrev") == "on",
+                "interval": int(cfg.get("time_interval") or 0), "recovery": int(cfg.get("recover_time") or 0),
+                "ports": ports}
+
     async def set_loop(self, ports: dict):
-        """ports: {user_port: enabled, ...}. Ports left out or False are disabled."""
+        """ports: {user_port: enabled, ...}. Ports left out or False are disabled. (1.0.0.x)"""
         data = {}
         for port, enabled in ports.items():
             internal = self.to_internal(port)
             if enabled:
                 data[f"checkbox_{internal}"] = "on"
         return await self._post("port_lock_cfg.json", data)
+
+    async def set_loop_v2(self, enabled: bool, prevention: bool, interval: int | None, recovery: int | None) -> bool:
+        """2.0.0.x loop detection, as its own page applies it: detection turned on turns STP off
+        (the page offers the two as alternatives). A timer given as None is left out, which keeps
+        the stored value; detection must be started with both (a missing one would run as 0).
+        Returns True when STP was turned off."""
+        body = {"detect_enable": "1" if enabled else "0"}
+        for key, value in (("time_interval", interval), ("recover_time", recovery)):
+            if value is not None:
+                body[key] = str(int(value))
+            elif enabled:
+                raise ValueError(f"{key} is needed to start loop detection")
+        if prevention:
+            body["cPrev"] = "on"
+        await self._post("port_lock_cfg.json", body)
+        if enabled:
+            stp = await self.get_stp()
+            if stp["enabled"]:
+                await self._set_stp_v2(False, stp["mode"], [p["port"] for p in stp["ports"] if p["edge"]])
+                return True
+        return False
 
     # ── IGMP ──
     async def get_igmp_config(self):
@@ -640,17 +851,59 @@ class SwitchClient:
     async def set_igmp_config(self, data: dict):
         return await self._post("igmp_config.json", data)
 
+    async def set_igmp_v2(self, enabled: bool, fast_leave: bool, report_flood: bool):
+        """2.0.0.x reads "fast-leave"/"report-flood" (it answers fast_leave/report_flood) and takes
+        a missing key as off, like the unchecked boxes its own form leaves out. It has no global
+        querier (queriers are set per VLAN)."""
+        body = {key: "on" for key, on in (("igmp", enabled), ("fast-leave", fast_leave),
+                                          ("report-flood", report_flood)) if on}
+        return await self._post("igmp_config.json", body)
+
     async def get_igmp_entries(self):
         return await self._get("igmp_get_entries.json")
 
     # ── Storm Control ──
+    @_parsed("storm_ctrl_cfg.json")
     async def get_storm_control(self):
-        return await self._get("storm_ctrl_cfg.json")
+        """1.0.0.x: the switch's own {"sctrl_state", "sctrl_rate"}. 2.0.0.x: a limit per port and
+        traffic type, {"model": "per_port", enabled, rate, types, uniform, ports}."""
+        raw = await self._get("storm_ctrl_cfg.json")
+        if isinstance(raw, dict) and isinstance(raw.get("ports"), list):
+            return self._storm_v2(raw)
+        return raw
+
+    def _storm_v2(self, raw: dict) -> dict:
+        """Rates are in Mbps, 0 = no limit. rate/types summarise them as one setting for every
+        port (the most common rate); uniform is False when the ports differ from that summary."""
+        ports = sorted(({"port": self.to_user(int(p["port_id"])), **{t: int(p.get(k) or 0) for t, k in STORM_TYPES.items()}}
+                        for p in raw["ports"]), key=lambda x: x["port"])
+        limits = [p[t] for p in ports for t in STORM_TYPES if p[t]]
+        rate = collections.Counter(limits).most_common(1)[0][0] if limits else 0
+        types = [t for t in STORM_TYPES if any(p[t] for p in ports)]
+        uniform = all(p[t] == (rate if t in types else 0) for p in ports for t in STORM_TYPES)
+        return {"model": "per_port", "enabled": bool(limits), "rate": rate, "types": types,
+                "uniform": uniform, "ports": ports}
 
     async def set_storm_control(self, rate: int, enabled: bool):
         return await self._post("storm_ctrl_cfg.json", {
             "sctrl_rate": str(rate), "sctrl_state": "1" if enabled else "0"
         })
+
+    async def set_storm_v2(self, enabled: bool, rate: int, types: list[str]) -> int:
+        """2.0.0.x: the same limit on every port for the given traffic types, none for the others.
+        One request per port and type (numbers, as the native page sends them), only where the
+        setting changes. Returns the number of requests sent."""
+        current = await self.get_storm_control()
+        sent = 0
+        for p in current["ports"]:
+            for storm_type in STORM_TYPES:
+                want = int(rate) if enabled and storm_type in types else 0
+                if p[storm_type] == want:
+                    continue
+                await self._post("storm_ctrl_cfg.json", {"port": self.to_internal(p["port"]), "rate": want,
+                                                         "state": 1 if want else 0, "storm_type": storm_type})
+                sent += 1
+        return sent
 
     # ── Port Mirror ──
     async def get_mirror_raw(self):
@@ -669,11 +922,12 @@ class SwitchClient:
                 "egress": p.get("Egress_Status") == "Enabled",
             })
         ports.sort(key=lambda x: x["port"])
+        dest = self.to_user(monitoring) if monitoring else 0
         # the firmware keeps the last destination after mirroring is switched off,
-        # so "enabled" means at least one source still copies traffic
-        enabled = bool(monitoring) and any(p["ingress"] or p["egress"] for p in ports)
-        return {"monitoring_port": self.to_user(monitoring) if monitoring else 0,
-                "enabled": enabled, "ports": ports}
+        # so "enabled" means at least one source still copies traffic (the destination
+        # itself is never one: the switch skips it when it is listed as a source)
+        enabled = bool(monitoring) and any(p["ingress"] or p["egress"] for p in ports if p["port"] != dest)
+        return {"monitoring_port": dest, "enabled": enabled, "ports": ports}
 
     async def _post_mirror(self, dest: int, sources: list[int], ingress: bool, egress: bool):
         return await self._post("port_mirror.json", {
@@ -728,6 +982,8 @@ class SwitchClient:
     # ── MAC Table ──
     @_parsed("mac_get_dynamic_mac_entries.json")
     async def get_dynamic_macs(self, search: str | None = None):
+        if await self.is_v2():
+            return await self._get_dynamic_macs_v2(search)
         if search:
             raw = await self._get("mac_search_dynamic_mac_entries.json", params={"mac_search_txt": search})
         else:
@@ -736,13 +992,56 @@ class SwitchClient:
         total = raw.get("total_entries", len(entries)) if isinstance(raw, dict) else len(entries)
         return {"entries": entries, "total": total}
 
+    async def _get_dynamic_macs_v2(self, search: str | None) -> dict:
+        """2.0.0.x answers 50 entries at a time (mac_get_next_... continues, and starts again from
+        the top past the end) and only searches by prefix, so the table is read whole and filtered
+        here: any part of the address, with or without separators. truncated: more entries may
+        exist than were read."""
+        entries, seen, truncated = [], set(), False
+        async with self._mac_lock:
+            raw = await self._get("mac_get_dynamic_mac_entries.json")
+            for page in range(V2_MAC_MAX_PAGES):
+                batch = _parse_mac_entries(raw, self.to_user)
+                fresh = [e for e in batch if (e["mac"], e["vlan"], e["fid"]) not in seen]
+                if page and (not fresh or batch[0]["idx"] == "1"):
+                    break  # read past the end: the switch went back to the first entries
+                seen.update((e["mac"], e["vlan"], e["fid"]) for e in fresh)
+                entries += fresh
+                if len(batch) < V2_MAC_PAGE:
+                    break
+                try:
+                    raw = await self._get("mac_get_next_dynamic_mac_entries.json")
+                except (SwitchError, json.JSONDecodeError):
+                    truncated = True  # this build cannot page: keep the first entries
+                    break
+            else:
+                truncated = True
+        if search:
+            needle = _mac_hex(search)
+            entries = [e for e in entries if needle and needle in (_mac_hex(e["mac"]) or "")]
+        return {"entries": entries, "total": len(entries), "truncated": truncated}
+
     @_parsed("mac_get_static_mac_entries.json")
     async def get_static_macs(self):
-        raw = await self._get("mac_get_static_mac_entries.json")
+        async with self._mac_lock:
+            raw = await self._get("mac_get_static_mac_entries.json")
         return _parse_mac_entries(raw, self.to_user)
 
-    async def add_static_mac(self, mac: str, port: int, fid: int = 0):
+    async def _static_entries(self, mac: str) -> dict:
+        """2.0.0.x: {vlan: port} of the static entries for this address."""
+        return {e["vlan"]: e["port"] for e in await self.get_static_macs() if e["mac"].upper() == mac.upper()}
+
+    async def add_static_mac(self, mac: str, port: int, fid: int = 0, vlan: int | None = None):
         internal = self.to_internal(port)
+        if await self.is_v2():
+            # 2.0.0.x: keyed by VLAN ID (1-4094) instead of FID, every value a string
+            vid = int(vlan or 1)
+            await self._post("mac_add_static_mac_entries.json", {
+                "mac-input": mac, "port-input": str(internal), "vlan-input": str(vid)})
+            if (await self._static_entries(mac)).get(vid) != int(port):
+                raise SwitchError(f"mac_add_static_mac_entries.json: the switch answered OK but has no "
+                                  f"static entry for {mac} on port {port} in VLAN {vid}")
+            return await self._save_static_macs()
         await self._post("mac_add_static_mac_entries.json", {
             "mac-input": mac,
             "port-input": str(internal),
@@ -750,13 +1049,18 @@ class SwitchClient:
         })
         return await self._save_static_macs()
 
-    async def delete_static_mac(self, mac: str, port: int, fid: int = 0):
-        """Delete one static entry, identified by MAC + port + FID like the add form.
-
-        The firmware's delete form keys were never captured from the native UI; the add
-        form ('mac-input', 'port-input', 'fid-input') is the only documented shape, so the
-        delete payload mirrors it rather than forwarding whatever the caller sent."""
+    async def delete_static_mac(self, mac: str, port: int, fid: int = 0, vlan: int | None = None):
+        """Delete one static entry: by MAC + port + FID on 1.0.0.x (the add form's keys, the only
+        shape captured there), by MAC + VLAN ID on 2.0.0.x (its own page's request)."""
         internal = self.to_internal(port)
+        if await self.is_v2():
+            vid = int(vlan or 1)
+            await self._post("mac_delete_static_mac_entries.json", {"mac_addr_txt": [mac], "vlan_text": [str(vid)]})
+            # answered 200 even when nothing matched: check the entry is gone
+            if vid in await self._static_entries(mac):
+                raise SwitchError(f"mac_delete_static_mac_entries.json: the switch answered OK but still has "
+                                  f"{mac} in VLAN {vid}")
+            return await self._save_static_macs()
         await self._post("mac_delete_static_mac_entries.json", {
             "mac-input": mac,
             "port-input": str(internal),
@@ -767,7 +1071,12 @@ class SwitchClient:
     async def _save_static_macs(self) -> list[str]:
         """Returns warnings: the entry change is applied already, a save timeout only delays flash."""
         try:
-            await self._post("mac_save_static_mac_entries.json", {})
+            if await self.is_v2():
+                # never mac_save_static_mac_entries.json on 2.0.0.x: it rewrites the saved entries
+                # from the request body, so an empty body erases them
+                await self.save_all()
+            else:
+                await self._post("mac_save_static_mac_entries.json", {})
         except (httpx.TimeoutException, SwitchError) as e:
             return [f"Static MAC table applied but saving to flash did not complete: {e.__class__.__name__}"]
         return []

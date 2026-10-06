@@ -4,7 +4,7 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.1.1-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.2.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 Already running SwitchPilot? Jump to **[Updating](#updating)**.
 
@@ -26,7 +26,7 @@ The stock Xikestor web UI is:
 ### Switch management
 - **Overview** — front-panel view of the switch with per-port LEDs and negotiated speeds, live figures (temperature, ports up, traffic, errors) and the latest configuration changes
 - **Ports** — enable/disable, speed/duplex, flow control, descriptions, live TX/RX and packets-per-second counters; disabling the management port asks for confirmation
-- **VLANs** — named VLANs assigned to ports as Access, Trunk (native + allowed VLANs) or Flat. Only the ports you change are written, the rest of the switch's VLAN tables is preserved; hardware limits (native VLAN ≤ 63, 111 tag entries) are shown as you go
+- **VLANs** — named VLANs assigned to ports as Access, Trunk (native + allowed VLANs) or Flat. Only the ports you change are written, the rest of the switch's VLAN tables is preserved; the firmware's limits are shown as you go (1.0.0.x: native VLAN ≤ 63, 111 tag entries; 2.0.0.x: 100 VLANs, named on the switch)
 - **Link aggregation** — static or LACP groups with names, member state and LACP timeout
 - **MAC table** — live table with search and vendor lookup (39,000+ IEEE OUI entries), plus static entries
 - **System** — management IP (DHCP/static), clock and SNTP (hostnames resolved for you), STP, storm control, IGMP snooping, EEE, port mirroring, loop detection, configuration snapshots (save / download / import), reboot
@@ -50,10 +50,13 @@ The stock Xikestor web UI is:
 
 Other Xikestor models using the same web API should also work.
 
-**Firmware:** SwitchPilot targets the **1.0.0.x** firmware line (V1). Xikestor also ships a
-**2.0.0.x** line (V2) with a different web API for VLANs, STP, loop detection, storm control and
-EEE. V2 support is **coming soon**; until then, on a V2 switch the dashboard, ports and port
-statistics work but the VLAN and System pages will not.
+**Firmware:** SwitchPilot supports both firmware lines: **1.0.0.x** (V1) and, since 2.2.0,
+**2.0.0.x** (V2), whose web API differs for almost every setting. The 2.0.0.x support follows the
+requests the switch's own web pages send. Port settings were confirmed on a 2.0.0.3 unit; every
+other change is read back from the switch before it is saved, so anything the switch does not
+apply is reported instead of being silently lost. Please open an issue if something does not
+behave as expected on your 2.0.0.x switch. EEE and time/SNTP are read-only on 2.0.0.x: the vendor
+removed them from that firmware's own web interface.
 
 The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
 unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check
@@ -112,6 +115,8 @@ Then hard-refresh the browser once (**Ctrl+Shift+R**, **Cmd+Shift+R** on macOS) 
 old cached frontend. Coming from the first release (before October 2026) you are logged out
 once. After updating to 2.1.1, check each switch's SFP+ port numbering once under **System**: it is
 now set from the firmware line, and the page warns if a switch does not match (see the guide).
+With 2.2.0, settings on 2.0.0.x switches become editable; if you changed IGMP, loop detection or
+STP on such a switch with an earlier version, check them once (see the guide).
 
 Full details, what to check after the update, rollback and troubleshooting:
 **[docs/upgrade.md](docs/upgrade.md)**. What changed in each version: **[CHANGELOG.md](CHANGELOG.md)**.
@@ -216,12 +221,13 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 
 | Limitation | Value | Displayed in UI |
 |------------|-------|-----------------|
-| Native VLAN (PVID/FID) | 0 - 63 only | Warning badge + form validation |
+| Native VLAN (PVID/FID) | 0 - 63 on 1.0.0.x firmware; any VLAN 1 - 4094 on 2.0.0.x | Warning badge + form validation |
 | Tagged VLAN ID | 1 - 4094 | Standard 802.1Q |
-| Tag VLAN entries | 111 max | Counter in header |
+| VLAN table | 1.0.0.x: 111 tag entries; 2.0.0.x: 100 VLANs, names of 16 characters | Counter in header |
 | Management VLAN | Not supported | Info tooltip |
 | Port 9/10 mapping | Swapped on 1.0.0.x firmware, not on 2.0.0.x | Set automatically from the firmware; per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
+| EEE, clock and SNTP on 2.0.0.x firmware | Not offered by that firmware's web interface | Shown read-only |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |
 

@@ -209,6 +209,8 @@ def test_vlan_apply_failure_restores_previous_tables(api):
 def test_vlan_list_merges_in_use_without_writing(api):
     sid = add_switch(api)
     vlans = api.get(f"/api/switches/{sid}/vlans").json()
+    for v in vlans:
+        v.pop("deletable")
     assert vlans == [{"vlan_id": 20, "name": "VLAN 20", "defined": False, "in_use": True},
                      {"vlan_id": 30, "name": "VLAN 30", "defined": False, "in_use": True}]
     assert sqlite3.connect(dbmod.DB_PATH).execute("SELECT COUNT(*) FROM vlans").fetchone()[0] == 0
@@ -217,8 +219,8 @@ def test_vlan_list_merges_in_use_without_writing(api):
     assert api.post(f"/api/switches/{sid}/vlans", json={"vlan_id": 4095, "name": "x"}).status_code == 422
     assert api.post(f"/api/switches/{sid}/vlans", json={"vlan_id": 40, "name": "Lab"}).status_code == 200
     vlans = {v["vlan_id"]: v for v in api.get(f"/api/switches/{sid}/vlans").json()}
-    assert vlans[20] == {"vlan_id": 20, "name": "Office", "defined": True, "in_use": True}
-    assert vlans[40] == {"vlan_id": 40, "name": "Lab", "defined": True, "in_use": False}
+    assert vlans[20] == {"vlan_id": 20, "name": "Office", "defined": True, "in_use": True, "deletable": True}
+    assert vlans[40] == {"vlan_id": 40, "name": "Lab", "defined": True, "in_use": False, "deletable": True}
     assert api.delete(f"/api/switches/{sid}/vlans/20").status_code == 200
     assert api.get(f"/api/switches/{sid}/vlans").json()[0]["name"] == "VLAN 20"  # still in use, name gone
     api.get(f"/api/switches/{sid}/vlans/assignments")

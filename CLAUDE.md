@@ -36,9 +36,18 @@ Docker: single container (nginx + supervisor + uvicorn)
 - Port mapping: on 1.0.0.x firmware the SFP+ ports 9 and 10 are SWAPPED relative to the firmware's JSON indexes, on 2.0.0.x they match (issue #3; `default_swap_sfp(fw_ver)` picks the default when a switch is added and in the migration). It is a per-switch setting (`switches.swap_sfp_9_10`, `PUT /api/switches/{id}/port-mapping`) applied only through `SwitchClient.to_internal()` / `to_user()`; never translate ports anywhere else
 - Cookie-based session, auto-relogin on expiry
 
+### Firmware 2.0.0.x (V2)
+- A different web API for almost every setting; `SwitchClient.is_v2()` (from status.json `fw_ver`) picks the format. Formats follow the native web UI built into the official 2.0.0.x image (port settings also verified on a 2.0.0.3 unit)
+- Writes are allowed per feature by `V2_WRITABLE` / `_require_writable` (501 before anything is sent); EEE and time/SNTP stay read-only
+- Every V2 write: the native request, then a read-back (the firmware answers 200 even when it ignores a request; a mismatch is `_not_applied`, 502, nothing saved), then `save_all()` (`save_all_configs.json`, the only persistence on V2)
+- VLANs: one 802.1Q table (`tag_vlan.json`: GET is an SSE stream, POST `updatedVlans`/`deletedVlans`), PVID + frame type via `port_vlan.json`. STP: `stp_rstp_mode` + `psel_cbox<N>`, every POST resets enable/mode/edges. Loop detection is global (timers read 0 while off) and exclusive with STP. Storm control per port and type, JSON numbers, Mbps. IGMP reads `fast-leave`/`report-flood` (missing = off). Static MACs keyed by VLAN; the dynamic table comes 50 entries at a time
+- Never on V2: `mac_save_static_mac_entries.json` (erases the saved static MACs), `logout.json` (logs out every session); never probe unknown URLs (`system_reboot.json`, `factory_reset.json` and `/exit` act on any method)
+- One request at a time per V2 switch (`_gate`); MAC reads and `save_all()` share `_mac_lock` (one MAC read position per switch)
+- Tests: `backend/tests/v2_mock.py` simulates the V2 handlers (`V2Vlans`, `V2L2`)
+
 ### Hardware Limits (MaxLinear MxL86282S)
-- PVID/FID (native VLAN): 0-63 max
-- Tag VLAN entries: 111 max
+- PVID/FID (native VLAN): 0-63 max on 1.0.0.x (2.0.0.x: any VLAN 1-4094)
+- Tag VLAN entries: 111 max on 1.0.0.x (2.0.0.x: 100 VLANs, names of 16 bytes on the switch)
 - SNTP: IP only (no hostnames - backend resolves DNS)
 - No management VLAN support
 - No syslog/event log

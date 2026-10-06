@@ -43,7 +43,7 @@
       <div class="flex-1 min-w-[200px]">
         <h3 class="h2">{{ t('lag.priority') }}</h3><p class="hint">{{ t('lag.priorityDesc') }}</p>
       </div>
-      <input v-model.number="systemPriority" type="number" min="1" max="65535" :disabled="!can('lag')" class="input input-sm num w-28" />
+      <input v-model.number="systemPriority" type="number" min="0" max="65535" :disabled="!can('lag')" class="input input-sm num w-28" />
       <Btn v-if="can('lag')" size="sm" @click="applyPriority">{{ t('lag.save') }}</Btn>
     </div>
 
@@ -145,7 +145,8 @@ function togglePort(port) { const i = draft.ports.indexOf(port); i >= 0 ? draft.
 async function load() {
   try {
     const data = await api(`/api/switches/${props.switchId}/lag`)
-    systemPriority.value = Number(data.system_priority) || 32768
+    const prio = data.system_priority === '' || data.system_priority == null ? NaN : Number(data.system_priority)
+    systemPriority.value = Number.isFinite(prio) ? prio : 32768  // 0 is a valid priority
     allPorts.value = data.ports
     names.value = { ...(data.group_names || {}) }
     savedNames.value = { ...(data.group_names || {}) }
@@ -167,9 +168,10 @@ async function createGroup() {
   try {
     const ports = rowsPayload(p => draft.ports.includes(p.port) ? { type: draft.mode, group: draft.id, timeout: draft.timeout } : null)
     const group_names = { ...savedNames.value, [draft.id]: draft.name || `LAG ${draft.id}` }
-    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names }) })
+    const res = await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports, group_names }) })
     modal.value = false
     toast.success(t('lag.created'))
+    for (const w of res.warnings || []) toast.error(w)
     await load()
   } catch (e) { toast.error(e.message) }
   finally { applying.value = false }
@@ -179,8 +181,9 @@ async function removeGroup(id) {
   if (!await confirm({ title: t('common.remove'), message: t('lag.removeConfirm', { id }), danger: true, confirmText: t('common.remove') })) return
   try {
     const ports = rowsPayload(p => p.group === id ? { type: 0, group: 0, timeout: 0 } : null)
-    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports }) })
+    const res = await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports }) })
     toast.success(t('lag.removed'))
+    for (const w of res.warnings || []) toast.error(w)
     await load()
   } catch (e) { toast.error(e.message) }
 }
@@ -196,8 +199,9 @@ async function rename(id) {
 
 async function applyPriority() {
   try {
-    await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: rowsPayload(() => null) }) })
+    const res = await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports: rowsPayload(() => null) }) })
     toast.success(t('lag.priorityUpdated'))
+    for (const w of res.warnings || []) toast.error(w)
   } catch (e) { toast.error(e.message) }
 }
 

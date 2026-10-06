@@ -132,6 +132,34 @@ say it, so it is a setting on each switch, chosen from the firmware version.
   SwitchPilot; the switch itself is not touched.
 - On the Ports page, hovering a port number shows the switch's internal index when the two differ.
 
+### 2.0.0.x switches: settings can be changed (2.2.0)
+
+On switches running **2.0.0.x** firmware, SwitchPilot can now change VLANs, link aggregation,
+STP, loop detection, storm control, IGMP snooping, port mirroring and the MAC table, using the
+requests the switch's own web pages send. Every change is read back from the switch and then
+saved on it. If the switch does not apply a change, you get an error and nothing is saved:
+restarting the switch brings back its saved configuration. EEE and the clock (time/SNTP) stay
+read-only, because that firmware's own web interface no longer offers them.
+
+Things that work differently on 2.0.0.x, as on the switch's own pages:
+- VLANs live in one table of up to 100 VLANs, with their names stored on the switch (16
+  characters), and any VLAN ID can be an access or native VLAN.
+- Loop detection is one setting for the whole switch, and it is an alternative to STP: turning
+  one on turns the other off.
+- Storm control is set in Mbps, per kind of traffic.
+- IGMP has report flooding instead of a querier.
+- Static MAC entries are keyed by VLAN ID.
+
+**If you changed settings on a 2.0.0.x switch with an earlier version, check them once.**
+Earlier versions sent 1.0.0.x requests that this firmware misread:
+- **IGMP snooping:** any IGMP change turned **Fast Leave** and **report flooding** off.
+- **Loop detection:** any change there turned loop detection off.
+- **STP:** any STP change cleared the edge ports and reset the mode to RSTP.
+- **VLANs created in SwitchPilot** were never created on the switch. They are created there
+  (with their names) as soon as a port is assigned to them, or when you add them again.
+
+Open **System** and **VLANs** on each 2.0.0.x switch and set these as you want them.
+
 ### Port mirroring works from the UI
 
 Applying a mirror session from the System page used to fail silently (the backend answered
@@ -192,6 +220,23 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   VLAN names, snapshots).
 - Python: `switch_client.PORT_MAP` no longer exists. Create a `SwitchClient(ip, user, password,
   swap_sfp=...)` and use `to_internal()` / `to_user()`.
+- 2.2.0, switches on 2.0.0.x firmware (1.0.0.x switches answer as before):
+  - `GET /loop` returns `{"model": "global", "enabled", "prevention", "interval", "recovery",
+    "ports": [{"port", "violation"}]}`.
+  - `POST /loop` takes `{"enabled"?, "prevention"?, "interval"?, "recovery"?}` and answers
+    `stp_turned_off`.
+  - `GET /storm` returns `{"model": "per_port", "enabled", "rate", "types", "uniform", "ports"}`.
+  - `POST /storm` takes `types` (default `["broadcast"]`), and its `rate` is in Mbps (1-1000).
+  - `POST /igmp` takes `report_flood`; `querier` does not exist there.
+  - `POST /stp` answers `loop_turned_off`.
+  - Static MAC add/delete take `vlan_id` instead of `fid`.
+  - A write the switch answered but did not apply is a `502` ("did not apply", nothing saved).
+    `warnings` lists a save that did not complete.
+- 2.2.0, every switch:
+  - MAC entries carry `vlan` (`null` on 1.0.0.x), and `GET /mac/dynamic` carries `truncated`.
+  - `GET /vlans` entries carry `on_switch` and `deletable`.
+  - `GET /switches`, `/info` and `/status` carry `firmware_line` and `read_only`.
+  - A write a firmware cannot take answers `501` and nothing is sent.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the complete list.
 

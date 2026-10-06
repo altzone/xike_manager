@@ -3,8 +3,13 @@
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <p class="hint max-w-2xl">{{ t('vlans.tip') }}</p>
       <div class="flex items-center gap-2 shrink-0">
-        <Badge tone="neutral"><span class="inline-flex items-center gap-1">{{ t('vlans.tagEntries', { used: limits.used, max: limits.max }) }} <Tip :text="t('vlans.tagTip')" /></span></Badge>
-        <Badge tone="warn"><span class="inline-flex items-center gap-1">{{ t('vlans.nativeMax') }} <Tip :text="t('vlans.nativeTip')" /></span></Badge>
+        <template v-if="dot1q">
+          <Badge tone="neutral"><span class="inline-flex items-center gap-1">{{ t('vlans.vlanCount', { used: limits.used, max: limits.max }) }} <Tip :text="t('vlans.vlanCountTip', { max: limits.max })" /></span></Badge>
+        </template>
+        <template v-else>
+          <Badge tone="neutral"><span class="inline-flex items-center gap-1">{{ t('vlans.tagEntries', { used: limits.used, max: limits.max }) }} <Tip :text="t('vlans.tagTip')" /></span></Badge>
+          <Badge tone="warn"><span class="inline-flex items-center gap-1">{{ t('vlans.nativeMax') }} <Tip :text="t('vlans.nativeTip')" /></span></Badge>
+        </template>
       </div>
     </div>
 
@@ -17,18 +22,18 @@
         </div>
         <ul v-if="vlans.length" class="divide-y divide-line">
           <li v-for="v in vlans" :key="v.vlan_id" class="px-4 py-2.5 flex items-center gap-3 group">
-            <span class="w-11 h-9 rounded-md flex items-center justify-center text-sm font-semibold num shrink-0" :class="v.vlan_id <= 63 ? 'bg-accent-soft text-accent-ink' : 'bg-surface-3 text-muted'">{{ v.vlan_id }}</span>
+            <span class="w-11 h-9 rounded-md flex items-center justify-center text-sm font-semibold num shrink-0" :class="dot1q || v.vlan_id <= 63 ? 'bg-accent-soft text-accent-ink' : 'bg-surface-3 text-muted'">{{ v.vlan_id }}</span>
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium truncate" :class="v.defined ? 'text-ink' : 'text-muted italic'">{{ v.defined ? v.name : t('vlans.unnamed') }}</p>
               <p class="text-[11px] text-muted flex items-center gap-1.5">
                 <span v-if="v.in_use" class="text-ok-ink">{{ t('vlans.inUse') }}</span>
-                <span v-if="v.in_use && v.vlan_id > 63" aria-hidden="true">·</span>
-                <span v-if="v.vlan_id > 63" :title="t('vlans.vlanIdWarn', { id: v.vlan_id })">{{ t('vlans.trunkOnly') }}</span>
+                <span v-if="v.in_use && !dot1q && v.vlan_id > 63" aria-hidden="true">·</span>
+                <span v-if="!dot1q && v.vlan_id > 63" :title="t('vlans.vlanIdWarn', { id: v.vlan_id })">{{ t('vlans.trunkOnly') }}</span>
               </p>
             </div>
             <div v-if="auth.isAdmin" class="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
               <Btn variant="ghost" size="xs" icon="pencil" icon-only :aria-label="t('common.edit')" @click="openAdd(v)" />
-              <Btn v-if="v.defined" variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteVlan(v)" />
+              <Btn v-if="v.deletable ?? v.defined" variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteVlan(v)" />
             </div>
           </li>
         </ul>
@@ -77,7 +82,7 @@
                     <option v-for="v in pvidVlans" :key="v.vlan_id" :value="v.vlan_id">{{ v.name }} ({{ v.vlan_id }})</option>
                   </select>
                   <select v-else-if="r.mode === 'trunk'" v-model.number="r.native_vlan" :disabled="!editable(r)" class="select select-sm w-44">
-                    <option :value="0">{{ t('vlans.defaultBridge') }}</option>
+                    <option v-if="!dot1q" :value="0">{{ t('vlans.defaultBridge') }}</option>
                     <option v-for="v in pvidVlans" :key="v.vlan_id" :value="v.vlan_id">{{ v.name }} ({{ v.vlan_id }})</option>
                   </select>
                   <span v-else class="text-faint">—</span>
@@ -127,7 +132,8 @@
           <label class="label" for="vlan-form-name">{{ t('vlans.vlanName') }}</label>
           <input id="vlan-form-name" v-model.trim="form.name" required maxlength="64" class="input" :placeholder="t('vlans.namePlaceholder')" />
         </div>
-        <p v-if="form.id > 63" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg">{{ t('vlans.vlanIdWarn', { id: form.id }) }}</p>
+        <p v-if="!dot1q && form.id > 63" class="text-xs text-warn-ink bg-warn-soft px-3 py-2 rounded-lg">{{ t('vlans.vlanIdWarn', { id: form.id }) }}</p>
+        <p v-if="dot1q && form.name.length > 16" class="hint">{{ t('vlans.nameV2Hint') }}</p>
         <p v-if="formError" class="text-sm text-danger-ink bg-danger-soft rounded-lg px-3 py-2" role="alert">{{ formError }}</p>
       </form>
       <template #footer>
@@ -167,7 +173,9 @@ const vlans = ref([])
 const rows = ref([])
 const baseline = ref([])   // deep copies of the rows as loaded from the switch
 const original = ref({})   // normalized baseline per port, for change detection
-const limits = reactive({ used: 0, max: 111 })
+const limits = reactive({ used: 0, max: 111, model: 'bridge' })
+// 2.0.0.x: one 802.1Q table where any VLAN can be an access/native VLAN (1.0.0.x: bridges 0-63)
+const dot1q = computed(() => limits.model === '8021q')
 const loadError = ref('')
 const applying = ref(false)
 const syncing = ref(false)
@@ -176,7 +184,7 @@ const editVlan = ref(null)
 const form = reactive({ id: '', name: '' })
 const formError = ref('')
 
-const pvidVlans = computed(() => vlans.value.filter(v => v.vlan_id <= 63))
+const pvidVlans = computed(() => dot1q.value ? vlans.value : vlans.value.filter(v => v.vlan_id <= 63))
 function editable(r) { return can('vlans') && r.port !== 1 && !applying.value }
 const clone = x => JSON.parse(JSON.stringify(x))
 
@@ -205,7 +213,8 @@ async function loadVlans() {
     api(`/api/switches/${props.switchId}/vlans/limits`),
   ])
   vlans.value = vl
-  limits.used = lim.used_tag_entries; limits.max = lim.max_tag_entries
+  limits.model = lim.model || 'bridge'
+  limits.used = lim.used_vlans ?? lim.used_tag_entries; limits.max = lim.max_vlans ?? lim.max_tag_entries
 }
 // Port rows: replaces the rows and their baseline
 async function loadRows() {
@@ -221,7 +230,8 @@ async function load() {
 
 function onModeChange(r) {
   if (r.mode === 'access' && !r.access_vlan) r.access_vlan = pvidVlans.value[0]?.vlan_id || 1
-  if (r.mode === 'trunk' && r.native_vlan == null) r.native_vlan = 0   // default bridge: always offered by the select
+  // 1.0.0.x: the default bridge (0), always offered by the select; 2.0.0.x: the default VLAN 1
+  if (r.mode === 'trunk' && r.native_vlan == null) r.native_vlan = dot1q.value ? 1 : 0
 }
 
 // Restore the rows from the kept baseline, no network round trip needed
@@ -237,7 +247,9 @@ async function applyAll() {
       trunk_vlans: r.mode === 'trunk' ? r.trunk_vlans : null,
     }))
     const res = await api(`/api/switches/${props.switchId}/vlans/apply`, { method: 'POST', body: JSON.stringify(payload) })
-    toast.success(t('vlans.applied', { ports: res.port_vlans, tags: res.tag_entries }))
+    // 2.0.0.x answers with the VLANs it updated (802.1Q table) instead of tag entries
+    toast.success(res.tag_entries === undefined ? t('vlans.appliedV2', { ports: res.port_vlans, vlans: res.vlans })
+      : t('vlans.applied', { ports: res.port_vlans, tags: res.tag_entries }))
     for (const w of res.warnings || []) toast.error(w)
     await load()
   } catch (e) { toast.error(e.message) }

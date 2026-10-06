@@ -92,16 +92,25 @@
         <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!can('stp')" :aria-label="t('sys.stp')" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
-      <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="t('sys.stormTip')" compact :locked="locked('storm')">
+      <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="storm.v2 ? t('sys.stormTipV2') : t('sys.stormTip')" compact :locked="locked('storm')">
         <template #actions><Toggle v-model="storm.enabled" :disabled="!can('storm')" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
-        <div v-if="storm.enabled"><label class="label" for="sys-storm-rate">{{ t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm')" class="input input-sm num" /></div>
+        <div v-if="storm.enabled" class="space-y-2.5">
+          <div><label class="label" for="sys-storm-rate">{{ storm.v2 ? t('sys.stormRateMbps') : t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm')" class="input input-sm num" /></div>
+          <!-- 2.0.0.x: a limit per traffic type (SwitchPilot sets the same one on every port) -->
+          <div v-if="storm.v2" class="space-y-1.5" role="group" :aria-label="t('sys.stormTypes')">
+            <p class="label">{{ t('sys.stormTypes') }}</p>
+            <label v-for="ty in STORM_TYPES" :key="ty" class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" :value="ty" v-model="storm.types" @change="applyStorm" :disabled="!can('storm') || (storm.types.length === 1 && storm.types[0] === ty)" class="accent-accent"> {{ t('sys.storm_' + ty) }}</label>
+          </div>
+          <p v-if="storm.v2 && !storm.uniform" class="text-xs text-warn-ink bg-warn-soft rounded-lg px-2.5 py-1.5">{{ t('sys.stormMixed') }}</p>
+        </div>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
-      <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="t('sys.igmpTip')" compact :locked="locked('igmp')">
+      <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="igmp.v2 ? t('sys.igmpTipV2') : t('sys.igmpTip')" compact :locked="locked('igmp')">
         <template #actions><Toggle v-model="igmp.enabled" :disabled="!can('igmp')" :label="t('sys.igmp')" @update:model-value="applyIgmp" /></template>
         <div v-if="igmp.enabled" class="space-y-1.5">
           <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.fastLeave') }}</label>
-          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.querier" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.querier') }}</label>
+          <label v-if="igmp.v2" class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.report_flood" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.reportFlood') }}</label>
+          <label v-else class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.querier" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.querier') }}</label>
         </div>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
@@ -142,16 +151,38 @@
         </div>
       </Section>
 
-      <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="t('sys.loopTip')" :locked="locked('loop')">
-        <p class="hint mb-3">{{ t('sys.loopDesc') }}</p>
-        <div class="grid grid-cols-5 gap-2">
-          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!can('loop')" :aria-pressed="!!lp.enabled" @click="toggleLoop(lp)"
-            class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
-            :class="lp.enabled ? (lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : 'border-ok/60 bg-ok-soft text-ok-ink') : 'border-line text-muted hover:border-line-strong'">
-            {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
-            <div class="text-[10px] font-normal">{{ lp.violation ? t('sys.loopViolation') : (lp.enabled ? t('common.on') : t('common.off')) }}</div>
-          </button>
-        </div>
+      <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="loopV2 ? t('sys.loopTipV2') : t('sys.loopTip')" :locked="locked('loop')">
+        <template v-if="loopV2" #actions><Toggle :model-value="loopCfg.enabled" :disabled="!can('loop')" :label="t('sys.loop')" @update:model-value="v => applyLoop({ enabled: v })" /></template>
+        <!-- 2.0.0.x: one setting for the whole switch; the ports only show where a loop was seen -->
+        <template v-if="loopV2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="sm:col-span-2 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="loopCfg.prevention" @change="applyLoop({ prevention: loopCfg.prevention })" :disabled="!can('loop')" class="accent-accent"> {{ t('sys.loopPrevention') }}</label>
+            <!-- the switch only shows its timers while detection runs (they read 0 otherwise) -->
+            <template v-if="loopCfg.enabled">
+              <div><label class="label" for="sys-loop-interval">{{ t('sys.loopInterval') }}</label><input id="sys-loop-interval" v-model.number="loopCfg.interval" type="number" min="0" max="100" @change="applyLoop({ interval: loopCfg.interval })" :disabled="!can('loop')" class="input input-sm num" /></div>
+              <div><label class="label" for="sys-loop-recovery">{{ t('sys.loopRecovery') }}</label><input id="sys-loop-recovery" v-model.number="loopCfg.recovery" type="number" min="0" max="100" @change="applyLoop({ recovery: loopCfg.recovery })" :disabled="!can('loop')" class="input input-sm num" /></div>
+            </template>
+          </div>
+          <div class="grid grid-cols-5 gap-2 mt-4">
+            <div v-for="lp in loopCfg.ports" :key="lp.port" class="rounded-lg border-2 py-2 text-center text-xs font-semibold"
+              :class="lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : (loopCfg.enabled ? 'border-ok/60 bg-ok-soft text-ok-ink' : 'border-line text-muted')">
+              {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
+              <div class="text-[10px] font-normal">{{ lp.violation ? t('sys.loopViolation') : (loopCfg.enabled ? t('common.on') : t('common.off')) }}</div>
+            </div>
+          </div>
+          <p class="hint mt-3 flex items-start gap-1.5"><Icon name="info" :size="13" class="mt-0.5 shrink-0" />{{ t('sys.loopStpExclusive') }}</p>
+        </template>
+        <template v-else>
+          <p class="hint mb-3">{{ t('sys.loopDesc') }}</p>
+          <div class="grid grid-cols-5 gap-2">
+            <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!can('loop')" :aria-pressed="!!lp.enabled" @click="toggleLoop(lp)"
+              class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
+              :class="lp.enabled ? (lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : 'border-ok/60 bg-ok-soft text-ok-ink') : 'border-line text-muted hover:border-line-strong'">
+              {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
+              <div class="text-[10px] font-normal">{{ lp.violation ? t('sys.loopViolation') : (lp.enabled ? t('common.on') : t('common.off')) }}</div>
+            </button>
+          </div>
+        </template>
       </Section>
     </div>
 
@@ -255,11 +286,17 @@ const tzLoaded = reactive({ timezone: '+00:00', daylight: false })
 const sntpStatus = ref(null)
 const sntpResolved = ref('')
 const stp = reactive({ enabled: false, mode: 'stp' })
-const storm = reactive({ enabled: false, rate: 100 })
-const igmp = reactive({ enabled: false, fast_leave: true, querier: false })
+// 2.0.0.x (v2): rate in Mbps per traffic type; uniform is false when the ports differ (set on the switch)
+const STORM_TYPES = ['broadcast', 'multicast', 'unknown_unicast', 'unknown_multicast']
+const storm = reactive({ enabled: false, rate: 100, v2: false, types: ['broadcast'], uniform: true })
+// 2.0.0.x (v2): report flooding instead of a global querier
+const igmp = reactive({ enabled: false, fast_leave: true, querier: false, v2: false, report_flood: false })
 const eee = reactive({ enabled: false })
 const mirror = reactive({ monitoring_port: 0, enabled: false, ingress: true, egress: true, mirrored_ports: [] })
 const loop = ref([])
+// 2.0.0.x: loop detection is one setting for the whole switch
+const loopV2 = ref(false)
+const loopCfg = reactive({ enabled: false, prevention: false, interval: 0, recovery: 0, ports: [] })
 const snapshots = ref([])
 const changes = ref([])
 const showSave = ref(false)
@@ -280,6 +317,7 @@ function tzChanges() {
 function fmtDate(d) { return d ? new Date(d + 'Z').toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' }) : '' }
 function ok(m) { toast.success(m) }
 function fail(e) { toast.error(e.message || String(e)) }
+function warn(res) { for (const w of res?.warnings || []) toast.error(w) }
 
 // A card whose body reflects the section's own load state
 const Section = defineComponent({
@@ -332,19 +370,38 @@ async function loadTime() {
   tzLoaded.timezone = tz.timezone; tzLoaded.daylight = tz.daylight
 }
 async function loadStp() { const d = await api(`${base}/stp`); stp.enabled = !!d.enabled; stp.mode = d.mode || 'stp' }
-async function loadStorm() { const d = await api(`${base}/storm`); storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100 }
-async function loadIgmp() { const d = await api(`${base}/igmp`); igmp.enabled = d.config?.igmp === 'on'; igmp.fast_leave = d.config?.fast_leave === 'on'; igmp.querier = d.config?.snoop_querier === 'on' }
+async function loadStorm() {
+  const d = await api(`${base}/storm`)
+  storm.v2 = d.model === 'per_port'
+  if (storm.v2) {
+    storm.enabled = d.enabled; storm.rate = d.rate || 100; storm.uniform = d.uniform
+    storm.types = d.types?.length ? [...d.types] : ['broadcast']
+  } else {
+    storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100
+  }
+}
+async function loadIgmp() {
+  const d = await api(`${base}/igmp`)
+  igmp.enabled = d.config?.igmp === 'on'; igmp.fast_leave = d.config?.fast_leave === 'on'; igmp.querier = d.config?.snoop_querier === 'on'
+  igmp.v2 = 'report_flood' in (d.config || {}); igmp.report_flood = d.config?.report_flood === 'on'
+}
 async function loadEee() { const d = await api(`${base}/eee`); if (d.supported === false) return 'unsupported'; eee.enabled = d.enabled ?? d.eee === 'on' }
 async function loadMirror() {
   const d = await api(`${base}/mirror`)
-  const active = d.ports.filter(p => p.ingress || p.egress)
+  // the destination's own flags are not a source (the switch never mirrors a port to itself)
+  const active = d.ports.filter(p => (p.ingress || p.egress) && p.port !== d.monitoring_port)
   mirror.enabled = !!d.enabled
   mirror.monitoring_port = d.enabled ? d.monitoring_port : 0
   mirror.mirrored_ports = active.map(p => p.port)
   mirror.ingress = active.length === 0 || active.some(p => p.ingress)
   mirror.egress = active.length === 0 || active.some(p => p.egress)
 }
-async function loadLoop() { loop.value = await api(`${base}/loop`) }
+async function loadLoop() {
+  const d = await api(`${base}/loop`)
+  loopV2.value = !Array.isArray(d)
+  if (loopV2.value) Object.assign(loopCfg, d)
+  else loop.value = d
+}
 async function loadSnapshots() { snapshots.value = await api(`${base}/snapshots`) }
 async function loadChanges() { changes.value = await api(`${base}/changes?limit=50`) }
 
@@ -392,21 +449,49 @@ async function applyTime() {
     ok(t('sys.timeSet')); section('time', loadTime)
   } catch (e) { fail(e) } finally { busy.time = false }
 }
-async function applyStp() { try { await api(`${base}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) }); ok(t('sys.stpUpdated')) } catch (e) { fail(e); section('stp', loadStp) } }
-async function applyStorm() { try { await api(`${base}/storm`, { method: 'POST', body: JSON.stringify({ enabled: storm.enabled, rate: storm.rate || 100 }) }); ok(t('sys.stormUpdated')) } catch (e) { fail(e); section('storm', loadStorm) } }
-async function applyIgmp() { try { await api(`${base}/igmp`, { method: 'POST', body: JSON.stringify({ enabled: igmp.enabled, fast_leave: igmp.fast_leave, querier: igmp.querier }) }); ok(t('sys.igmpUpdated')) } catch (e) { fail(e); section('igmp', loadIgmp) } }
+async function applyStp() {
+  try {
+    const res = await api(`${base}/stp`, { method: 'POST', body: JSON.stringify({ enabled: stp.enabled, mode: stp.mode }) })
+    ok(t('sys.stpUpdated')); warn(res)
+    // 2.0.0.x: STP and loop detection are alternatives, as on the switch's own page
+    if (res.loop_turned_off) { ok(t('sys.loopTurnedOff')); section('loop', loadLoop) }
+  } catch (e) { fail(e); section('stp', loadStp) }
+}
+async function applyStorm() {
+  try {
+    const body = { enabled: storm.enabled, rate: storm.rate || 100, ...(storm.v2 ? { types: storm.types } : {}) }
+    const res = await api(`${base}/storm`, { method: 'POST', body: JSON.stringify(body) })
+    ok(t('sys.stormUpdated')); warn(res)
+    if (storm.v2) storm.uniform = true
+  } catch (e) { fail(e); section('storm', loadStorm) }
+}
+async function applyIgmp() {
+  try {
+    const body = { enabled: igmp.enabled, fast_leave: igmp.fast_leave, ...(igmp.v2 ? { report_flood: igmp.report_flood } : { querier: igmp.querier }) }
+    const res = await api(`${base}/igmp`, { method: 'POST', body: JSON.stringify(body) })
+    ok(t('sys.igmpUpdated')); warn(res)
+  } catch (e) { fail(e); section('igmp', loadIgmp) }
+}
 async function applyEee() { try { await api(`${base}/eee`, { method: 'POST', body: JSON.stringify({ enabled: eee.enabled }) }); ok(t('sys.eeeUpdated')) } catch (e) { fail(e); section('eee', loadEee) } }
 function toggleMirrorPort(p) { const i = mirror.mirrored_ports.indexOf(p); i >= 0 ? mirror.mirrored_ports.splice(i, 1) : mirror.mirrored_ports.push(p) }
 async function applyMirror() {
   busy.mirror = true
   try {
-    await api(`${base}/mirror`, { method: 'POST', body: JSON.stringify({ monitoring_port: mirror.monitoring_port, mirrored_ports: mirror.mirrored_ports, ingress: mirror.ingress, egress: mirror.egress }) })
-    ok(t('sys.mirrorUpdated')); section('mirror', loadMirror)
+    const res = await api(`${base}/mirror`, { method: 'POST', body: JSON.stringify({ monitoring_port: mirror.monitoring_port, mirrored_ports: mirror.mirrored_ports, ingress: mirror.ingress, egress: mirror.egress }) })
+    ok(t('sys.mirrorUpdated')); warn(res); section('mirror', loadMirror)
   } catch (e) { fail(e) } finally { busy.mirror = false }
 }
 async function toggleLoop(lp) {
   const ports = Object.fromEntries(loop.value.map(l => [l.port, l.port === lp.port ? !l.enabled : l.enabled]))
   try { await api(`${base}/loop`, { method: 'POST', body: JSON.stringify({ ports }) }); ok(t('sys.loopToggle', { port: lp.port, state: !lp.enabled ? t('common.on') : t('common.off') })) } catch (e) { fail(e) }
+  section('loop', loadLoop)
+}
+async function applyLoop(changes) {
+  try {
+    const res = await api(`${base}/loop`, { method: 'POST', body: JSON.stringify(changes) })
+    ok(t('sys.loopUpdated')); warn(res)
+    if (res.stp_turned_off) { ok(t('sys.stpTurnedOff')); section('stp', loadStp) }
+  } catch (e) { fail(e) }
   section('loop', loadLoop)
 }
 async function saveSnapshot() {

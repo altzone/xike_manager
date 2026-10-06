@@ -21,7 +21,7 @@ from auth import (hash_password_async, verify_password_async, validate_password,
                   check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH,
                   load_user, password_version)
 from switch_client import (SwitchClient, SwitchError, SwitchFormatError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
-                           default_swap_sfp, firmware_line,
+                           default_swap_sfp, firmware_line, V2_MAX_VLANS, V2_STORM_MAX, STORM_TYPES,
                            MAX_VLAN_ID, NUM_PORTS, MANAGEMENT_PORT)
 from sse import get_switch_client, drop_switch_client, sse_endpoint
 
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="SwitchPilot", version="2.1.1", lifespan=lifespan)
+app = FastAPI(title="SwitchPilot", version="2.2.0", lifespan=lifespan)
 if CORS_ORIGINS:
     # The UI is served from the same origin by nginx; CORS is only for external tooling.
     app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=True,
@@ -112,8 +112,9 @@ class VlanRename(BaseModel):
 class PortAssignment(BaseModel):
     port: int
     mode: Literal["access", "trunk", "flat", "unknown"]  # unknown = as reported by GET: keep as is
-    access_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_FID)  # 0 = the default bridge
-    native_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_FID)  # 0 = the default bridge
+    # 1.0.0.x: 0-63 (a bridge/FID, 0 = the default bridge); 2.0.0.x: an 802.1Q VLAN ID 1-4094
+    access_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_VLAN_ID)
+    native_vlan: Optional[int] = Field(default=None, ge=0, le=MAX_VLAN_ID)
     trunk_vlans: Optional[list[int]] = None
 
 class StpConfig(BaseModel):
@@ -122,16 +123,26 @@ class StpConfig(BaseModel):
     edge_ports: Optional[list[int]] = None
 
 class LoopConfig(BaseModel):
-    ports: dict[int, bool]  # port -> enabled
+    # 1.0.0.x: port -> enabled
+    ports: Optional[dict[int, bool]] = None
+    # 2.0.0.x: one setting for the whole switch; a field left out keeps its current value
+    enabled: Optional[bool] = None
+    prevention: Optional[bool] = None  # block the port a loop is seen on
+    interval: Optional[int] = Field(default=None, ge=0, le=100)  # tenths of a second
+    recovery: Optional[int] = Field(default=None, ge=0, le=100)  # seconds
+
+StormType = Literal["broadcast", "multicast", "unknown_unicast", "unknown_multicast"]
 
 class StormConfig(BaseModel):
     enabled: bool
-    rate: int = Field(default=100, ge=1, le=1000000)
+    rate: int = Field(default=100, ge=1, le=1000000)  # 1.0.0.x: packets/s; 2.0.0.x: Mbps, 1-1000
+    types: Optional[list[StormType]] = None  # 2.0.0.x: traffic limited (default: broadcast)
 
 class IgmpConfig(BaseModel):
     enabled: bool
     fast_leave: bool = True
-    querier: bool = False
+    querier: bool = False  # 1.0.0.x only (2.0.0.x sets queriers per VLAN)
+    report_flood: Optional[bool] = None  # 2.0.0.x only; left out = keep the current value
 
 class MirrorConfig(BaseModel):
     monitoring_port: int  # 0 disables mirroring
@@ -156,12 +167,14 @@ class PortDescription(BaseModel):
 class StaticMacAdd(BaseModel):
     mac: str = Field(pattern=r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
     port: int
-    fid: int = Field(default=0, ge=0, le=MAX_FID)
+    fid: int = Field(default=0, ge=0, le=MAX_FID)  # 1.0.0.x
+    vlan_id: Optional[int] = Field(default=None, ge=1, le=MAX_VLAN_ID)  # 2.0.0.x (default VLAN 1)
 
 class StaticMacDelete(BaseModel):
     mac: str = Field(pattern=r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
     port: int
-    fid: int = Field(default=0, ge=0, le=MAX_FID)
+    fid: int = Field(default=0, ge=0, le=MAX_FID)  # 1.0.0.x
+    vlan_id: Optional[int] = Field(default=None, ge=1, le=MAX_VLAN_ID)  # 2.0.0.x (default VLAN 1)
 
 class LagPort(BaseModel):
     port: int
@@ -171,7 +184,7 @@ class LagPort(BaseModel):
     group: int = Field(default=0, ge=0, le=15)
 
 class LagConfig(BaseModel):
-    system_priority: int = Field(default=32768, ge=1, le=65535)
+    system_priority: int = Field(default=32768, ge=0, le=65535)
     ports: list[LagPort] = []
     group_names: dict[str, str] = {}
 
@@ -268,9 +281,12 @@ def _public_switch(row) -> dict:
 # 2.0.0.3 unit, issue #3). Reading works or fails cleanly (SwitchFormatError -> 502).
 WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "igmp", "mirror",
                   "eee", "time", "static_mac", "mac_table", "reboot")
-# Each entry follows the request the 2.0.0.x native UI sends (code carved from the vendor image)
-# and is saved with save_all_configs.json: ports (also verified on a 2.0.0.3 unit), network, reboot.
-V2_WRITABLE = frozenset({"ports", "network", "reboot"})
+# Each entry follows the request the 2.0.0.x native UI sends (code carved from the vendor image),
+# is read back where the switch answers OK whatever it did, and is saved with save_all_configs.json
+# (port settings were also verified on a 2.0.0.3 unit). Left out: EEE and time/SNTP, which the
+# 2.0.0.x web interface no longer offers (their request format there is unconfirmed).
+V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "lag", "stp", "loop", "storm", "igmp",
+                         "mirror", "static_mac", "mac_table"})
 
 
 def read_only_features(fw_ver) -> list[str]:
@@ -285,9 +301,15 @@ async def _require_writable(client: SwitchClient, feature: str):
     """Refuse a write this switch's firmware line is not known to accept, before sending anything."""
     line = await client.firmware_line()
     if line is not None and line >= 2 and feature not in V2_WRITABLE:
-        raise HTTPException(501, f"Not supported yet on firmware {client.fw_ver}: SwitchPilot does not know how "
-                                 "this firmware expects this change, so nothing was sent to the switch. Use the "
-                                 "switch's own web interface for this setting for now.")
+        raise HTTPException(501, f"Not supported on firmware {client.fw_ver}: its own web interface does not offer "
+                                 "this setting and SwitchPilot does not know the format it expects, so nothing was "
+                                 "sent to the switch.")
+
+
+def _not_applied(client: SwitchClient, what: str) -> HTTPException:
+    """A 2.0.0.x write answered OK but read back different: report it, and save nothing."""
+    return HTTPException(502, f"Firmware {client.fw_ver} answered OK but did not apply {what}. Nothing was saved: "
+                              "restarting the switch brings back its saved configuration.")
 
 
 # ── Setup ──
@@ -653,6 +675,134 @@ def _assign_bridges(tag_entries: list[dict], port_configs: list[dict], current_t
         e["bridge"] = assigned[vid]
 
 
+# ── 2.0.0.x VLANs: one 802.1Q table, a PVID per port ──
+def _v2_port_view(port: int, table: dict, pvid: int) -> tuple[str, list[int]]:
+    """SwitchPilot's view of a port from the 802.1Q table: (mode, tagged VLANs).
+    flat = untagged in VLAN 1 only (the factory state), access = untagged in its PVID only,
+    trunk = tagged VLANs plus at most the PVID untagged; anything else is reported as unknown."""
+    untagged = sorted(v for v, e in table.items() if e["ports"].get(port) == 1)
+    tagged = sorted(v for v, e in table.items() if e["ports"].get(port) == 2)
+    if not untagged and not tagged:
+        return "unknown", []
+    if not tagged and untagged == [pvid]:
+        return ("flat" if pvid == 1 else "access"), []
+    if tagged and set(untagged) <= {pvid}:
+        return "trunk", tagged
+    return "unknown", tagged
+
+
+def _v2_target(a: "PortAssignment") -> tuple[dict, int]:
+    """Membership ({vlan_id: 1 untagged | 2 tagged}) and PVID a requested port mode asks for."""
+    if a.mode == "flat":
+        return {1: 1}, 1
+    if a.mode == "access":
+        vid = a.access_vlan or 1
+        return {vid: 1}, vid
+    native = a.native_vlan or 1  # untagged traffic: the native VLAN, untagged member and PVID
+    states = {vid: 2 for vid in (a.trunk_vlans or []) if vid != native}
+    states[native] = 1
+    return states, native
+
+
+async def _is_v2(client: SwitchClient, sw) -> bool:
+    """Firmware line from the switch, or from the stored version when it cannot be reached (so
+    the 1.0.0.x VLAN definitions, kept in SwitchPilot only, can still be edited offline)."""
+    try:
+        return await client.is_v2()
+    except Exception:
+        return (firmware_line(sw["firmware"]) or 1) >= 2
+
+
+async def _defined_vlan_names(switch_id: int) -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT vlan_id, name FROM vlans WHERE switch_id=?", (switch_id,))
+        return {r[0]: r[1] for r in await cursor.fetchall()}
+
+
+async def _save_v2(client: SwitchClient, warnings: list):
+    try:
+        await client.save_all()
+    except Exception as e:
+        warnings.append(f"Applied, but saving the configuration on the switch did not complete: {e.__class__.__name__}")
+
+
+async def _apply_vlans_v2(switch_id: int, client: SwitchClient, requested: dict) -> dict:
+    """2.0.0.x: write the requested port modes as 802.1Q memberships and PVIDs.
+
+    Each VLAN entry the switch takes replaces that VLAN's whole membership, so every affected
+    VLAN is sent with all its ports (untouched ports as read). Order: memberships a port gains,
+    then PVIDs, then the memberships it loses (the switch keeps a port in the VLAN that is its
+    PVID). The switch answers 200 even when it refuses something, so the result is read back;
+    on a mismatch the previous configuration is put back.
+    """
+    table = await client.get_vlan_table_v2()
+    cfg = await client.get_port_vlan_cfg_v2()
+    names = await _defined_vlan_names(switch_id)
+    changes = {p: _v2_target(a) for p, a in requested.items() if a.mode != "unknown"}
+    if not changes:
+        return {"ok": True, "port_vlans": 0, "vlans": 0, "warnings": []}
+    affected = set()
+    for port, (states, _) in changes.items():
+        affected |= {v for v, e in table.items() if e["ports"].get(port)}
+        affected |= set(states)
+    created = sorted(affected - set(table))
+    if len(table) + len(created) > V2_MAX_VLANS:
+        raise HTTPException(400, f"The switch holds at most {V2_MAX_VLANS} VLANs ({len(table)} exist, "
+                                 f"{len(created)} more needed)")
+    final = {}
+    for vid in affected:
+        ports = dict(table[vid]["ports"]) if vid in table else {p: 0 for p in range(1, NUM_PORTS + 1)}
+        for port, (states, _) in changes.items():
+            ports[port] = states.get(vid, 0)
+        final[vid] = ports
+
+    def name_of(vid):
+        return table[vid]["name"] if vid in table else names.get(vid, "")
+
+    gain = [{"vlan_id": v, "name": name_of(v),
+             "ports": {p: (s or (table[v]["ports"].get(p, 0) if v in table else 0)) for p, s in final[v].items()}}
+            for v in sorted(affected)]
+    lose = [{"vlan_id": v, "name": name_of(v), "ports": final[v]} for v, g in zip(sorted(affected), gain)
+            if g["ports"] != final[v]]
+    pvids = {p: pvid for p, (_, pvid) in changes.items() if cfg.get(p, {}).get("pvid") != pvid}
+    frames = {p: c["frame_type"] for p, c in cfg.items()}
+    previous = [{"vlan_id": v, "name": table[v]["name"], "ports": table[v]["ports"]} for v in sorted(affected) if v in table]
+    previous_pvids = {p: cfg[p]["pvid"] for p in pvids if p in cfg}
+
+    step = "VLAN memberships"
+    try:
+        await client.set_vlans_v2(gain)
+        step = "PVIDs"
+        if pvids:
+            await client.set_pvids_v2(pvids, frames)
+        step = "VLAN memberships"
+        if lose:
+            await client.set_vlans_v2(lose)
+        step = "verification"
+        after, after_cfg = await client.get_vlan_table_v2(), await client.get_port_vlan_cfg_v2()
+        wrong = [f"port {p} in VLAN {v}" for v in sorted(affected) for p in sorted(changes)
+                 if after.get(v, {}).get("ports", {}).get(p, 0) != final[v][p]]
+        wrong += [f"PVID of port {p}" for p, (_, pvid) in sorted(changes.items()) if after_cfg.get(p, {}).get("pvid") != pvid]
+        if wrong:
+            raise SwitchError("the switch did not apply " + ", ".join(wrong[:6]) + (" ..." if len(wrong) > 6 else ""))
+    except Exception as e:
+        restored = True
+        try:
+            if previous:
+                await client.set_vlans_v2(previous)
+            if previous_pvids:
+                await client.set_pvids_v2(previous_pvids, frames)
+            await client.delete_vlans_v2(created)
+        except Exception:
+            restored = False
+        raise HTTPException(502, f"VLAN apply failed while writing {step} ({e}). "
+                                 + ("The previous configuration was put back (not saved)." if restored else
+                                    "The switch may be left with an incomplete VLAN configuration: check it and apply again."))
+    warnings = []
+    await _save_v2(client, warnings)
+    return {"ok": True, "port_vlans": len(changes), "vlans": len(affected), "created": created, "warnings": warnings}
+
+
 async def _vlans_in_use(client: SwitchClient) -> set[int]:
     in_use = set()
     for pv in await client.get_port_vlans():
@@ -671,45 +821,114 @@ async def get_vlans(switch_id: int, user=Depends(get_current_user)):
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT vlan_id, name FROM vlans WHERE switch_id=?", (switch_id,))
         named = {r["vlan_id"]: r["name"] for r in await cursor.fetchall()}
+    client = await _get_client(switch_id)
     try:
-        in_use = await _vlans_in_use(await _get_client(switch_id))
+        if await client.is_v2():
+            # 2.0.0.x keeps VLANs (and a 16-character name) on the switch itself
+            table = await client.get_vlan_table_v2()
+            out = []
+            for vid in sorted(set(table) | set(named)):
+                on = table.get(vid)
+                name = named.get(vid) or (on["name"] if on and on["name"] else f"VLAN {vid}")
+                out.append({"vlan_id": vid, "name": name, "defined": vid in named or on is not None,
+                            "in_use": bool(on and any(on["ports"].values())), "on_switch": on is not None,
+                            "deletable": vid != 1})
+            return out
+        in_use = await _vlans_in_use(client)
     except Exception as e:  # switch offline: still show what we know
         log.info("VLAN discovery skipped for switch %s: %s", switch_id, e)
         in_use = set()
-    vlans = [{"vlan_id": vid, "name": named.get(vid, f"VLAN {vid}"), "defined": vid in named, "in_use": vid in in_use}
+    vlans = [{"vlan_id": vid, "name": named.get(vid, f"VLAN {vid}"), "defined": vid in named, "in_use": vid in in_use,
+              "deletable": vid in named}
              for vid in sorted(set(named) | in_use)]
     return vlans
 
 @app.post("/api/switches/{switch_id}/vlans")
 async def create_vlan(switch_id: int, req: VlanCreate, user=Depends(require_admin)):
-    await _switch_row(switch_id)
+    sw = await _switch_row(switch_id)
+    name = req.name.strip()
+    named = await _defined_vlan_names(switch_id)
+    client = await _get_client(switch_id)
+    warnings = []
+    if await _is_v2(client, sw):
+        # 2.0.0.x: the VLAN is created on the switch (no member port yet), with its name
+        async with _vlan_locks.setdefault(switch_id, asyncio.Lock()):
+            table = await client.get_vlan_table_v2()
+            if req.vlan_id in named and req.vlan_id in table:
+                raise HTTPException(409, f"VLAN {req.vlan_id} already exists")
+            if req.vlan_id not in table and len(table) >= V2_MAX_VLANS:
+                raise HTTPException(400, f"The switch holds at most {V2_MAX_VLANS} VLANs")
+            ports = table[req.vlan_id]["ports"] if req.vlan_id in table else {}
+            await client.set_vlans_v2([{"vlan_id": req.vlan_id, "name": name, "ports": ports}])
+            if req.vlan_id not in await client.get_vlan_table_v2():
+                raise HTTPException(502, f"The switch did not create VLAN {req.vlan_id}")
+            await _save_v2(client, warnings)
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("INSERT OR REPLACE INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
+                             (switch_id, req.vlan_id, name))
+            await db.commit()
+        await _log_change(switch_id, user, "vlans", {"vlan_id": req.vlan_id, "name": name, "created": True})
+        return {"ok": True, "warnings": warnings}
     async with aiosqlite.connect(DB_PATH) as db:
         try:
             await db.execute("INSERT INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
-                             (switch_id, req.vlan_id, req.name.strip()))
+                             (switch_id, req.vlan_id, name))
             await db.commit()
         except aiosqlite.IntegrityError:
             raise HTTPException(409, f"VLAN {req.vlan_id} already exists")
-    return {"ok": True}
+    return {"ok": True, "warnings": warnings}
 
 @app.put("/api/switches/{switch_id}/vlans/{vlan_id}")
 async def rename_vlan(switch_id: int, vlan_id: int, req: VlanRename, user=Depends(require_admin)):
     """Rename a defined VLAN in place (the ID stays, so port assignments are untouched)."""
-    await _switch_row(switch_id)
+    sw = await _switch_row(switch_id)
     name = req.name.strip()
     if not name:
         raise HTTPException(422, "VLAN name must not be blank")
+    client = await _get_client(switch_id)
+    warnings = []
+    on_switch = False
+    if await _is_v2(client, sw):
+        # 2.0.0.x keeps the name on the switch too (16 characters): rename it there, members unchanged
+        async with _vlan_locks.setdefault(switch_id, asyncio.Lock()):
+            table = await client.get_vlan_table_v2()
+            if vlan_id in table:
+                on_switch = True
+                await client.set_vlans_v2([{"vlan_id": vlan_id, "name": name, "ports": table[vlan_id]["ports"]}])
+                await _save_v2(client, warnings)
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("UPDATE vlans SET name=? WHERE switch_id=? AND vlan_id=?",
-                                  (name, switch_id, vlan_id))
+        if on_switch:
+            cursor = await db.execute("INSERT OR REPLACE INTO vlans (switch_id, vlan_id, name) VALUES (?,?,?)",
+                                      (switch_id, vlan_id, name))
+        else:
+            cursor = await db.execute("UPDATE vlans SET name=? WHERE switch_id=? AND vlan_id=?",
+                                      (name, switch_id, vlan_id))
         await db.commit()
         if cursor.rowcount == 0:
             raise HTTPException(404, f"VLAN {vlan_id} is not defined")
     await _log_change(switch_id, user, "vlans", {"vlan_id": vlan_id, "name": name, "renamed": True})
-    return {"ok": True}
+    return {"ok": True, "warnings": warnings}
 
 @app.delete("/api/switches/{switch_id}/vlans/{vlan_id}")
 async def delete_vlan(switch_id: int, vlan_id: int, user=Depends(require_admin)):
+    sw = await _switch_row(switch_id)
+    client = await _get_client(switch_id)
+    if await _is_v2(client, sw):
+        if vlan_id == 1:
+            raise HTTPException(400, "VLAN 1 is the default VLAN: the switch keeps it")
+        async with _vlan_locks.setdefault(switch_id, asyncio.Lock()):
+            table = await client.get_vlan_table_v2()
+            if vlan_id in table:
+                cfg = await client.get_port_vlan_cfg_v2()
+                pvid_ports = sorted(p for p, c in cfg.items() if c["pvid"] == vlan_id)
+                if pvid_ports:  # the switch silently refuses this
+                    raise HTTPException(409, f"VLAN {vlan_id} is the access/native VLAN of port(s) "
+                                             f"{', '.join(map(str, pvid_ports))}: move them to another VLAN first")
+                await client.delete_vlans_v2([vlan_id])
+                if vlan_id in await client.get_vlan_table_v2():
+                    raise HTTPException(502, f"The switch did not delete VLAN {vlan_id}")
+                await _save_v2(client, [])
+                await _log_change(switch_id, user, "vlans", {"vlan_id": vlan_id, "deleted": True})
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM vlans WHERE switch_id=? AND vlan_id=?", (switch_id, vlan_id))
         await db.commit()
@@ -718,13 +937,27 @@ async def delete_vlan(switch_id: int, vlan_id: int, user=Depends(require_admin))
 @app.get("/api/switches/{switch_id}/vlans/limits")
 async def vlan_limits(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
+    if await client.is_v2():
+        table = await client.get_vlan_table_v2()
+        return {"model": "8021q", "max_vlans": V2_MAX_VLANS, "used_vlans": len(table),
+                "max_vlan_id": MAX_VLAN_ID, "max_pvid": MAX_VLAN_ID}
     tag_entries = await client.get_tag_vlans()
-    return {"max_fid": MAX_FID, "max_tag_entries": MAX_TAG_ENTRIES, "used_tag_entries": len(tag_entries),
-            "max_vlan_id": MAX_VLAN_ID}
+    return {"model": "bridge", "max_fid": MAX_FID, "max_tag_entries": MAX_TAG_ENTRIES, "used_tag_entries": len(tag_entries),
+            "max_vlan_id": MAX_VLAN_ID, "max_pvid": MAX_FID}
 
 @app.get("/api/switches/{switch_id}/vlans/assignments")
 async def get_vlan_assignments(switch_id: int, user=Depends(get_current_user)):
     client = await _get_client(switch_id)
+    if await client.is_v2():
+        table = await client.get_vlan_table_v2()
+        cfg = await client.get_port_vlan_cfg_v2()
+        rows = []
+        for port in sorted(cfg):
+            pvid = cfg[port]["pvid"]
+            mode, tagged = _v2_port_view(port, table, pvid)
+            rows.append({"port": port, "enabled": mode != "flat", "pvid": pvid, "mode": mode,
+                         "trunk_vlans": [v for v in tagged if v != pvid], "frame_type": cfg[port]["frame_type"]})
+        return rows
     port_vlans = await client.get_port_vlans()
     tag_vlans = await client.get_tag_vlans()
     # Build per-port view
@@ -759,6 +992,16 @@ async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignmen
         requested[a.port] = a
 
     lock = _vlan_locks.setdefault(switch_id, asyncio.Lock())
+    if await client.is_v2():
+        async with lock:
+            result = await _apply_vlans_v2(switch_id, client, requested)
+        await _log_change(switch_id, user, "vlans", [a.model_dump() for a in assignments])
+        return result
+    for a in requested.values():  # 1.0.0.x: PVIDs are bridges (FIDs) 0-63
+        for vid in (a.access_vlan, a.native_vlan):
+            if vid is not None and vid > MAX_FID:
+                raise HTTPException(422, f"Port {a.port}: VLAN {vid} cannot be an access/native VLAN on this "
+                                         f"firmware (0-{MAX_FID})")
     async with lock:
         current_ports = {p["port"]: p for p in await client.get_port_vlans()}
         current_tags = await client.get_tag_vlans()
@@ -852,9 +1095,22 @@ async def get_stp(switch_id: int, user=Depends(get_current_user)):
 async def set_stp(switch_id: int, cfg: StpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "stp")
-    await client.set_stp(cfg.enabled, cfg.mode, cfg.edge_ports)
+    if cfg.edge_ports is not None:
+        for p in cfg.edge_ports:
+            client.to_internal(p)  # InvalidPortError -> 400 before anything is sent
+    result = {"ok": True, "warnings": []}
+    if await client.is_v2():
+        result["loop_turned_off"] = await client.set_stp(cfg.enabled, cfg.mode, cfg.edge_ports)
+        now = await client.get_stp()
+        # with STP off the switch reads the mode as RSTP and drops every edge port: only "off" is checked
+        if now["enabled"] != cfg.enabled or cfg.enabled and (now["mode"] != cfg.mode or (
+                cfg.edge_ports is not None and {p["port"] for p in now["ports"] if p["edge"]} != set(cfg.edge_ports))):
+            raise _not_applied(client, "the STP setting")
+        await _save_v2(client, result["warnings"])
+    else:
+        await client.set_stp(cfg.enabled, cfg.mode, cfg.edge_ports)
     await _log_change(switch_id, user, "stp", cfg.model_dump())
-    return {"ok": True}
+    return result
 
 
 # ── Loop Detection ──
@@ -867,9 +1123,29 @@ async def get_loop(switch_id: int, user=Depends(get_current_user)):
 async def set_loop(switch_id: int, cfg: LoopConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "loop")
-    await client.set_loop(cfg.ports)
-    await _log_change(switch_id, user, "loop", cfg.ports)
-    return {"ok": True}
+    if not await client.is_v2():
+        if cfg.ports is None:
+            raise HTTPException(400, "Give the ports to watch: {\"ports\": {\"1\": true, ...}}")
+        await client.set_loop(cfg.ports)
+        await _log_change(switch_id, user, "loop", cfg.ports)
+        return {"ok": True}
+    # 2.0.0.x: one setting for the whole switch, fields left out keep their value. The switch only
+    # shows the two timers while detection runs (they read 0 otherwise): when they are unknown they
+    # are left out, which keeps them, except to start detection, which needs both (0 as its page sends)
+    cur = await client.get_loop()
+    want = {"enabled": cur["enabled"] if cfg.enabled is None else cfg.enabled,
+            "prevention": cur["prevention"] if cfg.prevention is None else cfg.prevention}
+    for key, given in (("interval", cfg.interval), ("recovery", cfg.recovery)):
+        known = cur[key] if cur["enabled"] else None
+        want[key] = given if given is not None else (known if known is not None or not want["enabled"] else 0)
+    result = {"ok": True, "warnings": [], "stp_turned_off": await client.set_loop_v2(**want)}
+    now = await client.get_loop()
+    checked = ("enabled", "prevention", "interval", "recovery") if want["enabled"] else ("enabled", "prevention")
+    if any(now[k] != want[k] for k in checked):
+        raise _not_applied(client, "the loop detection setting")
+    await _save_v2(client, result["warnings"])
+    await _log_change(switch_id, user, "loop", want)
+    return result
 
 
 # ── Storm Control ──
@@ -882,9 +1158,23 @@ async def get_storm(switch_id: int, user=Depends(get_current_user)):
 async def set_storm(switch_id: int, cfg: StormConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "storm")
-    await client.set_storm_control(cfg.rate, cfg.enabled)
-    await _log_change(switch_id, user, "storm", cfg.model_dump())
-    return {"ok": True}
+    if not await client.is_v2():
+        await client.set_storm_control(cfg.rate, cfg.enabled)
+        await _log_change(switch_id, user, "storm", cfg.model_dump())
+        return {"ok": True}
+    # 2.0.0.x: a limit in Mbps per port and traffic type; SwitchPilot sets the same one on every port
+    if cfg.enabled and cfg.rate > V2_STORM_MAX:
+        raise HTTPException(400, f"The rate is in Mbps on this firmware: 1-{V2_STORM_MAX}")
+    types = list(dict.fromkeys(cfg.types if cfg.types is not None else ["broadcast"]))
+    if cfg.enabled and not types:
+        raise HTTPException(400, "Choose at least one kind of traffic to limit")
+    result = {"ok": True, "warnings": [], "requests": await client.set_storm_v2(cfg.enabled, cfg.rate, types)}
+    now = await client.get_storm_control()
+    if any(p[t] != (cfg.rate if cfg.enabled and t in types else 0) for p in now["ports"] for t in STORM_TYPES):
+        raise _not_applied(client, "the storm control limits on every port")
+    await _save_v2(client, result["warnings"])
+    await _log_change(switch_id, user, "storm", {**cfg.model_dump(), "types": types})
+    return result
 
 
 # ── IGMP ──
@@ -899,13 +1189,27 @@ async def get_igmp(switch_id: int, user=Depends(get_current_user)):
 async def set_igmp(switch_id: int, cfg: IgmpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "igmp")
-    await client.set_igmp_config({
-        "igmp": "on" if cfg.enabled else "off",
-        "fast_leave": "on" if cfg.fast_leave else "off",
-        "snoop_querier": "on" if cfg.querier else "off",
-    })
-    await _log_change(switch_id, user, "igmp", cfg.model_dump())
-    return {"ok": True}
+    if not await client.is_v2():
+        await client.set_igmp_config({
+            "igmp": "on" if cfg.enabled else "off",
+            "fast_leave": "on" if cfg.fast_leave else "off",
+            "snoop_querier": "on" if cfg.querier else "off",
+        })
+        await _log_change(switch_id, user, "igmp", cfg.model_dump())
+        return {"ok": True}
+    report_flood = cfg.report_flood
+    if report_flood is None:
+        report_flood = (await client.get_igmp_config()).get("report_flood") == "on"
+    await client.set_igmp_v2(cfg.enabled, cfg.fast_leave, report_flood)
+    now = await client.get_igmp_config()
+    if ((now.get("igmp") == "on", now.get("fast_leave") == "on", now.get("report_flood") == "on")
+            != (cfg.enabled, cfg.fast_leave, report_flood)):
+        raise _not_applied(client, "the IGMP snooping setting")
+    result = {"ok": True, "warnings": []}
+    await _save_v2(client, result["warnings"])
+    await _log_change(switch_id, user, "igmp", {"enabled": cfg.enabled, "fast_leave": cfg.fast_leave,
+                                                "report_flood": report_flood})
+    return result
 
 
 # ── Port Mirror ──
@@ -918,9 +1222,23 @@ async def get_mirror(switch_id: int, user=Depends(get_current_user)):
 async def set_mirror(switch_id: int, cfg: MirrorConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "mirror")
+    if cfg.monitoring_port:
+        for p in [cfg.monitoring_port, *cfg.mirrored_ports]:
+            client.to_internal(p)  # InvalidPortError -> 400 before anything is sent
     await client.set_mirror(cfg.monitoring_port, cfg.mirrored_ports, cfg.ingress, cfg.egress)
+    result = {"ok": True, "warnings": []}
+    if await client.is_v2():
+        now = await client.get_mirror()
+        dest = cfg.monitoring_port or now["monitoring_port"]
+        sources = {int(p) for p in cfg.mirrored_ports} - {dest} if cfg.monitoring_port else set()
+        # the switch skips the destination when it is listed as a source: its own flags stay as they were
+        actual = {p["port"]: (p["ingress"], p["egress"]) for p in now["ports"] if p["port"] != dest}
+        expected = {port: (port in sources and cfg.ingress, port in sources and cfg.egress) for port in actual}
+        if actual != expected or (cfg.monitoring_port and now["monitoring_port"] != cfg.monitoring_port):
+            raise _not_applied(client, "the port mirroring setting")
+        await _save_v2(client, result["warnings"])
     await _log_change(switch_id, user, "mirror", cfg.model_dump())
-    return {"ok": True}
+    return result
 
 
 # ── EEE ──
@@ -1009,10 +1327,19 @@ async def set_lag(switch_id: int, cfg: LagConfig, user=Depends(require_admin)):
             raise HTTPException(400, f"Port {p.port} is listed twice")
         seen.add(p.port)
     await client.set_lag(cfg.system_priority, [p.model_dump() for p in cfg.ports])
+    result = {"ok": True, "warnings": []}
+    if await client.is_v2():
+        now = await client.get_lag()
+        by_port = {p["port"]: p for p in now["ports"]}
+        if int(now["system_priority"]) != cfg.system_priority or any(
+                (by_port[p.port]["type"], by_port[p.port]["group"] if p.type else 0)
+                != (p.type, p.group if p.type else 0) for p in cfg.ports):
+            raise _not_applied(client, "the link aggregation setting")
+        await _save_v2(client, result["warnings"])
     if cfg.group_names:
         await _save_lag_names(switch_id, cfg.group_names)
     await _log_change(switch_id, user, "lag", cfg.model_dump())
-    return {"ok": True}
+    return result
 
 @app.put("/api/switches/{switch_id}/lag/names")
 async def set_lag_names(switch_id: int, req: LagNames, user=Depends(require_admin)):
@@ -1104,16 +1431,16 @@ async def get_static_macs(switch_id: int, user=Depends(get_current_user)):
 async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "static_mac")
-    warnings = await client.add_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
-    await _log_change(switch_id, user, "static_mac_add", req.model_dump())
+    warnings = await client.add_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid, req.vlan_id)
+    await _log_change(switch_id, user, "static_mac_add", req.model_dump(exclude_none=True))
     return {"ok": True, "warnings": warnings}
 
 @app.post("/api/switches/{switch_id}/mac/static/delete")
 async def delete_static_mac(switch_id: int, req: StaticMacDelete, user=Depends(require_admin)):
     client = await _get_client(switch_id)
     await _require_writable(client, "static_mac")
-    warnings = await client.delete_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
-    await _log_change(switch_id, user, "static_mac_delete", req.model_dump())
+    warnings = await client.delete_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid, req.vlan_id)
+    await _log_change(switch_id, user, "static_mac_delete", req.model_dump(exclude_none=True))
     return {"ok": True, "warnings": warnings}
 
 # ── Config Snapshots ──
@@ -1132,8 +1459,11 @@ async def create_snapshot(switch_id: int, req: SnapshotCreate, user=Depends(requ
     client = await _get_client(switch_id)
     snapshot = {"meta": {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": client.swap_sfp}}
     unavailable = []
+    vlan_reads = ((("vlan_table", client.get_vlan_table_v2), ("port_vlan_cfg", client.get_port_vlan_cfg_v2))
+                  if await client.is_v2() else
+                  (("port_vlans", client.get_port_vlans), ("tag_vlans", client.get_tag_vlans)))
     for name, read in (("status", client.get_status), ("network", client.get_network), ("ports", client.get_ports),
-                       ("port_vlans", client.get_port_vlans), ("tag_vlans", client.get_tag_vlans),
+                       *vlan_reads,
                        ("stp", client.get_stp), ("storm", client.get_storm_control),
                        ("igmp_config", client.get_igmp_config), ("eee", client.get_eee), ("lag", client.get_lag),
                        ("mirror", client.get_mirror), ("loop", client.get_loop), ("sntp", client.get_sntp)):

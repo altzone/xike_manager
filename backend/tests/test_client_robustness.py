@@ -23,12 +23,17 @@ def test_parse_mac_entries_handles_both_firmware_shapes():
     ident = lambda p: p
     v1 = {"total_entries": "1", "Idx_0": {"Dynamic_idx": "0", "Dynamic_mac_addr": "AA:00:00:00:00:01",
                                            "Dynamic_portid": "3", "Dynamic_fid": "2", "Dynamic_age_timer": "10"}}
-    assert _parse_mac_entries(v1, ident) == [{"idx": "0", "mac": "AA:00:00:00:00:01", "port": 3, "fid": "2", "age": "10"}]
+    assert _parse_mac_entries(v1, ident) == [{"idx": "0", "mac": "AA:00:00:00:00:01", "port": 3, "fid": "2", "vlan": None, "age": "10"}]
     v2 = [{"Static_idx": 1, "Static_mac_addr": "AA:00:00:00:00:02", "Static_vlan_id": 7, "Static_portid": 8}]
-    assert _parse_mac_entries(v2, ident) == [{"idx": "1", "mac": "AA:00:00:00:00:02", "port": 8, "fid": "7", "age": ""}]
+    assert _parse_mac_entries(v2, ident) == [{"idx": "1", "mac": "AA:00:00:00:00:02", "port": 8, "fid": "7", "vlan": 7, "age": ""}]
     qss = {"batch": [{"mac_addr": "AA:00:00:00:00:03", "vlan_id": 1, "fid": 0, "portid": 2, "age_timer": 5}],
            "has_more": False, "count": 1}
     assert _parse_mac_entries(qss, ident)[0]["port"] == 2
+    # 2.0.0.x writes the VLAN ID before the FID: each keeps its own column
+    both = {"Idx_0": {"Static_idx": 1, "Static_mac_addr": "AA:00:00:00:00:04", "Static_vlan_id": 20, "Static_fid": 0,
+                      "Static_portid": 4}, "total_entries": 1}
+    assert _parse_mac_entries(both, ident)[0] == {"idx": "1", "mac": "AA:00:00:00:00:04", "port": 4, "fid": "0",
+                                                  "vlan": 20, "age": ""}
     assert _parse_mac_entries({"total_entries": "0"}, ident) == []
 
 
@@ -91,4 +96,4 @@ def test_static_mac_list_from_sse_style_payload(api, monkeypatch):
 
     monkeypatch.setattr(api.mock, "handler", handler)
     assert api.get(f"/api/switches/{sid}/mac/static").json() == [
-        {"idx": "1", "mac": "00:11:22:33:44:55", "port": 9, "fid": "1", "age": ""}]
+        {"idx": "1", "mac": "00:11:22:33:44:55", "port": 9, "fid": "1", "vlan": 1, "age": ""}]

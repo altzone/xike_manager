@@ -1,27 +1,27 @@
 """Switches on 2.0.0.x firmware: pages that answer in another format fail cleanly, and the
-1.0.0.x write requests SwitchPilot cannot send safely are refused before anything reaches the
-switch (issue #3: an IGMP change turned two other options off on a 2.0.0.3 unit)."""
+writes SwitchPilot cannot send safely there are refused before anything reaches the switch
+(issue #3: a 1.0.0.x IGMP request turned two other options off on a 2.0.0.3 unit)."""
 import sqlite3
 
+import httpx
 import pytest
 
 import db as dbmod
 from conftest import add_switch
+from v2_mock import V2L2, V2Vlans
 
 
-def make_v2(mock):
-    """Answers of an SKS3200-8E2X-P on 2.0.0.3 (status, storm and IGMP as captured from
-    SwitchPilot on that unit; the VLAN/STP pages only need to differ from the 1.0.0.x shape)."""
+def make_v2(mock, dynamic=None):
+    """An SKS3200-8E2X-P on 2.0.0.3: status as captured from that unit, the other pages as its
+    firmware's handlers answer and read them (tests/v2_mock.py)."""
     st = mock.state
     st["status.json"] = {"temperature": "49", "sys_ipv4": "10.0.0.2", "sys_macaddr": "8C:A6:82:71:A3:36",
                          "fw_ver": "2.0.0.3", "hw_ver": "A0", "des": "SKS3200-8E2X-P"}
     st["port_vlan_cfg.json"] = {"PortNum": 10, **{f"Port_{i}": {"Port_Id": i, "PVID": 1, "Frame_Type": 0}
                                                   for i in range(1, 11)}}
     st["tag_vlan_cfg.json"] = {"vlans": []}
-    st["stp.json"] = {"stp_enable": "0", "stp_rstp_mode": "RSTP"}
-    st["storm_ctrl_cfg.json"] = {"portnum": 10, "ports": [
-        {"sctrl_bcast": 0, "sctrl_mcast": 0, "sctrl_unucast": 0, "sctrl_unmcast": 0, "port_id": i} for i in range(1, 11)]}
-    st["igmp_config.json"] = {"igmp": "off", "fast_leave": "on", "report_flood": "on"}
+    mock.v2 = V2Vlans(mock)  # tag_vlan.json / port_vlan.json (and their 1.0.0.x aliases)
+    mock.l2 = V2L2(mock, dynamic)  # LAG, STP, loop, storm, IGMP, mirroring, MAC tables, save
 
 
 @pytest.fixture
@@ -34,27 +34,19 @@ def v2(api):
 
 
 def test_pages_in_another_format_fail_with_a_clear_502(api, v2):
-    for path in ("vlans/assignments", "vlans/limits", "stp"):
-        r = api.get(f"/api/switches/{v2}/{path}")
-        assert r.status_code == 502, (path, r.status_code, r.text)
-        assert "2.0.0.3" in r.json()["detail"] and ".json" in r.json()["detail"]
-    assert api.get(f"/api/switches/{v2}/vlans").status_code == 200  # local definitions still listed
+    for path in ("vlans", "vlans/assignments", "vlans/limits", "stp", "loop", "storm", "igmp", "mirror", "lag",
+                 "mac/dynamic", "mac/static", "ports", "eee"):  # all read in the 2.0.0.x format
+        assert api.get(f"/api/switches/{v2}/{path}").status_code == 200, path
+    api.mock.responders["port_trunk_cfg.json"] = lambda request: httpx.Response(200, json={"PortNum": 10})
+    r = api.get(f"/api/switches/{v2}/lag")
+    assert r.status_code == 502, r.text
+    assert "2.0.0.3" in r.json()["detail"] and "port_trunk_cfg.json" in r.json()["detail"]
 
 
-WRITES = [
-    ("vlans/apply", [{"port": 2, "mode": "access", "access_vlan": 10}]),
-    ("stp", {"enabled": True, "mode": "rstp"}),
-    ("loop", {"ports": {"2": True}}),
-    ("storm", {"enabled": True, "rate": 100}),
-    ("igmp", {"enabled": True, "fast_leave": True, "querier": False}),
-    ("mirror", {"monitoring_port": 2, "mirrored_ports": [3], "ingress": True, "egress": False}),
+WRITES = [  # settings the 2.0.0.x web interface no longer offers
     ("eee", {"enabled": True}),
-    ("mac/clear", None),
-    ("lag", {"system_priority": 32768, "ports": [{"port": 2, "type": 2, "group": 1}, {"port": 3, "type": 2, "group": 1}]}),
     ("time", {"time": "12:00:00", "date": "01/10/2026", "timezone": "+01:00"}),
     ("sntp", {"enabled": True, "server": "1.2.3.4", "poll": 64}),
-    ("mac/static/add", {"mac": "AA:BB:CC:DD:EE:01", "port": 2, "fid": 0}),
-    ("mac/static/delete", {"mac": "AA:BB:CC:DD:EE:01", "port": 2, "fid": 0}),
 ]
 
 
@@ -87,7 +79,7 @@ def test_switches_report_their_firmware_line_and_read_only_features(api, v2):
     by_id = {s["id"]: s for s in api.get("/api/switches").json()}
     assert by_id[v1]["firmware_line"] == 1 and by_id[v1]["read_only"] == []
     assert by_id[v2]["firmware_line"] == 2
-    assert "vlans" in by_id[v2]["read_only"] and "igmp" in by_id[v2]["read_only"] and "ports" not in by_id[v2]["read_only"]
+    assert by_id[v2]["read_only"] == ["eee", "time"]
     assert api.get(f"/api/switches/{v2}/info").json()["read_only"] == by_id[v2]["read_only"]
     status = api.get(f"/api/switches/{v2}/status").json()
     assert status["firmware_line"] == 2 and status["read_only"] == by_id[v2]["read_only"]
@@ -107,7 +99,8 @@ def test_snapshot_keeps_what_the_switch_can_give(api, v2):
     r = api.post(f"/api/switches/{v2}/snapshots", json={"name": "v2"})
     assert r.status_code == 200, r.text
     cfg = api.get(f"/api/switches/{v2}/snapshots/{r.json()['id']}").json()["config"]
-    assert {"port_vlans", "tag_vlans", "stp"} <= set(cfg["meta"]["unavailable"])
+    assert "unavailable" not in cfg["meta"] and cfg["stp"]["mode"] == "rstp" and cfg["loop"]["model"] == "global"
+    assert cfg["vlan_table"]["1"]["ports"]["1"] == 1 and cfg["port_vlan_cfg"]["1"]["pvid"] == 1
     assert cfg["meta"]["firmware"] == "2.0.0.3"
     assert cfg["ports"] and cfg["status"]["fw_ver"] == "2.0.0.3"
 

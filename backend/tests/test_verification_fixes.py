@@ -304,7 +304,7 @@ def test_vlan_rename_updates_the_row_in_place(api):
     sid = add_switch(api)
     assert api.post(f"/api/switches/{sid}/vlans", json={"vlan_id": 20, "name": "old"}).status_code == 200
     r = api.put(f"/api/switches/{sid}/vlans/20", json={"name": "  Servers  "})
-    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert r.status_code == 200 and r.json()["ok"] is True
     vlans = {v["vlan_id"]: v for v in api.get(f"/api/switches/{sid}/vlans").json()}
     assert vlans[20]["name"] == "Servers" and vlans[20]["defined"] is True
     assert vlans[20]["in_use"] is True  # port 9 carries PVID 20 in the fixture: untouched by the rename

@@ -63,7 +63,7 @@ def test_reads_without_swap_match_firmware_indexes(api):
     assert macs[0]["port"] == 9 and "vendor" in macs[0]
 
     static = api.get(f"/api/switches/{sid}/mac/static").json()
-    assert static == [{"idx": "0", "mac": "AA:BB:CC:00:00:02", "port": 9, "fid": "0", "age": ""}]
+    assert static == [{"idx": "0", "mac": "AA:BB:CC:00:00:02", "port": 9, "fid": "0", "vlan": None, "age": ""}]
 
 
 def test_reads_with_swap_relabel_sfp_ports(api):
