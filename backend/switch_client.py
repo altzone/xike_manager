@@ -160,6 +160,15 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
     return entries
 
 
+def _alert_key(text: str) -> str | None:
+    """The {"alert_key": ...} some 2.0.0.x handlers answer with, None for an empty or other body."""
+    try:
+        data = json.loads(text) if text and text.strip() else None
+    except ValueError:
+        return None
+    return data.get("alert_key") if isinstance(data, dict) else None
+
+
 class SwitchClient:
     def __init__(self, ip: str, username: str = "admin", password: str = "admin",
                  swap_sfp: bool = False, transport: httpx.AsyncBaseTransport | None = None):
@@ -274,10 +283,13 @@ class SwitchClient:
 
     async def _post(self, endpoint: str, data: dict):
         await self._ensure_login()
-        r = await self.client.post(f"{self.base}/{endpoint}", json=data)
+        # compact JSON, like the native UI's axios: some 2.0.0.x handlers read at most 47 or 255 bytes
+        body = json.dumps(data, separators=(",", ":"))
+        headers = {"Content-Type": "application/json"}
+        r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
         if "login.html" in r.text:
             await self._relogin()
-            r = await self.client.post(f"{self.base}/{endpoint}", json=data)
+            r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
             if "login.html" in r.text:
                 # the write was dropped: never report it as applied
                 self._logged_in = False
@@ -300,10 +312,28 @@ class SwitchClient:
             await self.get_status()
         return firmware_line(self.fw_ver)
 
+    async def is_v2(self) -> bool:
+        return (await self.firmware_line() or 1) >= 2
+
+    async def save_all(self):
+        """2.0.0.x: the native UI's single Save button (POST {} -> empty body). Every change made
+        on 2.0.0.x lives in the running configuration only until this is called."""
+        return await self._post("save_all_configs.json", {})
+
     async def get_network(self):
         return await self._get("network_settings.json")
 
     async def set_network_ipv4(self, ip: str, netmask: str, gateway: str, dhcp: bool):
+        if await self.is_v2():
+            # 2.0.0.x native UI: the address fields are disabled (so left out) when DHCP is on;
+            # the switch answers {"alert_key": "alert_success"} or an alert naming the problem
+            body = {"dhcp_enable": "1"} if dhcp else {
+                "dhcp_enable": "0", "input_ip": ip, "input_netmask": netmask, "input_gateway": gateway or ""}
+            text = await self._post("network_settings_ipv4.json", body)
+            alert = _alert_key(text)
+            if alert and alert != "alert_success":
+                raise SwitchError(f"network_settings_ipv4.json: the switch refused the change ({alert})")
+            return text
         return await self._post("network_settings_ipv4.json", {
             "input_ip": ip, "input_netmask": netmask,
             "input_gateway": gateway, "dhcp_enable": "1" if dhcp else "0"
@@ -383,6 +413,8 @@ class SwitchClient:
         })
 
     async def save_ports(self):
+        if await self.is_v2():
+            return await self.save_all()  # what the 2.0.0.x port page's Save button sends
         return await self._post("save_user_port_setting.json", {})
 
     @_parsed("port_statistics.json")
@@ -681,7 +713,14 @@ class SwitchClient:
     # ── EEE ──
     async def get_eee(self):
         # Removed in firmware 1.0.0.5+ (empty body → None = unsupported).
-        return await self._get("eee_config.json", default=None)
+        data = await self._get("eee_config.json", default=None)
+        if isinstance(data, dict):
+            if "eee" in data:  # one switch for the whole device
+                data["enabled"] = data["eee"] == "on"
+            else:  # 2.0.0.x: per port, Idx_0..7 = ports 1-8 (the SFP+ cages, ext_Idx_*, never do EEE)
+                data["enabled"] = any(isinstance(v, dict) and v.get("eee_enable") == "on"
+                                      for k, v in data.items() if k.startswith("Idx_"))
+        return data
 
     async def set_eee(self, enabled: bool):
         return await self._post("eee_config.json", {"eee": "on" if enabled else "off"})

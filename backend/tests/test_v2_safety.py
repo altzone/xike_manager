@@ -42,7 +42,6 @@ def test_pages_in_another_format_fail_with_a_clear_502(api, v2):
 
 
 WRITES = [
-    ("network", {"dhcp": False, "ip": "10.0.0.2", "netmask": "255.255.255.0", "gateway": "10.0.0.1"}),
     ("vlans/apply", [{"port": 2, "mode": "access", "access_vlan": 10}]),
     ("stp", {"enabled": True, "mode": "rstp"}),
     ("loop", {"ports": {"2": True}}),
@@ -56,7 +55,6 @@ WRITES = [
     ("sntp", {"enabled": True, "server": "1.2.3.4", "poll": 64}),
     ("mac/static/add", {"mac": "AA:BB:CC:DD:EE:01", "port": 2, "fid": 0}),
     ("mac/static/delete", {"mac": "AA:BB:CC:DD:EE:01", "port": 2, "fid": 0}),
-    ("reboot", None),
 ]
 
 

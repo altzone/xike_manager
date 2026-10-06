@@ -334,7 +334,7 @@ async function loadTime() {
 async function loadStp() { const d = await api(`${base}/stp`); stp.enabled = !!d.enabled; stp.mode = d.mode || 'stp' }
 async function loadStorm() { const d = await api(`${base}/storm`); storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100 }
 async function loadIgmp() { const d = await api(`${base}/igmp`); igmp.enabled = d.config?.igmp === 'on'; igmp.fast_leave = d.config?.fast_leave === 'on'; igmp.querier = d.config?.snoop_querier === 'on' }
-async function loadEee() { const d = await api(`${base}/eee`); if (d.supported === false) return 'unsupported'; eee.enabled = d.eee === 'on' }
+async function loadEee() { const d = await api(`${base}/eee`); if (d.supported === false) return 'unsupported'; eee.enabled = d.enabled ?? d.eee === 'on' }
 async function loadMirror() {
   const d = await api(`${base}/mirror`)
   const active = d.ports.filter(p => p.ingress || p.egress)

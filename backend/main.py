@@ -268,7 +268,9 @@ def _public_switch(row) -> dict:
 # 2.0.0.3 unit, issue #3). Reading works or fails cleanly (SwitchFormatError -> 502).
 WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "igmp", "mirror",
                   "eee", "time", "static_mac", "mac_table", "reboot")
-V2_WRITABLE = frozenset({"ports"})  # apply_user_port_setting.json: same format, verified on 2.0.0.3
+# Each entry follows the request the 2.0.0.x native UI sends (code carved from the vendor image)
+# and is saved with save_all_configs.json: ports (also verified on a 2.0.0.3 unit), network, reboot.
+V2_WRITABLE = frozenset({"ports", "network", "reboot"})
 
 
 def read_only_features(fw_ver) -> list[str]:
@@ -490,6 +492,7 @@ async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_a
         current_ip = ""
     note = ""
     accepted = True
+    v2 = await client.is_v2()
     try:
         await client.set_network_ipv4(cfg.ip, cfg.netmask, cfg.gateway, cfg.dhcp)
     except SwitchError as e:
@@ -499,21 +502,43 @@ async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_a
         accepted = False
         note = f"The switch did not acknowledge the change ({e.__class__.__name__}); it may have re-addressed itself."
     await _log_change(switch_id, user, "network", cfg.model_dump())
+
+    def add(text):
+        nonlocal note
+        note = (note + " " if note else "") + text
+
+    # 2.0.0.x applies the address at once but keeps it only once saved, and the save has to be
+    # sent to the switch at its new address
+    v2_unsaved = ("On this firmware the new address is kept after a reboot only once saved: open the "
+                  "switch's own web interface at its new address and press Save.")
     if cfg.dhcp:
-        return {"ok": True, "dhcp": True,
-                "note": (note + " " if note else "") + "The switch now takes its address from DHCP: "
-                "once you know the new address, update it under the switch settings (PUT /api/switches/{id})."}
+        add("The switch now takes its address from DHCP: once you know the new address, update it under "
+            "the switch settings (PUT /api/switches/{id}).")
+        if v2:
+            add(v2_unsaved)
+        return {"ok": True, "dhcp": True, "note": note}
+    target = client
     if cfg.ip != sw["ip"]:
         if sw["ip"] == current_ip:
             async with aiosqlite.connect(DB_PATH) as db:
                 await db.execute("UPDATE switches SET ip = ? WHERE id = ?", (cfg.ip, switch_id))
                 await db.commit()
-            get_switch_client(switch_id, cfg.ip, sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
-            note = (note + " " if note else "") + f"SwitchPilot now reaches this switch at {cfg.ip}."
+            target = get_switch_client(switch_id, cfg.ip, sw["username"], sw["password"], bool(sw["swap_sfp_9_10"]))
+            add(f"SwitchPilot now reaches this switch at {cfg.ip}.")
         else:
-            note = (note + " " if note else "") + (
-                f"SwitchPilot keeps reaching this switch at {sw['ip']} (not the switch's own address); "
+            target = None
+            add(f"SwitchPilot keeps reaching this switch at {sw['ip']} (not the switch's own address); "
                 "update it under the switch settings if needed.")
+    if v2:
+        saved = False
+        if target is not None:
+            try:
+                await target.save_all()
+                saved = True
+            except Exception:
+                pass
+        if not saved:
+            add(v2_unsaved)
     return {"ok": True, "dhcp": False, "ip": cfg.ip, "accepted": accepted, "note": note}
 
 # ── System ──
