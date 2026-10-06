@@ -43,6 +43,7 @@
         <div class="card-head">
           <div><h3 class="h2">{{ t('vlans.portAssign') }}</h3><p class="hint">{{ t('vlans.portAssignDesc') }}</p></div>
           <Badge v-if="dirty" tone="warn" dot>{{ t('vlans.changedPorts', { n: changed.length }) }}</Badge>
+          <Badge v-else-if="auth.isAdmin && sw.readOnly('vlans')" :title="t('v2.readOnlyTip')"><Icon name="lock" :size="12" /> {{ t('v2.readOnly') }}</Badge>
         </div>
         <div class="overflow-x-auto">
           <table class="table">
@@ -144,6 +145,7 @@ import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -157,6 +159,9 @@ const { t } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
+const sw = useSwitchesStore()
+// admin and the setting is changeable on this switch's firmware (2.0.0.x: see read_only from the backend)
+const can = (feature) => auth.isAdmin && !sw.readOnly(feature)
 
 const vlans = ref([])
 const rows = ref([])
@@ -172,7 +177,7 @@ const form = reactive({ id: '', name: '' })
 const formError = ref('')
 
 const pvidVlans = computed(() => vlans.value.filter(v => v.vlan_id <= 63))
-function editable(r) { return auth.isAdmin && r.port !== 1 && !applying.value }
+function editable(r) { return can('vlans') && r.port !== 1 && !applying.value }
 const clone = x => JSON.parse(JSON.stringify(x))
 
 function norm(r) {

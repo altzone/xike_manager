@@ -3,6 +3,28 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [Unreleased]
+
+### Fixed
+- **2.0.0.x firmware: SwitchPilot no longer sends settings that firmware misreads.** Most
+  settings pages speak the 1.0.0.x API. On a 2.0.0.x switch those requests were either rejected
+  (storm control, EEE) or, worse, accepted and misread: an IGMP change turned Fast Leave and
+  Report Flood off on an SKS3200-8E2X-P running 2.0.0.3 (issue #3). On 2.0.0.x, only the
+  settings known to work (port enable/speed/flow control) are sent; every other change is
+  refused with a clear message before anything reaches the switch, and the UI shows those
+  sections as read-only with a banner explaining why. Port descriptions, VLAN and LAG names
+  (stored in SwitchPilot) can still be edited.
+- Pages the switch formats differently (VLAN tables and STP on 2.0.0.x) answered
+  `500 Internal Server Error`; they now return `502` naming the page and the firmware, and a
+  snapshot keeps every section it could read (`meta.unavailable` lists the others).
+- The stored model and firmware of a switch are refreshed from its status page: switches added
+  by the first release on 2.0.0.x firmware had no model.
+
+### Added
+- `GET /api/switches`, `/info` and `/status` report `firmware_line` (1 or 2) and `read_only`
+  (the settings SwitchPilot cannot change yet on that firmware). Writes refused for that reason
+  answer `501`.
+
 ## [2.1.1] - 2026-10-05
 
 ### Changed

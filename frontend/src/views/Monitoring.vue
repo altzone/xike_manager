@@ -12,7 +12,7 @@
             <input v-model="search" @input="debouncedSearch" :placeholder="t('mac.search')" class="input input-sm ps-9 w-56" maxlength="32" />
           </div>
           <Btn size="sm" icon="refresh" icon-only :aria-label="t('ui.refresh')" :loading="loading" @click="refresh" />
-          <Btn v-if="auth.isAdmin" size="sm" variant="danger-soft" icon="trash" @click="clearMacs">{{ t('mac.clearAll') }}</Btn>
+          <Btn v-if="can('mac_table')" size="sm" variant="danger-soft" icon="trash" @click="clearMacs">{{ t('mac.clearAll') }}</Btn>
         </div>
       </div>
       <div class="overflow-x-auto">
@@ -40,7 +40,7 @@
       <div class="card-head">
         <div><h3 class="h2">{{ t('sys.staticMac') }}</h3><p class="hint">{{ t('sys.staticMacTip') }}</p></div>
       </div>
-      <form v-if="auth.isAdmin" @submit.prevent="addStatic" class="px-5 py-4 grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-3 items-end border-b border-line" novalidate>
+      <form v-if="can('static_mac')" @submit.prevent="addStatic" class="px-5 py-4 grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-3 items-end border-b border-line" novalidate>
         <div><label class="label" for="static-mac">{{ t('sys.macAddress') }}</label><input id="static-mac" v-model.trim="draft.mac" class="input input-sm mono" placeholder="AA:BB:CC:DD:EE:FF" pattern="^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$" required /></div>
         <div><label class="label" for="static-port">{{ t('sys.macPort') }}</label><select id="static-port" v-model.number="draft.port" class="select select-sm"><option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option></select></div>
         <div><label class="label" for="static-fid">{{ t('sys.macVlanGroup') }}</label><input id="static-fid" v-model.number="draft.fid" type="number" min="0" max="63" class="input input-sm num" /></div>
@@ -48,13 +48,13 @@
       </form>
       <div class="overflow-x-auto">
         <table v-if="statics.length" class="table">
-          <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th v-if="auth.isAdmin" class="w-12"></th></tr></thead>
+          <thead><tr><th>{{ t('sys.macAddress') }}</th><th>{{ t('mac.port') }}</th><th>{{ t('mac.vlanGroup') }}</th><th v-if="can('static_mac')" class="w-12"></th></tr></thead>
           <tbody>
             <tr v-for="m in statics" :key="m.mac + m.port">
               <td class="mono font-medium">{{ m.mac }}</td>
               <td><Badge :tone="m.port >= 9 ? 'sfp' : 'accent'">{{ t('mac.port') }} {{ m.port }}</Badge></td>
               <td class="num text-ink-2">{{ m.fid }}</td>
-              <td v-if="auth.isAdmin" class="text-end"><Btn variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteStatic(m)" /></td>
+              <td v-if="can('static_mac')" class="text-end"><Btn variant="ghost" size="xs" icon="trash" icon-only :aria-label="t('common.delete')" class="hover:text-danger" @click="deleteStatic(m)" /></td>
             </tr>
           </tbody>
         </table>
@@ -73,6 +73,7 @@ import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 import Btn from '../components/ui/Btn.vue'
@@ -85,6 +86,9 @@ const { t } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
+const sw = useSwitchesStore()
+// admin and the setting is changeable on this switch's firmware (2.0.0.x: see read_only from the backend)
+const can = (feature) => auth.isAdmin && !sw.readOnly(feature)
 
 const macs = ref([])
 const total = ref(0)

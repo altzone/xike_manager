@@ -42,18 +42,18 @@
               </td>
               <td>
                 <div class="flex items-center gap-2">
-                  <Toggle :model-value="port.status === 'Enabled'" size="sm" :disabled="!auth.isAdmin || busy === port.port" :label="`${t('ports.status')} – ${t('ports.port')} ${port.port}`" @update:model-value="togglePort(port)" />
+                  <Toggle :model-value="port.status === 'Enabled'" size="sm" :disabled="!can('ports') || busy === port.port" :label="`${t('ports.status')} – ${t('ports.port')} ${port.port}`" @update:model-value="togglePort(port)" />
                   <span class="text-xs" :class="port.status === 'Enabled' ? 'text-ok-ink' : 'text-danger-ink'">{{ port.status === 'Enabled' ? t('ports.enabled') : t('ports.disabled') }}</span>
                 </div>
               </td>
               <td>
-                <select v-model="port.speed_config" @change="applyPort(port)" :disabled="!auth.isAdmin || busy === port.port" class="select select-sm w-[118px]">
+                <select v-model="port.speed_config" @change="applyPort(port)" :disabled="!can('ports') || busy === port.port" class="select select-sm w-[118px]">
                   <option v-for="o in speedOptions(port)" :key="o.v" :value="o.v">{{ o.l }}</option>
                 </select>
               </td>
               <td><span :class="isUp(port.port) ? 'mono text-ink' : 'text-faint'">{{ isUp(port.port) ? negotiated(port) : t('ports.down') }}</span></td>
               <td>
-                <Toggle :model-value="port.flow_ctrl_config === 'On'" size="sm" :disabled="!auth.isAdmin || busy === port.port" :label="`${t('ports.flow')} – ${t('ports.port')} ${port.port}`" @update:model-value="toggleFlow(port)" />
+                <Toggle :model-value="port.flow_ctrl_config === 'On'" size="sm" :disabled="!can('ports') || busy === port.port" :label="`${t('ports.flow')} – ${t('ports.port')} ${port.port}`" @update:model-value="toggleFlow(port)" />
               </td>
               <td class="text-end num text-ink-2">
                 {{ (stats[port.port]?.tx_good || 0).toLocaleString(locale) }}
@@ -84,6 +84,7 @@ import { useSSE } from '../composables/useSSE.js'
 import { useToast } from '../composables/useToast.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Tip from '../components/Tip.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -97,6 +98,9 @@ const { t, locale } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
+const sw = useSwitchesStore()
+// admin and the setting is changeable on this switch's firmware (2.0.0.x: see read_only from the backend)
+const can = (feature) => auth.isAdmin && !sw.readOnly(feature)
 const sse = useSSE(props.switchId)
 
 const ports = ref([])

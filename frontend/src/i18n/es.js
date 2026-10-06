@@ -407,4 +407,7 @@ export default {
   'dash.swapOn': 'Intercambiados (habitual en firmware 1.0.0.x)',
   'dash.swapOff': 'Según el firmware (habitual en 2.0.0.x)',
   'sys.portMapCheck': 'Este ajuste no coincide con lo que suele necesitar el firmware {fw}. Compruébelo: conecte un cable en la jaula marcada 9; si el enlace aparece aquí en el puerto 10, invierta el ajuste.',
+  'v2.banner': 'Este switch usa el firmware {fw}. SwitchPilot muestra todo lo que puede leer, pero por ahora solo se pueden cambiar aquí los ajustes de los puertos: el resto es de solo lectura hasta que el soporte de 2.0.0.x esté completo. Use la interfaz web del switch para cambiarlos.',
+  'v2.readOnly': 'Solo lectura con este firmware',
+  'v2.readOnlyTip': 'SwitchPilot aún no sabe cómo espera este cambio el firmware 2.0.0.x, así que no lo envía. Por ahora, use la interfaz web del switch.',
 }

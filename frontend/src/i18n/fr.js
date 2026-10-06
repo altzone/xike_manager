@@ -407,4 +407,7 @@ export default {
   'dash.swapOn': 'Inversés (habituel en firmware 1.0.0.x)',
   'dash.swapOff': 'Numérotation du firmware (habituel en 2.0.0.x)',
   'sys.portMapCheck': 'Ce réglage ne correspond pas à ce que demande habituellement le firmware {fw}. Vérifiez : branchez un câble dans la cage marquée 9 ; si le lien apparaît ici sur le port 10, inversez le réglage.',
+  'v2.banner': 'Ce switch tourne en firmware {fw}. SwitchPilot affiche tout ce qu\'il sait lire, mais pour l\'instant seuls les réglages des ports peuvent être modifiés d\'ici : les autres réglages sont en lecture seule jusqu\'à ce que la prise en charge du 2.0.0.x soit complète. Utilisez l\'interface web du switch pour les modifier.',
+  'v2.readOnly': 'Lecture seule sur ce firmware',
+  'v2.readOnlyTip': 'SwitchPilot ne sait pas encore comment le firmware 2.0.0.x attend cette modification, il ne l\'envoie donc pas. Utilisez l\'interface web du switch pour l\'instant.',
 }

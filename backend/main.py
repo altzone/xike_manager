@@ -20,8 +20,8 @@ from auth import (hash_password_async, verify_password_async, validate_password,
                   create_token, create_stream_token, decode_token, get_current_user, require_admin,
                   check_login_allowed, record_login_failure, clear_login_failures, DUMMY_HASH,
                   load_user, password_version)
-from switch_client import (SwitchClient, SwitchError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
-                           default_swap_sfp,
+from switch_client import (SwitchClient, SwitchError, SwitchFormatError, InvalidPortError, MAX_FID, MAX_TAG_ENTRIES,
+                           default_swap_sfp, firmware_line,
                            MAX_VLAN_ID, NUM_PORTS, MANAGEMENT_PORT)
 from sse import get_switch_client, drop_switch_client, sse_endpoint
 
@@ -256,7 +256,36 @@ SWITCH_PUBLIC_COLUMNS = "id, name, ip, username, model, firmware, mac_address, s
 def _public_switch(row) -> dict:
     d = dict(row)
     d["swap_sfp_9_10"] = bool(d.get("swap_sfp_9_10", 0))
+    d["firmware_line"] = firmware_line(d.get("firmware"))
+    d["read_only"] = read_only_features(d.get("firmware"))
     return d
+
+
+# ── Firmware lines ──
+# Settings SwitchPilot writes to a switch, by feature. On 2.0.0.x firmware only the ones in
+# V2_WRITABLE are sent: the 1.0.0.x requests for the others are either rejected by that
+# firmware or, worse, accepted and misread (an IGMP change turned two other options off on a
+# 2.0.0.3 unit, issue #3). Reading works or fails cleanly (SwitchFormatError -> 502).
+WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "igmp", "mirror",
+                  "eee", "time", "static_mac", "mac_table", "reboot")
+V2_WRITABLE = frozenset({"ports"})  # apply_user_port_setting.json: same format, verified on 2.0.0.3
+
+
+def read_only_features(fw_ver) -> list[str]:
+    """Features SwitchPilot cannot change yet on this firmware (empty on 1.0.0.x and unknown)."""
+    line = firmware_line(fw_ver)
+    if line is None or line < 2:
+        return []
+    return [f for f in WRITE_FEATURES if f not in V2_WRITABLE]
+
+
+async def _require_writable(client: SwitchClient, feature: str):
+    """Refuse a write this switch's firmware line is not known to accept, before sending anything."""
+    line = await client.firmware_line()
+    if line is not None and line >= 2 and feature not in V2_WRITABLE:
+        raise HTTPException(501, f"Not supported yet on firmware {client.fw_ver}: SwitchPilot does not know how "
+                                 "this firmware expects this change, so nothing was sent to the switch. Use the "
+                                 "switch's own web interface for this setting for now.")
 
 
 # ── Setup ──
@@ -442,6 +471,7 @@ async def switch_ping(switch_id: int, user=Depends(get_current_user)):
 async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_admin)):
     sw = await _switch_row(switch_id)
     client = await _get_client(switch_id)
+    await _require_writable(client, "network")
     if not cfg.dhcp:
         try:
             ip = ipaddress.IPv4Address(cfg.ip)
@@ -489,10 +519,22 @@ async def set_network(switch_id: int, cfg: NetworkConfig, user=Depends(require_a
 # ── System ──
 @app.get("/api/switches/{switch_id}/status")
 async def switch_status(switch_id: int, user=Depends(get_current_user)):
+    sw = await _switch_row(switch_id)
     client = await _get_client(switch_id)
     status = await client.get_status()
     network = await client.get_network()
     status["modle"] = status.get("modle") or status.get("des", "")
+    # keep the stored identity current (switches added by the first release have no model on
+    # 2.0.0.x, which only reports "des"; a firmware update changes fw_ver)
+    ident = (status["modle"] or sw["model"] or "", str(status.get("fw_ver") or sw["firmware"] or ""),
+             status.get("sys_macaddr") or sw["mac_address"] or "")
+    if ident != (sw["model"] or "", sw["firmware"] or "", sw["mac_address"] or ""):
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("UPDATE switches SET model = ?, firmware = ?, mac_address = ? WHERE id = ?",
+                             (*ident, switch_id))
+            await db.commit()
+    status["firmware_line"] = firmware_line(status.get("fw_ver"))
+    status["read_only"] = read_only_features(status.get("fw_ver"))
     # what this firmware line usually needs, so the UI can flag a setting that does not match
     # (a choice forced when the switch was added, or a unit that differs); None when unknown
     status["swap_sfp_suggested"] = default_swap_sfp(status.get("fw_ver"))
@@ -516,6 +558,7 @@ async def get_ports(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/ports/config")
 async def set_port_config(switch_id: int, configs: list[PortConfig], user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "ports")
     if not configs:
         raise HTTPException(400, "No port configuration given")
     for cfg in configs:
@@ -676,6 +719,7 @@ async def apply_vlan_assignments(switch_id: int, assignments: list[PortAssignmen
     request can no longer wipe the uplink's tagged VLANs.
     """
     client = await _get_client(switch_id)
+    await _require_writable(client, "vlans")
     if not assignments:
         raise HTTPException(400, "No port assignments given")
     requested: dict[int, PortAssignment] = {}
@@ -782,6 +826,7 @@ async def get_stp(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/stp")
 async def set_stp(switch_id: int, cfg: StpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "stp")
     await client.set_stp(cfg.enabled, cfg.mode, cfg.edge_ports)
     await _log_change(switch_id, user, "stp", cfg.model_dump())
     return {"ok": True}
@@ -796,6 +841,7 @@ async def get_loop(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/loop")
 async def set_loop(switch_id: int, cfg: LoopConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "loop")
     await client.set_loop(cfg.ports)
     await _log_change(switch_id, user, "loop", cfg.ports)
     return {"ok": True}
@@ -810,6 +856,7 @@ async def get_storm(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/storm")
 async def set_storm(switch_id: int, cfg: StormConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "storm")
     await client.set_storm_control(cfg.rate, cfg.enabled)
     await _log_change(switch_id, user, "storm", cfg.model_dump())
     return {"ok": True}
@@ -826,6 +873,7 @@ async def get_igmp(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/igmp")
 async def set_igmp(switch_id: int, cfg: IgmpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "igmp")
     await client.set_igmp_config({
         "igmp": "on" if cfg.enabled else "off",
         "fast_leave": "on" if cfg.fast_leave else "off",
@@ -844,6 +892,7 @@ async def get_mirror(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/mirror")
 async def set_mirror(switch_id: int, cfg: MirrorConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "mirror")
     await client.set_mirror(cfg.monitoring_port, cfg.mirrored_ports, cfg.ingress, cfg.egress)
     await _log_change(switch_id, user, "mirror", cfg.model_dump())
     return {"ok": True}
@@ -862,6 +911,7 @@ async def get_eee(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/eee")
 async def set_eee(switch_id: int, cfg: EeeConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "eee")
     if await client.get_eee() is None:
         raise HTTPException(400, "Power-saving (EEE) is not supported on this firmware")
     await client.set_eee(cfg.enabled)
@@ -898,6 +948,7 @@ async def get_dynamic_macs(switch_id: int, search: Optional[str] = Query(default
 @app.post("/api/switches/{switch_id}/mac/clear")
 async def clear_macs(switch_id: int, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "mac_table")
     await client.clear_dynamic_macs()
     return {"ok": True}
 
@@ -925,6 +976,7 @@ async def get_lag(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/lag")
 async def set_lag(switch_id: int, cfg: LagConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "lag")
     seen = set()
     for p in cfg.ports:
         client.to_internal(p.port)
@@ -966,6 +1018,7 @@ def _daylight_flag(current: dict) -> str:
 @app.post("/api/switches/{switch_id}/time")
 async def set_time(switch_id: int, cfg: TimeConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "time")
     # Read current time first so we don't reset fields
     current = await client.get_time()
     if current is None:
@@ -982,6 +1035,7 @@ async def set_time(switch_id: int, cfg: TimeConfig, user=Depends(require_admin))
 @app.post("/api/switches/{switch_id}/sntp")
 async def set_sntp(switch_id: int, cfg: SntpConfig, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "time")
     if await client.get_sntp() is None:
         raise HTTPException(400, "SNTP is not supported on this firmware")
     server = cfg.server.strip()
@@ -1024,6 +1078,7 @@ async def get_static_macs(switch_id: int, user=Depends(get_current_user)):
 @app.post("/api/switches/{switch_id}/mac/static/add")
 async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "static_mac")
     warnings = await client.add_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
     await _log_change(switch_id, user, "static_mac_add", req.model_dump())
     return {"ok": True, "warnings": warnings}
@@ -1031,6 +1086,7 @@ async def add_static_mac(switch_id: int, req: StaticMacAdd, user=Depends(require
 @app.post("/api/switches/{switch_id}/mac/static/delete")
 async def delete_static_mac(switch_id: int, req: StaticMacDelete, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "static_mac")
     warnings = await client.delete_static_mac(req.mac.upper().replace("-", ":"), req.port, req.fid)
     await _log_change(switch_id, user, "static_mac_delete", req.model_dump())
     return {"ok": True, "warnings": warnings}
@@ -1049,22 +1105,22 @@ async def list_snapshots(switch_id: int, user=Depends(get_current_user)):
 async def create_snapshot(switch_id: int, req: SnapshotCreate, user=Depends(require_admin)):
     """Save a full snapshot of all switch settings (port numbers are user-facing)"""
     client = await _get_client(switch_id)
-    snapshot = {
-        "meta": {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": client.swap_sfp},
-        "status": await client.get_status(),
-        "network": await client.get_network(),
-        "ports": await client.get_ports(),
-        "port_vlans": await client.get_port_vlans(),
-        "tag_vlans": await client.get_tag_vlans(),
-        "stp": await client.get_stp(),
-        "storm": await client.get_storm_control(),
-        "igmp_config": await client.get_igmp_config(),
-        "eee": await client.get_eee(),
-        "lag": await client.get_lag(),
-        "mirror": await client.get_mirror(),
-        "loop": await client.get_loop(),
-        "sntp": await client.get_sntp(),
-    }
+    snapshot = {"meta": {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": client.swap_sfp}}
+    unavailable = []
+    for name, read in (("status", client.get_status), ("network", client.get_network), ("ports", client.get_ports),
+                       ("port_vlans", client.get_port_vlans), ("tag_vlans", client.get_tag_vlans),
+                       ("stp", client.get_stp), ("storm", client.get_storm_control),
+                       ("igmp_config", client.get_igmp_config), ("eee", client.get_eee), ("lag", client.get_lag),
+                       ("mirror", client.get_mirror), ("loop", client.get_loop), ("sntp", client.get_sntp)):
+        try:
+            snapshot[name] = await read()
+        except (SwitchFormatError, json.JSONDecodeError):
+            # a page this firmware formats differently: keep the rest of the snapshot
+            snapshot[name] = None
+            unavailable.append(name)
+    snapshot["meta"]["firmware"] = client.fw_ver
+    if unavailable:
+        snapshot["meta"]["unavailable"] = unavailable
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "INSERT INTO config_snapshots (switch_id, name, config_json) VALUES (?,?,?)",
@@ -1194,6 +1250,7 @@ async def update_user(user_id: int, req: UserUpdate, user=Depends(require_admin)
 @app.post("/api/switches/{switch_id}/reboot")
 async def reboot_switch(switch_id: int, user=Depends(require_admin)):
     client = await _get_client(switch_id)
+    await _require_writable(client, "reboot")
     try:
         await client.reboot()
     except httpx.HTTPError:

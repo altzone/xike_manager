@@ -231,7 +231,7 @@ def test_snapshot_records_numbering_and_user_ports(api):
     sid = add_switch(api, swap=True)
     snap_id = api.post(f"/api/switches/{sid}/snapshots", json={"name": "s1"}).json()["id"]
     cfg = api.get(f"/api/switches/{sid}/snapshots/{snap_id}").json()["config"]
-    assert cfg["meta"] == {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": True}
+    assert cfg["meta"] == {"schema": 2, "port_numbering": "user", "swap_sfp_9_10": True, "firmware": "1.0.0.6"}
     assert cfg["mirror"]["monitoring_port"] == 10
     assert by_port(cfg["lag"]["ports"])[10]["group"] == 1
     assert by_port(cfg["loop"])[10]["enabled"]

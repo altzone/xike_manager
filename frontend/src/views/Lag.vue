@@ -2,7 +2,7 @@
   <div class="space-y-5">
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <p class="hint max-w-2xl">{{ t('lag.tip') }}</p>
-      <Btn v-if="auth.isAdmin" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
+      <Btn v-if="can('lag')" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
     </div>
 
     <div v-if="groups.length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -21,7 +21,7 @@
               <p class="hint">{{ g.ports.length === 1 ? t('lag.memberOne') : t('lag.members', { n: g.ports.length }) }} · {{ g.ports.reduce((s, p) => s + (p.port >= 9 ? 10 : 2.5), 0) }}G</p>
             </div>
           </div>
-          <Btn v-if="auth.isAdmin" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g.id)" />
+          <Btn v-if="can('lag')" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g.id)" />
         </div>
         <div class="px-4 py-3 flex gap-2 flex-wrap">
           <div v-for="p in g.ports" :key="p.port" class="flex-1 min-w-[72px] rounded-lg border p-2.5 text-center" :class="p.state === 1 ? 'border-ok/50 bg-ok-soft' : 'border-line bg-surface-2'">
@@ -35,7 +35,7 @@
     <div v-else class="card">
       <EmptyState icon="lag" :title="loadError ? t('common.failedLoad') : t('lag.noGroups')" :text="loadError || t('lag.createDesc')">
         <Btn v-if="loadError" size="sm" icon="refresh" @click="load">{{ t('ui.retry') }}</Btn>
-        <Btn v-else-if="auth.isAdmin" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
+        <Btn v-else-if="can('lag')" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
       </EmptyState>
     </div>
 
@@ -43,8 +43,8 @@
       <div class="flex-1 min-w-[200px]">
         <h3 class="h2">{{ t('lag.priority') }}</h3><p class="hint">{{ t('lag.priorityDesc') }}</p>
       </div>
-      <input v-model.number="systemPriority" type="number" min="1" max="65535" :disabled="!auth.isAdmin" class="input input-sm num w-28" />
-      <Btn v-if="auth.isAdmin" size="sm" @click="applyPriority">{{ t('lag.save') }}</Btn>
+      <input v-model.number="systemPriority" type="number" min="1" max="65535" :disabled="!can('lag')" class="input input-sm num w-28" />
+      <Btn v-if="can('lag')" size="sm" @click="applyPriority">{{ t('lag.save') }}</Btn>
     </div>
 
     <!-- Create -->
@@ -101,6 +101,7 @@ import { api } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useConfirm } from '../composables/useConfirm.js'
 import { useAuthStore } from '../stores/auth.js'
+import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Btn from '../components/ui/Btn.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -112,6 +113,9 @@ const { t } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
+const sw = useSwitchesStore()
+// admin and the setting is changeable on this switch's firmware (2.0.0.x: see read_only from the backend)
+const can = (feature) => auth.isAdmin && !sw.readOnly(feature)
 
 const allPorts = ref([])
 const names = ref({})

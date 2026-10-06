@@ -8,6 +8,10 @@
       </div>
       <Btn size="sm" icon="refresh" @click="checkOnline">{{ t('ui.retry') }}</Btn>
     </div>
+    <div v-if="sw.current?.firmware_line >= 2" role="note" class="rounded-xl border border-info/40 bg-info-soft px-4 py-3 flex items-start gap-3 text-sm text-info-ink">
+      <Icon name="info" :size="18" class="mt-0.5 shrink-0" />
+      <p>{{ t('v2.banner', { fw: sw.current.firmware }) }}</p>
+    </div>
     <router-view v-if="switchId" :switch-id="switchId" :key="switchId" />
   </div>
 </template>

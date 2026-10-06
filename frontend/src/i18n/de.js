@@ -407,4 +407,7 @@ export default {
   'dash.swapOn': 'Vertauscht (üblich bei Firmware 1.0.0.x)',
   'dash.swapOff': 'Wie von der Firmware nummeriert (üblich bei 2.0.0.x)',
   'sys.portMapCheck': 'Diese Einstellung weicht von dem ab, was Firmware {fw} üblicherweise braucht. Prüfen: ein Kabel in den mit 9 beschrifteten Schacht stecken; erscheint der Link hier auf Port 10, die Einstellung umschalten.',
+  'v2.banner': 'Dieser Switch läuft mit Firmware {fw}. SwitchPilot zeigt alles an, was es lesen kann, aber vorerst lassen sich hier nur Port-Einstellungen ändern: die übrigen Einstellungen sind schreibgeschützt, bis die Unterstützung für 2.0.0.x vollständig ist. Ändern Sie sie über die Weboberfläche des Switches.',
+  'v2.readOnly': 'Schreibgeschützt bei dieser Firmware',
+  'v2.readOnlyTip': 'SwitchPilot weiß noch nicht, wie Firmware 2.0.0.x diese Änderung erwartet, und sendet sie daher nicht. Verwenden Sie vorerst die Weboberfläche des Switches.',
 }

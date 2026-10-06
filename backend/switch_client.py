@@ -1,5 +1,6 @@
 """Xikestor SKS3200-8E2X API Client"""
 import asyncio
+import functools
 import hashlib
 import json
 import re
@@ -25,6 +26,34 @@ class InvalidPortError(ValueError):
 
 class SwitchError(Exception):
     """The switch refused or garbled a request (bad credentials, HTTP error, odd body)."""
+
+
+class SwitchFormatError(SwitchError):
+    """The switch answered, but not in the format this client reads (typically a page that
+    works differently on 2.0.0.x firmware)."""
+
+
+def _parsed(endpoint: str):
+    """Report a payload this client cannot read as a SwitchFormatError (HTTP 502 with the
+    endpoint and firmware) instead of an unhandled KeyError/TypeError (HTTP 500)."""
+    def wrap(fn):
+        @functools.wraps(fn)
+        async def inner(self, *args, **kwargs):
+            try:
+                return await fn(self, *args, **kwargs)
+            except (SwitchError, json.JSONDecodeError):
+                raise
+            except (KeyError, IndexError, TypeError, AttributeError, ValueError) as e:
+                if self.fw_ver is None:  # name the firmware in the message (one extra read, failures only)
+                    try:
+                        await self.get_status()
+                    except Exception:
+                        pass
+                fw = f" on firmware {self.fw_ver}" if self.fw_ver else ""
+                raise SwitchFormatError(f"{endpoint}: the switch answered in a format SwitchPilot does not "
+                                        f"read yet{fw} ({e.__class__.__name__}: {e})") from e
+        return inner
+    return wrap
 
 
 def default_bridge(vlan_id: int) -> int:
@@ -134,6 +163,7 @@ def _parse_mac_entries(raw, port_to_user) -> list[dict]:
 class SwitchClient:
     def __init__(self, ip: str, username: str = "admin", password: str = "admin",
                  swap_sfp: bool = False, transport: httpx.AsyncBaseTransport | None = None):
+        self.fw_ver: str | None = None  # from status.json; "" when the switch does not report it
         self.configure(ip, username, password)
         self.set_port_mapping(swap_sfp)
         # trust_env=False: a switch on the LAN must never be reached through an HTTP_PROXY
@@ -158,6 +188,7 @@ class SwitchClient:
         self.password = password
         if changed:
             self._logged_in = False
+            self.fw_ver = None  # another switch may answer at the new address
 
     def set_port_mapping(self, swap_sfp: bool):
         self.swap_sfp = bool(swap_sfp)
@@ -257,7 +288,17 @@ class SwitchClient:
 
     # ── System ──
     async def get_status(self):
-        return await self._get("status.json")
+        status = await self._get("status.json")
+        if isinstance(status, dict):
+            self.fw_ver = str(status.get("fw_ver") or "")
+        return status
+
+    async def firmware_line(self) -> int | None:
+        """1 (1.0.0.x) or 2 (2.0.0.x), None when the switch does not say. status.json is read
+        once per address; get_status() keeps the cached version current."""
+        if self.fw_ver is None:
+            await self.get_status()
+        return firmware_line(self.fw_ver)
 
     async def get_network(self):
         return await self._get("network_settings.json")
@@ -310,6 +351,7 @@ class SwitchClient:
     }
 
     # ── Ports ──
+    @_parsed("port_setting_load.json")
     async def get_ports(self):
         raw = await self._get("port_setting_load.json")
         ports = []
@@ -343,6 +385,7 @@ class SwitchClient:
     async def save_ports(self):
         return await self._post("save_user_port_setting.json", {})
 
+    @_parsed("port_statistics.json")
     async def get_port_stats(self):
         raw = await self._get("port_statistics.json")
         stats = []
@@ -364,6 +407,7 @@ class SwitchClient:
         return await self._post("clear_statistics.json", {})
 
     # ── Port VLAN (PVID) ──
+    @_parsed("port_vlan_cfg.json")
     async def get_port_vlans(self):
         raw = await self._get("port_vlan_cfg.json")
         result = []
@@ -424,6 +468,7 @@ class SwitchClient:
         return await self._post("init_vlan.json", {})
 
     # ── Tag VLAN (802.1Q) ──
+    @_parsed("tag_vlan_cfg.json")
     async def get_tag_vlans(self):
         raw = await self._get("tag_vlan_cfg.json")
         entries = []
@@ -471,6 +516,7 @@ class SwitchClient:
     async def get_lag_raw(self):
         return await self._get("port_trunk_cfg.json")
 
+    @_parsed("port_trunk_cfg.json")
     async def get_lag(self):
         raw = await self.get_lag_raw()
         ports = []
@@ -499,6 +545,7 @@ class SwitchClient:
         return await self._post("port_trunk_cfg.json", post)
 
     # ── STP ──
+    @_parsed("stp.json")
     async def get_stp(self):
         raw = await self._get("stp.json")
         ports = []
@@ -530,6 +577,7 @@ class SwitchClient:
     async def get_loop_config(self):
         return await self._get("port_lock_cfg.json")
 
+    @_parsed("port_lock_cfg.json")
     async def get_loop(self):
         config = await self.get_loop_config()
         status = await self.get_loop_status()
@@ -576,6 +624,7 @@ class SwitchClient:
     async def get_mirror_raw(self):
         return await self._get("port_mirror.json")
 
+    @_parsed("port_mirror.json")
     async def get_mirror(self):
         raw = await self.get_mirror_raw()
         monitoring = int(raw.get("MonitoringPortId", 0) or 0)
@@ -638,6 +687,7 @@ class SwitchClient:
         return await self._post("eee_config.json", {"eee": "on" if enabled else "off"})
 
     # ── MAC Table ──
+    @_parsed("mac_get_dynamic_mac_entries.json")
     async def get_dynamic_macs(self, search: str | None = None):
         if search:
             raw = await self._get("mac_search_dynamic_mac_entries.json", params={"mac_search_txt": search})
@@ -647,6 +697,7 @@ class SwitchClient:
         total = raw.get("total_entries", len(entries)) if isinstance(raw, dict) else len(entries)
         return {"entries": entries, "total": total}
 
+    @_parsed("mac_get_static_mac_entries.json")
     async def get_static_macs(self):
         raw = await self._get("mac_get_static_mac_entries.json")
         return _parse_mac_entries(raw, self.to_user)

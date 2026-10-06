@@ -407,4 +407,7 @@ export default {
   'dash.swapOn': 'Ters (1.0.0.x firmware\'de olağan)',
   'dash.swapOff': 'Firmware numaralandırması (2.0.0.x\'te olağan)',
   'sys.portMapCheck': 'Bu ayar, {fw} firmware\'inin genellikle gerektirdiğinden farklı. Kontrol edin: 9 etiketli yuvaya bir kablo takın; bağlantı burada port 10\'da görünüyorsa ayarı değiştirin.',
+  'v2.banner': 'Bu switch {fw} firmware\'ini çalıştırıyor. SwitchPilot okuyabildiği her şeyi gösterir, ancak şimdilik buradan yalnızca port ayarları değiştirilebilir: 2.0.0.x desteği tamamlanana kadar diğer ayarlar salt okunurdur. Bunları değiştirmek için switch\'in kendi web arayüzünü kullanın.',
+  'v2.readOnly': 'Bu firmware\'de salt okunur',
+  'v2.readOnlyTip': 'SwitchPilot, 2.0.0.x firmware\'inin bu değişikliği nasıl beklediğini henüz bilmiyor, bu yüzden göndermiyor. Şimdilik switch\'in kendi web arayüzünü kullanın.',
 }

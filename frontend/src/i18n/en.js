@@ -407,4 +407,7 @@ export default {
   'dash.swapOn': 'Swapped (usual on 1.0.0.x firmware)',
   'dash.swapOff': 'As numbered by the firmware (usual on 2.0.0.x)',
   'sys.portMapCheck': 'This setting differs from what firmware {fw} usually needs. Check: plug a cable into the cage labelled 9; if the link shows on port 10 here, flip the setting.',
+  'v2.banner': 'This switch runs firmware {fw}. SwitchPilot shows everything it can read, but for now only port settings can be changed from here: the other settings are read-only until 2.0.0.x support is complete. Use the switch\'s own web interface to change them.',
+  'v2.readOnly': 'Read-only on this firmware',
+  'v2.readOnlyTip': 'SwitchPilot does not know yet how firmware 2.0.0.x expects this change, so it does not send it. Use the switch\'s own web interface for now.',
 }

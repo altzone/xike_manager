@@ -30,30 +30,30 @@
         </div>
       </Section>
 
-      <Section :title="t('sys.mgmtIface')" icon="network" :state="st.status" :tip="t('sys.mgmtTip')">
+      <Section :title="t('sys.mgmtIface')" icon="network" :state="st.status" :tip="t('sys.mgmtTip')" :locked="locked('network')">
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-sm text-ink-2">{{ t('sys.dhcp') }}</span>
-            <Toggle v-model="net.dhcp" :disabled="!auth.isAdmin" :label="t('sys.dhcp')" />
+            <Toggle v-model="net.dhcp" :disabled="!can('network')" :label="t('sys.dhcp')" />
           </div>
           <template v-if="!net.dhcp">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div><label class="label" for="sys-net-ip">{{ t('sys.ipAddress') }}</label><input id="sys-net-ip" v-model.trim="net.ip" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
-              <div><label class="label" for="sys-net-mask">{{ t('sys.netmask') }}</label><input id="sys-net-mask" v-model.trim="net.netmask" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
-              <div><label class="label" for="sys-net-gw">{{ t('sys.gateway') }}</label><input id="sys-net-gw" v-model.trim="net.gateway" class="input input-sm mono" :disabled="!auth.isAdmin" /></div>
+              <div><label class="label" for="sys-net-ip">{{ t('sys.ipAddress') }}</label><input id="sys-net-ip" v-model.trim="net.ip" class="input input-sm mono" :disabled="!can('network')" /></div>
+              <div><label class="label" for="sys-net-mask">{{ t('sys.netmask') }}</label><input id="sys-net-mask" v-model.trim="net.netmask" class="input input-sm mono" :disabled="!can('network')" /></div>
+              <div><label class="label" for="sys-net-gw">{{ t('sys.gateway') }}</label><input id="sys-net-gw" v-model.trim="net.gateway" class="input input-sm mono" :disabled="!can('network')" /></div>
             </div>
           </template>
           <p v-else class="hint">{{ t('sys.dhcpAuto') }}</p>
           <div class="flex items-center justify-between gap-3">
             <p class="text-[11px] text-danger-ink flex items-center gap-1"><Icon name="warning" :size="13" />{{ t('sys.ipWarning') }}</p>
-            <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.net" @click="applyNetwork">{{ net.dhcp ? t('sys.applyDhcp') : t('sys.applyStatic') }}</Btn>
+            <Btn v-if="can('network')" size="sm" variant="primary" :loading="busy.net" @click="applyNetwork">{{ net.dhcp ? t('sys.applyDhcp') : t('sys.applyStatic') }}</Btn>
           </div>
         </div>
       </Section>
     </div>
 
     <!-- Clock -->
-    <Section :title="t('sys.clock')" icon="clock" :state="st.time" :tip="t('sys.clockTip')" :unsupported="st.time === 'unsupported'">
+    <Section :title="t('sys.clock')" icon="clock" :state="st.time" :tip="t('sys.clockTip')" :unsupported="st.time === 'unsupported'" :locked="locked('time')">
       <template #actions>
         <span class="num text-sm text-ink bg-surface-2 border border-line rounded-lg px-2.5 py-1">{{ timeData.timeVal || '--:--:--' }}</span>
         <span class="num text-sm text-ink bg-surface-2 border border-line rounded-lg px-2.5 py-1">{{ timeData.dateVal || '--/--/----' }}</span>
@@ -63,11 +63,11 @@
         <button v-for="m in ['sntp', 'manual']" :key="m" type="button" :aria-pressed="timeMode === m" @click="timeMode = m" class="px-3.5 py-1.5 rounded-lg text-sm font-medium border transition" :class="timeMode === m ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line text-muted hover:border-line-strong'">{{ m === 'sntp' ? t('sys.sntpAuto') : t('sys.manual') }}</button>
       </div>
       <div v-if="timeMode === 'sntp'" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-        <div><label class="label" for="sys-ntp-server">{{ t('sys.ntpServer') }}</label><input id="sys-ntp-server" v-model.trim="sntp.server" class="input input-sm mono" placeholder="pool.ntp.org" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label" for="sys-ntp-poll">{{ t('sys.pollInterval') }}</label><input id="sys-ntp-poll" v-model.number="sntp.poll" type="number" min="16" max="99999" class="input input-sm num" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label" for="sys-tz-sntp">{{ t('sys.timezone') }}</label><select id="sys-tz-sntp" v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <div><label class="label" for="sys-ntp-server">{{ t('sys.ntpServer') }}</label><input id="sys-ntp-server" v-model.trim="sntp.server" class="input input-sm mono" placeholder="pool.ntp.org" :disabled="!can('time')" /></div>
+        <div><label class="label" for="sys-ntp-poll">{{ t('sys.pollInterval') }}</label><input id="sys-ntp-poll" v-model.number="sntp.poll" type="number" min="16" max="99999" class="input input-sm num" :disabled="!can('time')" /></div>
+        <div><label class="label" for="sys-tz-sntp">{{ t('sys.timezone') }}</label><select id="sys-tz-sntp" v-model="tz.timezone" class="select select-sm" :disabled="!can('time')"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
         <div class="flex gap-2">
-          <Btn v-if="auth.isAdmin" size="sm" variant="primary" class="flex-1" :loading="busy.sntp" @click="applySntp(true)">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</Btn>
+          <Btn v-if="can('time')" size="sm" variant="primary" class="flex-1" :loading="busy.sntp" @click="applySntp(true)">{{ sntp.enabled ? t('sys.updateSntp') : t('sys.enableSntp') }}</Btn>
           <Btn size="sm" @click="checkSntp">{{ t('sys.check') }}</Btn>
         </div>
         <div v-if="sntpStatus" class="md:col-span-4 text-xs flex items-center gap-2 px-3 py-2 rounded-lg" :class="sntpStatus.synced ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn-ink'">
@@ -77,48 +77,48 @@
         <p v-if="sntpResolved" class="md:col-span-4 hint">{{ t('sys.resolved') }} <span class="mono text-ink">{{ sntpResolved }}</span></p>
       </div>
       <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-        <div><label class="label" for="sys-time">{{ t('sys.time') }}</label><input id="sys-time" v-model.trim="tz.time" class="input input-sm mono" placeholder="14:30:00" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label" for="sys-date">{{ t('sys.date') }}</label><input id="sys-date" v-model.trim="tz.date" class="input input-sm mono" placeholder="01/10/2026" :disabled="!auth.isAdmin" /></div>
-        <div><label class="label" for="sys-tz-manual">{{ t('sys.timezone') }}</label><select id="sys-tz-manual" v-model="tz.timezone" class="select select-sm" :disabled="!auth.isAdmin"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
-        <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.time" @click="applyTime">{{ t('sys.setTime') }}</Btn>
-        <label class="md:col-span-4 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="tz.daylight" class="accent-accent" :disabled="!auth.isAdmin"> {{ t('sys.timezoneDst') }}</label>
+        <div><label class="label" for="sys-time">{{ t('sys.time') }}</label><input id="sys-time" v-model.trim="tz.time" class="input input-sm mono" placeholder="14:30:00" :disabled="!can('time')" /></div>
+        <div><label class="label" for="sys-date">{{ t('sys.date') }}</label><input id="sys-date" v-model.trim="tz.date" class="input input-sm mono" placeholder="01/10/2026" :disabled="!can('time')" /></div>
+        <div><label class="label" for="sys-tz-manual">{{ t('sys.timezone') }}</label><select id="sys-tz-manual" v-model="tz.timezone" class="select select-sm" :disabled="!can('time')"><option v-for="o in tzOptions" :key="o" :value="o">UTC {{ o }}</option></select></div>
+        <Btn v-if="can('time')" size="sm" variant="primary" :loading="busy.time" @click="applyTime">{{ t('sys.setTime') }}</Btn>
+        <label class="md:col-span-4 flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="tz.daylight" class="accent-accent" :disabled="!can('time')"> {{ t('sys.timezoneDst') }}</label>
       </div>
     </Section>
 
     <!-- Features -->
     <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5">
-      <Section :title="t('sys.stp')" icon="shield" :state="st.stp" :tip="t('sys.stpTip')" compact>
-        <template #actions><Toggle v-model="stp.enabled" :disabled="!auth.isAdmin" :label="t('sys.stp')" @update:model-value="applyStp" /></template>
-        <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!auth.isAdmin" :aria-label="t('sys.stp')" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
+      <Section :title="t('sys.stp')" icon="shield" :state="st.stp" :tip="t('sys.stpTip')" compact :locked="locked('stp')">
+        <template #actions><Toggle v-model="stp.enabled" :disabled="!can('stp')" :label="t('sys.stp')" @update:model-value="applyStp" /></template>
+        <select v-if="stp.enabled" v-model="stp.mode" @change="applyStp" :disabled="!can('stp')" :aria-label="t('sys.stp')" class="select select-sm"><option value="stp">{{ t('sys.stpClassic') }}</option><option value="rstp">{{ t('sys.stpRapid') }}</option></select>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
-      <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="t('sys.stormTip')" compact>
-        <template #actions><Toggle v-model="storm.enabled" :disabled="!auth.isAdmin" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
-        <div v-if="storm.enabled"><label class="label" for="sys-storm-rate">{{ t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!auth.isAdmin" class="input input-sm num" /></div>
+      <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="t('sys.stormTip')" compact :locked="locked('storm')">
+        <template #actions><Toggle v-model="storm.enabled" :disabled="!can('storm')" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
+        <div v-if="storm.enabled"><label class="label" for="sys-storm-rate">{{ t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm')" class="input input-sm num" /></div>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
-      <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="t('sys.igmpTip')" compact>
-        <template #actions><Toggle v-model="igmp.enabled" :disabled="!auth.isAdmin" :label="t('sys.igmp')" @update:model-value="applyIgmp" /></template>
+      <Section :title="t('sys.igmp')" icon="activity" :state="st.igmp" :tip="t('sys.igmpTip')" compact :locked="locked('igmp')">
+        <template #actions><Toggle v-model="igmp.enabled" :disabled="!can('igmp')" :label="t('sys.igmp')" @update:model-value="applyIgmp" /></template>
         <div v-if="igmp.enabled" class="space-y-1.5">
-          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.fastLeave') }}</label>
-          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.querier" @change="applyIgmp" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.querier') }}</label>
+          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.fast_leave" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.fastLeave') }}</label>
+          <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="igmp.querier" @change="applyIgmp" :disabled="!can('igmp')" class="accent-accent"> {{ t('sys.querier') }}</label>
         </div>
         <p v-else class="hint">{{ t('common.off') }}</p>
       </Section>
-      <Section :title="t('sys.eee')" icon="bolt" :state="st.eee" :tip="t('sys.eeeTip')" :unsupported="st.eee === 'unsupported'" compact>
-        <template #actions><Toggle v-if="st.eee === 'ok'" v-model="eee.enabled" :disabled="!auth.isAdmin" :label="t('sys.eee')" @update:model-value="applyEee" /></template>
+      <Section :title="t('sys.eee')" icon="bolt" :state="st.eee" :tip="t('sys.eeeTip')" :unsupported="st.eee === 'unsupported'" compact :locked="locked('eee')">
+        <template #actions><Toggle v-if="st.eee === 'ok'" v-model="eee.enabled" :disabled="!can('eee')" :label="t('sys.eee')" @update:model-value="applyEee" /></template>
         <p class="hint">{{ eee.enabled ? t('common.on') : t('common.off') }}</p>
       </Section>
     </div>
 
     <!-- Mirror + loop -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <Section :title="t('sys.mirror')" icon="mirror" :state="st.mirror" :tip="t('sys.mirrorTip')">
+      <Section :title="t('sys.mirror')" icon="mirror" :state="st.mirror" :tip="t('sys.mirrorTip')" :locked="locked('mirror')">
         <template #actions><Badge :tone="mirror.enabled ? 'ok' : 'neutral'" dot>{{ mirror.enabled ? t('common.on') : t('sys.mirrorDisabled') }}</Badge></template>
         <div class="space-y-4">
           <div>
             <label class="label" for="sys-mirror-dest">1 · {{ t('sys.mirrorDest') }}</label>
-            <select id="sys-mirror-dest" v-model.number="mirror.monitoring_port" :disabled="!auth.isAdmin" class="select select-sm">
+            <select id="sys-mirror-dest" v-model.number="mirror.monitoring_port" :disabled="!can('mirror')" class="select select-sm">
               <option :value="0">{{ t('sys.mirrorDisabled') }}</option>
               <option v-for="p in 10" :key="p" :value="p">{{ t('mac.port') }} {{ p }}{{ p >= 9 ? ' (SFP+)' : '' }}</option>
             </select>
@@ -127,25 +127,25 @@
           <div>
             <p id="sys-mirror-src-label" class="label">2 · {{ t('sys.mirrorSrc') }}</p>
             <div class="flex flex-wrap gap-1.5" role="group" aria-labelledby="sys-mirror-src-label">
-              <button v-for="p in 10" :key="p" type="button" v-show="p !== mirror.monitoring_port" :disabled="!auth.isAdmin" :aria-pressed="mirror.mirrored_ports.includes(p)" @click="toggleMirrorPort(p)"
+              <button v-for="p in 10" :key="p" type="button" v-show="p !== mirror.monitoring_port" :disabled="!can('mirror')" :aria-pressed="mirror.mirrored_ports.includes(p)" @click="toggleMirrorPort(p)"
                 class="chip border transition" :class="mirror.mirrored_ports.includes(p) ? 'bg-accent-soft border-accent/40 text-accent-ink' : 'bg-surface-2 border-line text-muted hover:border-line-strong'">P{{ p }}</button>
             </div>
             <p class="hint mt-1">{{ t('sys.mirrorSrcDesc') }}</p>
           </div>
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex gap-4">
-              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.ingress" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.mirrorIngress') }}</label>
-              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.egress" :disabled="!auth.isAdmin" class="accent-accent"> {{ t('sys.mirrorEgress') }}</label>
+              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.ingress" :disabled="!can('mirror')" class="accent-accent"> {{ t('sys.mirrorIngress') }}</label>
+              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer"><input type="checkbox" v-model="mirror.egress" :disabled="!can('mirror')" class="accent-accent"> {{ t('sys.mirrorEgress') }}</label>
             </div>
-            <Btn v-if="auth.isAdmin" size="sm" variant="primary" :loading="busy.mirror" @click="applyMirror">{{ t('sys.mirrorApply') }}</Btn>
+            <Btn v-if="can('mirror')" size="sm" variant="primary" :loading="busy.mirror" @click="applyMirror">{{ t('sys.mirrorApply') }}</Btn>
           </div>
         </div>
       </Section>
 
-      <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="t('sys.loopTip')">
+      <Section :title="t('sys.loop')" icon="loop" :state="st.loop" :tip="t('sys.loopTip')" :locked="locked('loop')">
         <p class="hint mb-3">{{ t('sys.loopDesc') }}</p>
         <div class="grid grid-cols-5 gap-2">
-          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!auth.isAdmin" :aria-pressed="!!lp.enabled" @click="toggleLoop(lp)"
+          <button v-for="lp in loop" :key="lp.port" type="button" :disabled="!can('loop')" :aria-pressed="!!lp.enabled" @click="toggleLoop(lp)"
             class="rounded-lg border-2 py-2 text-center text-xs font-semibold transition"
             :class="lp.enabled ? (lp.violation ? 'border-danger bg-danger-soft text-danger-ink' : 'border-ok/60 bg-ok-soft text-ok-ink') : 'border-line text-muted hover:border-line-strong'">
             {{ lp.port >= 9 ? 'SFP+' : 'P' }}{{ lp.port }}
@@ -192,7 +192,7 @@
     </div>
 
     <!-- Danger zone -->
-    <div v-if="auth.isAdmin" class="card border-danger/40">
+    <div v-if="can('reboot')" class="card border-danger/40">
       <div class="card-head items-center flex-wrap">
         <div class="min-w-0"><h3 class="h2 text-danger-ink">{{ t('sys.danger') }}</h3><p class="hint">{{ t('sys.dangerDesc') }}</p></div>
         <Btn variant="danger-soft" icon="power" @click="doReboot">{{ t('sys.reboot') }}</Btn>
@@ -231,6 +231,9 @@ const toast = useToast()
 const { confirm } = useConfirm()
 const auth = useAuthStore()
 const sw = useSwitchesStore()
+// admin and the setting is changeable on this switch's firmware (2.0.0.x: see read_only from the backend)
+const can = (feature) => auth.isAdmin && !sw.readOnly(feature)
+const locked = (feature) => auth.isAdmin && sw.readOnly(feature)
 const base = `/api/switches/${props.switchId}`
 
 // per-section load state: loading | ok | unsupported | error
@@ -280,7 +283,7 @@ function fail(e) { toast.error(e.message || String(e)) }
 
 // A card whose body reflects the section's own load state
 const Section = defineComponent({
-  props: { title: String, icon: String, state: String, tip: String, unsupported: Boolean, compact: Boolean, id: String },
+  props: { title: String, icon: String, state: String, tip: String, unsupported: Boolean, compact: Boolean, id: String, locked: Boolean },
   setup(p, { slots }) {
     return () => h('section', { class: 'card flex flex-col', id: p.id }, [
       // flex-wrap: on narrow screens the actions drop under the title instead of squeezing it out
@@ -291,7 +294,9 @@ const Section = defineComponent({
             h('h3', { class: 'h2 inline-flex items-center gap-1.5' }, [p.title, p.tip ? h(Tip, { title: p.title, text: p.tip }) : null]),
           ]),
         ]),
-        slots.actions && p.state === 'ok' ? h('div', { class: 'flex items-center flex-wrap gap-2 ms-auto' }, slots.actions()) : null,
+        // read-only on this firmware: say so instead of leaving disabled controls unexplained
+        p.locked && p.state === 'ok' ? h(Badge, { tone: 'neutral', class: 'ms-auto', title: t('v2.readOnlyTip') }, () => [h(Icon, { name: 'lock', size: 12 }), ' ', t('v2.readOnly')]) : null,
+        slots.actions && p.state === 'ok' ? h('div', { class: ['flex items-center flex-wrap gap-2', p.locked ? '' : 'ms-auto'] }, slots.actions()) : null,
       ]),
       h('div', { class: p.compact ? 'px-5 py-4 flex-1' : 'card-body flex-1' },
         p.state === 'loading' ? [h('div', { class: 'space-y-2 animate-pulse' }, [h('div', { class: 'h-3 rounded bg-surface-3 w-2/3' }), h('div', { class: 'h-3 rounded bg-surface-3 w-1/2' })])]
