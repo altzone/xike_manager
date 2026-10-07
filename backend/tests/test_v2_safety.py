@@ -79,7 +79,7 @@ def test_switches_report_their_firmware_line_and_read_only_features(api, v2):
     by_id = {s["id"]: s for s in api.get("/api/switches").json()}
     assert by_id[v1]["firmware_line"] == 1 and by_id[v1]["read_only"] == []
     assert by_id[v2]["firmware_line"] == 2
-    assert by_id[v2]["read_only"] == ["eee", "time"]
+    assert by_id[v2]["read_only"] == ["lag", "storm", "eee", "time"]
     assert api.get(f"/api/switches/{v2}/info").json()["read_only"] == by_id[v2]["read_only"]
     status = api.get(f"/api/switches/{v2}/status").json()
     assert status["firmware_line"] == 2 and status["read_only"] == by_id[v2]["read_only"]

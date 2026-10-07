@@ -408,7 +408,7 @@ export default {
   'dash.swapOff': '按固件编号（2.0.0.x 通常如此）',
   'sys.portMapCheck': '此设置与固件 {fw} 通常需要的不一致。请检查：将线缆插入标有 9 的插槽；如果此处链路显示在端口 10 上，请切换此设置。',
   'v2.readOnly': '此固件下只读',
-  'v2.readOnlyTip': '固件 2.0.0.x 的自带网页界面已不再提供此设置，其所需格式也未经确认，因此 SwitchPilot 只显示而不修改它。',
+  'v2.readOnlyTip': 'SwitchPilot 暂不在 2.0.0.x 固件上修改此设置：尚未在真实交换机上确认该固件如何接受它。此处按交换机报告的内容显示。',
   'vlans.vlanCount': 'VLAN：{used}/{max}',
   'vlans.vlanCountTip': '2.0.0.x 固件在一张 802.1Q 表中最多保存 {max} 个 VLAN，每个 VLAN 的名称都存储在交换机上。1 到 4094 之间的任何 VLAN 都可以用作 Access 或 Native VLAN。',
   'vlans.nameV2Hint': '交换机只保留名称的前 16 个字节（16 个拉丁字母，其他文字更少）；SwitchPilot 显示完整名称。',

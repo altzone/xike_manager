@@ -3,6 +3,22 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.3.1] - 2026-10-07
+
+### Changed
+- **On 2.0.0.x switches, link aggregation (LAG) and storm control are read-only for now.** On a
+  2.0.0.3 unit (issue #3), a LAG change (two unused ports into an LACP group) was followed by a
+  network outage, and storm control limits were answered OK by the switch but not applied
+  (SwitchPilot noticed it, put the previous setting back and saved nothing). Both requests match
+  what the switch's own pages send, so the cause is not known yet. Until they are confirmed on a
+  real switch, SwitchPilot shows these settings as the switch reports them and does not send
+  changes (the API answers 501, nothing reaches the switch). Port settings, VLANs, STP and IGMP
+  were seen working on that unit and stay editable, as do loop detection, port mirroring and the
+  MAC table.
+
+  If you changed a LAG on a 2.0.0.x switch with SwitchPilot 2.2.0 to 2.3.0, check it on the
+  switch's own Link Aggregation page.
+
 ## [2.3.0] - 2026-10-06
 
 First step towards simple updates: SwitchPilot is now published as a ready-made Docker image, the

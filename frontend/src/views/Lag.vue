@@ -3,6 +3,7 @@
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <p class="hint max-w-2xl">{{ t('lag.tip') }}</p>
       <Btn v-if="can('lag')" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
+      <Badge v-else-if="auth.isAdmin && sw.readOnly('lag')" tone="neutral" :title="t('v2.readOnlyTip')"><Icon name="lock" :size="12" /> {{ t('v2.readOnly') }}</Badge>
     </div>
 
     <div v-if="groups.length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -33,7 +34,7 @@
       </div>
     </div>
     <div v-else class="card">
-      <EmptyState icon="lag" :title="loadError ? t('common.failedLoad') : t('lag.noGroups')" :text="loadError || t('lag.createDesc')">
+      <EmptyState icon="lag" :title="loadError ? t('common.failedLoad') : t('lag.noGroups')" :text="loadError || (can('lag') ? t('lag.createDesc') : '')">
         <Btn v-if="loadError" size="sm" icon="refresh" @click="load">{{ t('ui.retry') }}</Btn>
         <Btn v-else-if="can('lag')" variant="primary" icon="plus" @click="openCreate">{{ t('lag.create') }}</Btn>
       </EmptyState>
@@ -105,6 +106,7 @@ import { useSwitchesStore } from '../stores/switches.js'
 import { useI18n } from '../i18n/index.js'
 import Btn from '../components/ui/Btn.vue'
 import Badge from '../components/ui/Badge.vue'
+import Icon from '../components/ui/Icon.vue'
 import Modal from '../components/ui/Modal.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 

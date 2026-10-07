@@ -390,9 +390,12 @@ WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "i
                   "eee", "time", "static_mac", "mac_table", "reboot")
 # Each entry follows the request the 2.0.0.x native UI sends (code carved from the vendor image),
 # is read back where the switch answers OK whatever it did, and is saved with save_all_configs.json
-# (port settings were also verified on a 2.0.0.3 unit). Left out: EEE and time/SNTP, which the
-# 2.0.0.x web interface no longer offers (their request format there is unconfirmed).
-V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "lag", "stp", "loop", "storm", "igmp",
+# (ports, VLANs, STP and IGMP were also seen working on a 2.0.0.3 unit, issue #3). Left out:
+# - EEE and time/SNTP: the 2.0.0.x web interface no longer offers them (format unconfirmed);
+# - LAG and storm control (2.3.1): on that 2.0.0.3 unit a LAG change was followed by a network
+#   outage, and storm limits were answered OK but not applied, although both requests match what
+#   the switch's own pages send. Their code stays (tests), unused until confirmed on a real switch.
+V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "igmp",
                          "mirror", "static_mac", "mac_table"})
 
 
@@ -408,9 +411,8 @@ async def _require_writable(client: SwitchClient, feature: str):
     """Refuse a write this switch's firmware line is not known to accept, before sending anything."""
     line = await client.firmware_line()
     if line is not None and line >= 2 and feature not in V2_WRITABLE:
-        raise HTTPException(501, f"Not supported on firmware {client.fw_ver}: its own web interface does not offer "
-                                 "this setting and SwitchPilot does not know the format it expects, so nothing was "
-                                 "sent to the switch.")
+        raise HTTPException(501, f"Not supported on firmware {client.fw_ver} yet: how this firmware takes this "
+                                 "setting is not confirmed on a real switch, so nothing was sent to the switch.")
 
 
 async def _write_v2(client: SwitchClient, what: str, write, applied, restore):

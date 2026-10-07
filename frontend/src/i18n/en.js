@@ -408,7 +408,7 @@ export default {
   'dash.swapOff': 'As numbered by the firmware (usual on 2.0.0.x)',
   'sys.portMapCheck': 'This setting differs from what firmware {fw} usually needs. Check: plug a cable into the cage labelled 9; if the link shows on port 10 here, flip the setting.',
   'v2.readOnly': 'Read-only on this firmware',
-  'v2.readOnlyTip': 'Firmware 2.0.0.x no longer offers this setting in its own web interface and the format it expects is unconfirmed, so SwitchPilot shows it without changing it.',
+  'v2.readOnlyTip': 'SwitchPilot does not change this setting on 2.0.0.x firmware yet: how this firmware takes it is not confirmed on a real switch. It is shown as the switch reports it.',
   'vlans.vlanCount': 'VLANs: {used}/{max}',
   'vlans.vlanCountTip': 'Firmware 2.0.0.x keeps up to {max} VLANs in one 802.1Q table, each with a name stored on the switch. Any VLAN ID from 1 to 4094 can be an access or native VLAN.',
   'vlans.nameV2Hint': 'The switch keeps the first 16 bytes of the name (16 Latin letters, fewer in other scripts); SwitchPilot shows the full name.',

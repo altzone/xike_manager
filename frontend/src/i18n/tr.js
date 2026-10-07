@@ -408,7 +408,7 @@ export default {
   'dash.swapOff': 'Firmware numaralandırması (2.0.0.x\'te olağan)',
   'sys.portMapCheck': 'Bu ayar, {fw} firmware\'inin genellikle gerektirdiğinden farklı. Kontrol edin: 9 etiketli yuvaya bir kablo takın; bağlantı burada port 10\'da görünüyorsa ayarı değiştirin.',
   'v2.readOnly': 'Bu firmware\'de salt okunur',
-  'v2.readOnlyTip': 'Firmware 2.0.0.x bu ayarı kendi web arayüzünde artık sunmuyor ve beklediği biçim doğrulanmadı; bu yüzden SwitchPilot ayarı değiştirmeden gösterir.',
+  'v2.readOnlyTip': 'SwitchPilot bu ayarı 2.0.0.x yazılımında henüz değiştirmez: bu yazılımın ayarı nasıl aldığı gerçek bir switch üzerinde doğrulanmadı. Switch\'in bildirdiği şekilde gösterilir.',
   'vlans.vlanCount': 'VLAN\'lar: {used}/{max}',
   'vlans.vlanCountTip': '2.0.0.x firmware\'i tek bir 802.1Q tablosunda en fazla {max} VLAN tutar; her birinin adı switch\'te saklanır. 1-4094 arasındaki her VLAN erişim veya native VLAN olabilir.',
   'vlans.nameV2Hint': 'Switch adın ilk 16 baytını saklar (16 Latin harfi, diğer yazılarda daha az); SwitchPilot adın tamamını gösterir.',

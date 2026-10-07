@@ -49,7 +49,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
     saved").
   - Otherwise the change is saved on the switch (`save_all_configs.json`), and the answer's
     `warnings` lists a save that did not complete.
-- **Read-only:** settings in `read_only` (EEE and `time` on 2.0.0.x) answer `501` and nothing is
+- **Read-only:** settings in `read_only` (`lag`, `storm`, `eee` and `time` on 2.0.0.x) answer `501` and nothing is
   sent to the switch.
 - **One request at a time:** SwitchPilot sends one request at a time to the switch.
 - **VLAN layout check (2.0.0.3):** that firmware reads its VLAN table back with 10 port entries

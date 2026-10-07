@@ -4,7 +4,7 @@
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.3.1-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 - **New to SwitchPilot?** [Install it](#install-new-users) in three commands.
 - **Already running it?** [Update it](#update-existing-users): your data and settings are kept.
@@ -53,14 +53,16 @@ Other Xikestor models using the same web API should also work.
 
 **Firmware:** SwitchPilot supports both firmware lines: **1.0.0.x** (V1) and, since 2.2.0,
 **2.0.0.x** (V2), whose web API differs for almost every setting. The 2.0.0.x support follows the
-requests the switch's own web pages send. Only port settings have been confirmed on a real switch so
-far (a 2.0.0.3 unit); the rest was checked against the firmware's code and a simulated switch.
+requests the switch's own web pages send. Port settings, VLANs, STP and IGMP have been seen working
+on a real switch (a 2.0.0.3 unit); the rest was checked against the firmware's code and a simulated
+switch.
 
 After each change SwitchPilot reads the setting back from the switch and saves it only if it matches
 (port settings, the management address and clearing the MAC table excepted). A change the switch
 does not apply is reported and put back. Please open an issue if something does not behave as
-expected on your 2.0.0.x switch. EEE and time/SNTP are read-only on 2.0.0.x: the vendor removed them
-from that firmware's own web interface.
+expected on your 2.0.0.x switch. Read-only on 2.0.0.x for now: link aggregation (LAG) and storm
+control, until they are confirmed on a real switch (see the change log for 2.3.1), and EEE and
+time/SNTP, which the vendor removed from that firmware's own web interface.
 
 The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
 unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check
@@ -245,6 +247,7 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Port 9/10 mapping | Swapped on 1.0.0.x firmware, not on 2.0.0.x | Set automatically from the firmware; per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | EEE, clock and SNTP on 2.0.0.x firmware | Not offered by that firmware's web interface | Shown read-only |
+| LAG and storm control on 2.0.0.x firmware | Not yet confirmed on a real switch | Shown read-only |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |
 
