@@ -1,4 +1,5 @@
-# No BuildKit-only syntax here: Docker 20.10 (Synology, Debian 12) and docker-compose v1 build this too
+# No BuildKit-only syntax here: Docker 20.10 (Synology, Debian 12) and docker-compose v1 build this too.
+# CI builds the page natively and passes it in place of this stage (build context frontend-build).
 FROM node:22-alpine AS frontend-build
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./

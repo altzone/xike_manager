@@ -23,6 +23,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -57,6 +58,7 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-24.04
+    timeout-minutes: 45  # a build that hangs fails instead of holding the run for 6 hours
     permissions:
       contents: read
       packages: write
@@ -66,6 +68,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # every tag: the moving image tags only follow the newest version
+      # The web page is the same files on every platform: built here, natively, and handed to the
+      # image build in place of its frontend-build stage. Node crashes under QEMU on the runner
+      # (arm64 npm ci: "Illegal instruction", then the build hangs), so it never runs emulated.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Web page
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          mkdir -p "$RUNNER_TEMP/page/build"
+          cp -r dist "$RUNNER_TEMP/page/build/dist"
       - name: Moving tags this version takes
         id: moving
         if: github.ref_type == 'tag'
@@ -104,6 +121,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          build-contexts: frontend-build=${{ runner.temp }}/page
           platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -115,6 +133,7 @@ jobs:
     needs: image
     if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
