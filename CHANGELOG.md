@@ -3,6 +3,17 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.3.2] - 2026-10-08
+
+### Security
+- **The tools that build the web page are up to date.** `npm audit` reported six high-severity
+  advisories in them (nanoid, PostCSS, source-map-js, Vite, Vue's server renderer; nanoid was
+  reported in pull request #4). Updating within the versions SwitchPilot already allowed fixes
+  them all: nanoid 3.3.20, PostCSS 8.5.29, Vite 8.3.4, Vue 3.5.43, Tailwind CSS 4.3.3. None of
+  them could be reached in a running SwitchPilot: they concern building the page, Vite's
+  development server on Windows, or rendering pages on a server, which SwitchPilot does not do.
+  The page looks and works the same, and there is nothing to do after the update.
+
 ## [2.3.1] - 2026-10-07
 
 ### Changed
