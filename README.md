@@ -1,5 +1,7 @@
 # SwitchPilot
 
+Developed by [ALTZONE](https://altzone.net) — infrastructure, network, VoIP and datacenter engineering (Paris, France).
+
 **Modern, professional web management for Xikestor network switches.**
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
