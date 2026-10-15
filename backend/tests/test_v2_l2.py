@@ -311,6 +311,25 @@ def test_static_entries_are_added_and_deleted_by_vlan_and_saved_without_erasing_
     assert saves(m) == 2 and m.l2.static_flash_wiped is False
 
 
+@pytest.mark.parametrize("empty", ["", "data: \n\n"])
+def test_2_0_0_3_mac_tables_without_entries_read_as_empty(api, empty):
+    """2.0.0.3 answers `data: [...]`, and with no static entry something that is not JSON (seen on a
+    real unit, issue #3): the list was a 502, and deleting the last entry reported an error."""
+    make_v2(api.mock)
+    m = api.mock
+    m.l2.mac_sse_empty = empty
+    sid = api.post("/api/switches", json={"name": "P", "ip": "10.0.0.2"}).json()["id"]
+    assert api.get(url(sid, "mac/static")).json() == []
+    assert api.get(url(sid, "mac/dynamic")).json() == {"entries": [], "total": 0, "truncated": False}
+    r = api.post(url(sid, "mac/static/add"), json={"mac": "00:1A:2B:3C:4D:5E", "port": 2, "vlan_id": 61})
+    assert r.status_code == 200, r.text
+    assert [(e["mac"], e["port"], e["vlan"]) for e in api.get(url(sid, "mac/static")).json()] == [
+        ("00:1A:2B:3C:4D:5E", 2, 61)]
+    r = api.post(url(sid, "mac/static/delete"), json={"mac": "00:1A:2B:3C:4D:5E", "port": 2, "vlan_id": 61})
+    assert r.status_code == 200, r.text
+    assert api.get(url(sid, "mac/static")).json() == [] and saves(m) == 2
+
+
 def test_a_static_delete_the_switch_skips_is_reported(api, v2):
     m = api.mock
     api.post(url(v2, "mac/static/add"), json={"mac": "AA:BB:CC:DD:EE:01", "port": 4, "vlan_id": 20})

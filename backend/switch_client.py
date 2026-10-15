@@ -130,6 +130,13 @@ def decode_payload(text: str):
         return parts
 
 
+def is_empty_payload(text: str) -> bool:
+    """An answer with nothing in it: an empty body, or SSE-style `data:` lines without data. A
+    2.0.0.3 switch with no static MAC entry answers one of the two (seen as "not JSON")."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return all(line.startswith("data:") and not line[5:].strip() for line in lines)
+
+
 def _parse_mac_entries(raw, port_to_user) -> list[dict]:
     """Normalise a MAC table payload to [{idx, mac, port, fid, age}].
 
@@ -329,7 +336,9 @@ class SwitchClient:
                 # a GET is safe to send again on a fresh connection (a POST never is)
                 return await self.client.get(f"{self.base}/{endpoint}", params=params)
 
-    async def _get(self, endpoint: str, params: dict | None = None, default=_UNSET):
+    async def _get(self, endpoint: str, params: dict | None = None, default=_UNSET, empty=_UNSET):
+        """empty: what an answer with nothing in it means (is_empty_payload), for the lists whose
+        empty form is not JSON."""
         await self._ensure_login()
         r = await self._raw_get(endpoint, params)
         if "login.html" in r.text:
@@ -342,6 +351,8 @@ class SwitchClient:
             return default  # endpoint removed in this firmware
         if r.status_code != 200:
             raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
+        if empty is not _UNSET and is_empty_payload(r.text):
+            return empty
         try:
             return decode_payload(r.text)
         except json.JSONDecodeError:
@@ -1097,7 +1108,7 @@ class SwitchClient:
         exist than were read."""
         entries, seen, truncated = [], set(), False
         async with self._mac_lock:
-            raw = await self._get("mac_get_dynamic_mac_entries.json")
+            raw = await self._get("mac_get_dynamic_mac_entries.json", empty=[])
             for page in range(V2_MAC_MAX_PAGES):
                 batch = _parse_mac_entries(raw, self.to_user)
                 fresh = [e for e in batch if (e["mac"], e["vlan"], e["fid"]) not in seen]
@@ -1108,7 +1119,7 @@ class SwitchClient:
                 if len(batch) < V2_MAC_PAGE:
                     break
                 try:
-                    raw = await self._get("mac_get_next_dynamic_mac_entries.json")
+                    raw = await self._get("mac_get_next_dynamic_mac_entries.json", empty=[])
                 except (SwitchError, json.JSONDecodeError):
                     truncated = True  # this build cannot page: keep the first entries
                     break
@@ -1122,7 +1133,7 @@ class SwitchClient:
     @_parsed("mac_get_static_mac_entries.json")
     async def get_static_macs(self):
         async with self._mac_lock:
-            raw = await self._get("mac_get_static_mac_entries.json")
+            raw = await self._get("mac_get_static_mac_entries.json", empty=[])
         return _parse_mac_entries(raw, self.to_user)
 
     async def _static_entries(self, mac: str) -> dict:

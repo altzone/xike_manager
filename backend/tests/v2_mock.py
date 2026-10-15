@@ -126,6 +126,9 @@ class V2L2:
         self.macs = list(dynamic or [])
         self.cursor = 0  # one read position for the whole switch
         self.has_next = True  # mac_get_next_dynamic_mac_entries.json exists on this build
+        # None: MAC tables as plain JSON. A string: as on 2.0.0.3, `data: [entries]`, and this text
+        # when there is no entry (an empty body or `data:` without data)
+        self.mac_sse_empty = None
         self.ignore = set()  # endpoints that answer 200 but change nothing
         self.storm_refuse = set()  # storm types the switch answers 200 for but does not apply
         self.saved = 0
@@ -282,10 +285,16 @@ class V2L2:
         out["total_entries"] = len(page)
         return out, len(rows)
 
+    def _mac_answer(self, page):
+        if self.mac_sse_empty is None:
+            return httpx.Response(200, json=page)
+        items = [v for k, v in page.items() if k.startswith("Idx_")]
+        return httpx.Response(200, text=f"data: {json.dumps(items)}\n\n" if items else self.mac_sse_empty)
+
     def mac_first(self, request):
         page, _ = self._entries(False, 0, 50)
         self.cursor = page["total_entries"]
-        return httpx.Response(200, json=page)
+        return self._mac_answer(page)
 
     def mac_next(self, request):
         if not self.has_next:
@@ -295,12 +304,12 @@ class V2L2:
             page, _ = self._entries(False, 0, 50)
             self.cursor = 0
         self.cursor += page["total_entries"]
-        return httpx.Response(200, json=page)
+        return self._mac_answer(page)
 
     def mac_static(self, request):
         self.cursor = 0
         page, _ = self._entries(True, 0, 64)
-        return httpx.Response(200, json=page)
+        return self._mac_answer(page)
 
     def mac_add(self, request):
         body = self._body(request)

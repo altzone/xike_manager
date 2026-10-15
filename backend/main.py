@@ -392,9 +392,10 @@ WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "i
 # is read back where the switch answers OK whatever it did, and is saved with save_all_configs.json
 # (ports, VLANs, STP and IGMP were also seen working on a 2.0.0.3 unit, issue #3). Left out:
 # - EEE and time/SNTP: the 2.0.0.x web interface no longer offers them (format unconfirmed);
-# - LAG and storm control (2.3.1): on that 2.0.0.3 unit a LAG change was followed by a network
-#   outage, and storm limits were answered OK but not applied, although both requests match what
-#   the switch's own pages send. Their code stays (tests), unused until confirmed on a real switch.
+# - LAG and storm control (2.3.1): on that 2.0.0.3 unit a LAG change (the request its own page
+#   sends) was followed by a management outage until a power cycle; storm limits are applied but
+#   read back in another unit (its own page set 500 Mbps and read 41), so the read-back cannot
+#   confirm them. Their code stays (tests), unused until confirmed on a real switch.
 V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "igmp",
                          "mirror", "static_mac", "mac_table"})
 
