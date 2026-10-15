@@ -50,7 +50,7 @@ async function loadInfo() {
 // drop results that come back for another switch or after unmount, so they never overwrite the current status.
 async function checkOnline() {
   const id = switchId.value
-  if (!id) return
+  if (!id || document.hidden) return  // a tab in the background asks nothing (checked again when shown)
   let next
   try {
     const res = await api(`/api/switches/${id}/ping`)
@@ -75,7 +75,16 @@ function start() {
   timer = setInterval(checkOnline, 10000)
 }
 
-onMounted(start)
+function onVisibility() {
+  if (!document.hidden) checkOnline()
+}
+
+onMounted(() => { start(); document.addEventListener('visibilitychange', onVisibility) })
 watch(switchId, start)
-onUnmounted(() => { alive = false; clearInterval(timer); sw.setCurrent(null) })
+onUnmounted(() => {
+  alive = false
+  clearInterval(timer)
+  document.removeEventListener('visibilitychange', onVisibility)
+  sw.setCurrent(null)
+})
 </script>

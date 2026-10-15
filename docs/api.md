@@ -67,10 +67,10 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | PUT | `/api/switches/{id}` | Edit switch `{"name"?,"ip"?,"username"?,"password"?}` (connection re-tested when address/credentials change) |
 | DELETE | `/api/switches/{id}` | Remove switch and its local data (descriptions, LAG names, VLAN names, snapshots) |
 | PUT | `/api/switches/{id}/port-mapping` | `{"swap_sfp_9_10": bool, "move_descriptions"?: true}` — whether this unit's SFP+ cages 9/10 are numbered the other way round from the firmware's indexes. Changes labels only; nothing is written to the switch |
-| GET | `/api/switches/{id}/info` | Switch name, IP, model, firmware, `swap_sfp_9_10`, `firmware_line` (1 = 1.0.0.x, 2 = 2.0.0.x, null = unknown) and `read_only` (settings SwitchPilot does not change on this firmware: `["eee", "time"]` on 2.0.0.x; writing one of them answers `501` and nothing is sent to the switch) |
-| GET | `/api/switches/{id}/ping` | Quick online check |
+| GET | `/api/switches/{id}/info` | Switch name, IP, model, firmware, `swap_sfp_9_10`, `firmware_line` (1 = 1.0.0.x, 2 = 2.0.0.x, null = unknown) and `read_only` (settings SwitchPilot does not change on this firmware: `["lag", "storm", "eee", "time"]` on 2.0.0.x; writing one of them answers `501` and nothing is sent to the switch) |
+| GET | `/api/switches/{id}/ping` | Quick online check: `{"online", "temperature"}`, answered from the switch's last answer when it is under 10 s old (an open live view keeps it fresh), else by asking the switch |
 | GET | `/api/switches/{id}/status` | Full system status, plus `swap_sfp_suggested` (what the firmware line usually needs: `true` 1.0.0.x, `false` 2.0.0.x, `null` unknown) |
-| GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats); `token` from `POST /api/auth/stream-token` (5 min) |
+| GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats); `token` from `POST /api/auth/stream-token` (5 min). One reading per switch, shared by every open stream: port counters every 3 s; `temperature` and `port_settings` every 30 s, after a change sent by SwitchPilot and when a link goes up or down. `switch_error` events while the switch does not answer (retried every 15 s) |
 | GET | `/api/switches/{id}/changes?limit=50` | Audit log of configuration changes |
 
 ## Ports

@@ -6,7 +6,7 @@ Developed by [ALTZONE](https://altzone.net) — infrastructure, network, VoIP an
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.3.2-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.3.3-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 - **New to SwitchPilot?** [Install it](#install-new-users) in three commands.
 - **Already running it?** [Update it](#update-existing-users): your data and settings are kept.
@@ -40,7 +40,7 @@ The stock Xikestor web UI is:
 - **Change log** — who changed what and when, per switch
 - **VLAN sync** — copy VLAN definitions to every switch in one click
 - **12 languages** — English, French, German, Spanish, Portuguese, Italian, Turkish, Russian, Arabic (RTL), Chinese, Japanese, Korean; light and dark themes; works on a phone
-- **Live updates** — Server-Sent Events with automatic reconnect and polling fallback
+- **Live updates** — Server-Sent Events with automatic reconnect and polling fallback; one reading per switch shared by every open tab, paused while a tab is in the background
 - **Secure by default** — generated session key, login throttling, short-lived stream tokens, no CORS unless you ask for it
 - **REST API** — everything the UI does, documented in [docs/api.md](docs/api.md); backend test suite against a simulated switch
 

@@ -3,6 +3,36 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.3.3] - 2026-10-15
+
+### Changed
+- **SwitchPilot asks much less of your switches.** A page showing live readings used to ask the
+  switch for its status, port counters and port settings every 3 seconds, separately for each
+  open tab, and went on in tabs left in the background: about one request per second per tab,
+  day and night. Now:
+  - every tab and every user watching a switch share one reading of it;
+  - the port counters are read every 3 seconds; the temperature and the port settings every 30
+    seconds, right after a change made in SwitchPilot, and when a link goes up or down (so a
+    cable plugged in still shows its speed within seconds);
+  - a tab in the background asks nothing, and catches up as soon as it is shown again;
+  - the online check reuses the switch's last answer instead of asking again.
+
+  Measured with a test switch: 0.4 requests per second instead of 1.1 for one tab (2.2 for two),
+  whatever the number of tabs, and none for a hidden tab. The web server of a 2.0.0.x switch
+  answers one request at a time; this leaves it free for its own web page. The trade-off: a port
+  setting changed on the switch's own page takes up to 30 seconds to show in SwitchPilot.
+
+### Fixed
+- **2.0.0.3: the static MAC list showed an error when the switch had no static entry** ("not
+  JSON", issue #3): that firmware answers without JSON for an empty list. It now shows an empty
+  list, and deleting the last static entry no longer reports an error (the entry was deleted on
+  the switch but not saved).
+
+Storm control on 2.0.0.x stays read-only. The limits 2.3.1 reported as not applied are taken by
+the switch, but a 2.0.0.3 unit keeps them in 16 bits (in kbit/s): up to 65 Mbps a limit reads
+back as it was set, above that it wraps around (500 Mbps reads back as 41, 1000 as 16). Whether
+the switch then enforces the wrapped value is not known yet.
+
 ## [2.3.2] - 2026-10-08
 
 ### Security

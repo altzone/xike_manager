@@ -6,7 +6,8 @@ import { api } from './useApi.js'
  *
  * The stream is opened with a short-lived token (EventSource cannot send headers, so the
  * token sits in the URL and in access logs; the real session token never does).
- * One reconnect timer at a time, and nothing runs after disconnect()/unmount.
+ * One reconnect timer at a time, and nothing runs after disconnect()/unmount. A hidden tab asks
+ * nothing: the stream is closed while the tab is hidden and opened again when it is shown.
  *
  * Returns { data, connected, switchError, connect, disconnect }:
  *   - connected: stats are flowing (stream or poll)
@@ -23,12 +24,15 @@ export function useSSE(switchId) {
   let retryCount = 0
   let active = false
   let polling = false
+  let attempts = 0
   let prevCounters = null // internal_port -> [tx_good, rx_good] from the previous poll
   let prevTime = null
 
   async function connect() {
     active = true
     cleanup()
+    const attempt = ++attempts // a later connect() (tab hidden and shown again) replaces this one
+    if (document.hidden) return // opened when the tab is shown (onVisibility)
     let token
     try {
       token = (await api('/api/auth/stream-token', { method: 'POST' })).token
@@ -37,7 +41,7 @@ export function useSSE(switchId) {
       if (active) { startFallback(); scheduleReconnect() }
       return
     }
-    if (!active) return
+    if (!active || document.hidden || attempt !== attempts) return
 
     source = new EventSource(`/api/switches/${switchId}/sse?token=${encodeURIComponent(token)}`)
     source.addEventListener('stats', (e) => {
@@ -96,7 +100,7 @@ export function useSSE(switchId) {
   }
 
   async function pollOnce() {
-    if (polling || !active) return
+    if (polling || !active || document.hidden) return
     polling = true
     try {
       const [stats, status] = await Promise.all([
@@ -140,6 +144,22 @@ export function useSSE(switchId) {
     connected.value = false
   }
 
-  onUnmounted(disconnect)
+  // a tab left open in the background no longer polls the switch
+  function onVisibility() {
+    if (!active) return
+    if (document.hidden) {
+      cleanup()
+      connected.value = false
+    } else if (!source) {
+      retryCount = 0
+      connect()
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+
+  onUnmounted(() => {
+    document.removeEventListener('visibilitychange', onVisibility)
+    disconnect()
+  })
   return { data, connected, switchError, connect, disconnect }
 }

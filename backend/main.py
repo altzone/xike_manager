@@ -393,9 +393,9 @@ WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "i
 # (ports, VLANs, STP and IGMP were also seen working on a 2.0.0.3 unit, issue #3). Left out:
 # - EEE and time/SNTP: the 2.0.0.x web interface no longer offers them (format unconfirmed);
 # - LAG and storm control (2.3.1): on that 2.0.0.3 unit a LAG change (the request its own page
-#   sends) was followed by a management outage until a power cycle; storm limits are applied but
-#   read back in another unit (its own page set 500 Mbps and read 41), so the read-back cannot
-#   confirm them. Their code stays (tests), unused until confirmed on a real switch.
+#   sends) was followed by a management outage until a power cycle; storm limits are kept in 16
+#   bits of kbit/s, exact up to 65 Mbps and wrapped above (its own page set 500 Mbps and read 41).
+#   Their code stays (tests), unused until confirmed on a real switch.
 V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "igmp",
                          "mirror", "static_mac", "mac_table"})
 
@@ -614,15 +614,23 @@ async def switch_info(switch_id: int, user=Depends(get_current_user)):
             raise HTTPException(404, "Switch not found")
         return _public_switch(sw)
 
+
+PING_ANSWERED_WITHIN = 10  # seconds: a switch that answered this recently is online, without asking it again
+
+
 @app.get("/api/switches/{switch_id}/ping")
 async def switch_ping(switch_id: int, user=Depends(get_current_user)):
     """Quick check if switch is reachable"""
     client = await _get_client(switch_id)
+    status = client.recent_status(PING_ANSWERED_WITHIN)  # a live view open on it keeps this fresh
+    if status is not None:
+        return {"online": True, "temperature": status.get("temperature")}
     try:
         status = await asyncio.wait_for(client.get_status(), timeout=8)
         return {"online": True, "temperature": status.get("temperature")}
     except Exception as e:
         return {"online": False, "error": str(e) or e.__class__.__name__}
+
 
 # ── Network config ──
 @app.post("/api/switches/{switch_id}/network")

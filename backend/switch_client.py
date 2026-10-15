@@ -28,6 +28,7 @@ V2_BODY_MAX = 1023      # 2.0.0.x: bytes the VLAN handlers read from a request b
 V2_MAC_PAGE = 50        # 2.0.0.x: dynamic MAC entries per answer (mac_get_next_... gives the next ones)
 V2_MAC_MAX_PAGES = 40   # read at most this many pages of the dynamic table (2000 entries)
 V2_STORM_MAX = 1000     # 2.0.0.x: highest storm control rate, Mbps
+STATUS_MAX_AGE = 60     # seconds a status.json reading may be reused for "is it online?"
 # 2.0.0.x storm control: traffic type as the switch names it in a request -> its key in the reading
 STORM_TYPES = {"broadcast": "sctrl_bcast", "multicast": "sctrl_mcast",
                "unknown_unicast": "sctrl_unucast", "unknown_multicast": "sctrl_unmcast"}
@@ -237,6 +238,9 @@ class SwitchClient:
         # inherited from the container's environment
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5), transport=transport, trust_env=False)
         self.closed = False
+        self.answered_at = float("-inf")  # monotonic time of the switch's last answer (200)
+        self.writes = 0  # requests sent that may have changed a setting
+        self._status = None  # (monotonic time, last status.json)
         self._login_lock = asyncio.Lock()
         self._last_login = 0.0
         # 2.0.0.x keeps one read position for both MAC tables (per switch, not per session), which
@@ -351,6 +355,7 @@ class SwitchClient:
             return default  # endpoint removed in this firmware
         if r.status_code != 200:
             raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
+        self.answered_at = time.monotonic()
         if empty is not _UNSET and is_empty_payload(r.text):
             return empty
         try:
@@ -368,18 +373,22 @@ class SwitchClient:
         # compact JSON, like the native UI's axios: some 2.0.0.x handlers read at most 47 or 255 bytes
         body = json.dumps(data, separators=(",", ":"))
         headers = {"Content-Type": "application/json"}
-        async with self._gate():
-            r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
-        if "login.html" in r.text:
-            await self._relogin()
+        try:
             async with self._gate():
                 r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
             if "login.html" in r.text:
-                # the write was dropped: never report it as applied
-                self._logged_in = False
-                raise SwitchError(f"{endpoint}: the switch rejected the write (session expired)")
+                await self._relogin()
+                async with self._gate():
+                    r = await self.client.post(f"{self.base}/{endpoint}", content=body, headers=headers)
+                if "login.html" in r.text:
+                    # the write was dropped: never report it as applied
+                    self._logged_in = False
+                    raise SwitchError(f"{endpoint}: the switch rejected the write (session expired)")
+        finally:
+            self.writes += 1  # whatever the answer, the settings may have changed: live views read them again
         if r.status_code != 200:
             raise SwitchError(f"{endpoint}: switch answered HTTP {r.status_code}")
+        self.answered_at = time.monotonic()
         return r.text
 
     # ── System ──
@@ -387,7 +396,17 @@ class SwitchClient:
         status = await self._get("status.json")
         if isinstance(status, dict):
             self.fw_ver = str(status.get("fw_ver") or "")
+            self._status = (time.monotonic(), status)
         return status
+
+    def recent_status(self, answered_within: float, max_age: float = STATUS_MAX_AGE) -> dict | None:
+        """The last status.json read, if the switch answered a request in the last answered_within
+        seconds and the reading is at most max_age old (an open live view polls the switch every
+        few seconds); None otherwise. Spares a request to the switch for each "is it online?"."""
+        now = time.monotonic()
+        if self._status is None or now - self.answered_at > answered_within or now - self._status[0] > max_age:
+            return None
+        return self._status[1]
 
     async def firmware_line(self) -> int | None:
         """1 (1.0.0.x) or 2 (2.0.0.x), None when the switch does not say. status.json is read
