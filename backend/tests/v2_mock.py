@@ -239,7 +239,9 @@ class V2L2:
             return httpx.Response(400, text="Bad Request")  # a string reads as 0 on the switch
         if self._skip(request) or body["storm_type"] in self.storm_refuse:
             return None
-        self.storm[body["port"]][self.STORM_KEYS[body["storm_type"]]] = body["rate"] if body["state"] else 0
+        # 2.0.0.3 keeps the limit in 16 bits of kbit/s, and answers it divided by 1000 (issue #3)
+        kept = body["rate"] * 1000 % 65536 // 1000
+        self.storm[body["port"]][self.STORM_KEYS[body["storm_type"]]] = kept if body["state"] else 0
         return None
 
     # IGMP: answers fast_leave/report_flood, reads fast-leave/report-flood; a missing key is off

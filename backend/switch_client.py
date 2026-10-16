@@ -27,7 +27,9 @@ V2_VLAN_NAME_MAX = 16   # 2.0.0.x: bytes kept of a VLAN name
 V2_BODY_MAX = 1023      # 2.0.0.x: bytes the VLAN handlers read from a request body
 V2_MAC_PAGE = 50        # 2.0.0.x: dynamic MAC entries per answer (mac_get_next_... gives the next ones)
 V2_MAC_MAX_PAGES = 40   # read at most this many pages of the dynamic table (2000 entries)
-V2_STORM_MAX = 1000     # 2.0.0.x: highest storm control rate, Mbps
+# 2.0.0.x: highest storm control rate, Mbps. The firmware takes 1-1000, but a 2.0.0.3 unit keeps the
+# limit in 16 bits of kbit/s: above 65 Mbps it reads back wrapped (500 -> 41, issue #3)
+V2_STORM_MAX = 65
 STATUS_MAX_AGE = 60     # seconds a status.json reading may be reused for "is it online?"
 # 2.0.0.x storm control: traffic type as the switch names it in a request -> its key in the reading
 STORM_TYPES = {"broadcast": "sctrl_bcast", "multicast": "sctrl_mcast",

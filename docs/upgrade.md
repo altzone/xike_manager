@@ -93,7 +93,8 @@ Every row that matches the version you ran applies to you; an older version matc
 
 | You ran | Once after the update | Details |
 |---|---|---|
-| 2.3.0 or older, with a 2.0.0.x switch | LAG and storm control are now read-only on it. If you changed a LAG on it with SwitchPilot, check it on the switch's own Link Aggregation page. | [CHANGELOG 2.3.1](../CHANGELOG.md) |
+| 2.3.2 or older, with a 2.0.0.x switch | Storm control can be changed again, from 1 to 65 Mbps. A limit set above 65 Mbps on the switch's own page reads back wrong: set it again from SwitchPilot. | [CHANGELOG 2.3.3](../CHANGELOG.md) |
+| 2.3.0 or older, with a 2.0.0.x switch | LAG is now read-only on it (storm control too, until 2.3.3). If you changed a LAG on it with SwitchPilot, check it on the switch's own Link Aggregation page. | [CHANGELOG 2.3.1](../CHANGELOG.md) |
 | 2.2.1 or older | Nothing to do. From now on the database is copied to `data/backups/` before an update changes it, and a stop lets a change being sent to a switch finish. | [2.3.0](#230-safer-updates) |
 | 2.2.0 or older | Refresh the page once without the cache (Ctrl+Shift+R). | [After the update](#after-the-update) |
 | 2.1.x or older, with a 2.0.0.x switch | Its settings can now be changed from SwitchPilot. If you changed IGMP, loop detection or STP on it with an earlier version, check them once. | [2.2.0](#220-200x-switches-settings-can-be-changed) |
@@ -133,15 +134,17 @@ table. If the switch does not apply a change, SwitchPilot puts the previous sett
 it, and reports an error; nothing is saved.
 
 EEE and the clock (time/SNTP) stay read-only, because that firmware's own web interface no longer
-offers them. From 2.3.1, link aggregation and storm control are read-only on 2.0.0.x too, until
-they are confirmed on a real switch (see the change log).
+offers them. From 2.3.1, link aggregation is read-only on 2.0.0.x too, until it is confirmed on a
+real switch (see the change log). Storm control was read-only in 2.3.1 and 2.3.2, and can be set
+again from 2.3.3, from 1 to 65 Mbps.
 
 Things that work differently on 2.0.0.x, as on the switch's own pages:
 - VLANs live in one table of up to 100 VLANs, with their names stored on the switch (16
   characters), and any VLAN ID can be an access or native VLAN.
 - Loop detection is one setting for the whole switch, and it is an alternative to STP: turning
   one on turns the other off.
-- Storm control is set in Mbps, per kind of traffic.
+- Storm control is set in Mbps, per kind of traffic, from 1 to 65 Mbps (the switch keeps a
+  higher limit wrong: in 16 bits of kbit/s).
 - IGMP has report flooding instead of a querier.
 - Static MAC entries are keyed by VLAN ID.
 
@@ -314,7 +317,7 @@ those, the `lag`, `mirror` and `loop` sections used the switch's internal indexe
   - `POST /loop` takes `{"enabled"?, "prevention"?, "interval"?, "recovery"?}` and answers
     `stp_turned_off`.
   - `GET /storm` returns `{"model": "per_port", "enabled", "rate", "types", "uniform", "ports"}`.
-  - `POST /storm` takes `types` (default `["broadcast"]`), and its `rate` is in Mbps (1-1000).
+  - `POST /storm` takes `types` (default `["broadcast"]`), and its `rate` is in Mbps (1-65 from 2.3.3, 1-1000 before).
   - `POST /igmp` takes `report_flood`; `querier` does not exist there.
   - `POST /stp` answers `loop_turned_off`.
   - Static MAC add/delete take `vlan_id` instead of `fid`. A delete needs no port (the entry's VLAN

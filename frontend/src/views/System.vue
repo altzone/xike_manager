@@ -95,7 +95,7 @@
       <Section :title="t('sys.storm')" icon="bolt" :state="st.storm" :tip="storm.v2 ? t('sys.stormTipV2') : t('sys.stormTip')" compact :locked="locked('storm')">
         <template #actions><Toggle v-model="storm.enabled" :disabled="!can('storm') || busy.storm" :label="t('sys.storm')" @update:model-value="applyStorm" /></template>
         <div v-if="storm.enabled" class="space-y-2.5">
-          <div><label class="label" for="sys-storm-rate">{{ storm.v2 ? t('sys.stormRateMbps') : t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" max="1000" @change="applyStorm" :disabled="!can('storm') || busy.storm" class="input input-sm num" /></div>
+          <div><label class="label" for="sys-storm-rate">{{ storm.v2 ? t('sys.stormRateMbps') : t('sys.stormRate') }}</label><input id="sys-storm-rate" v-model.number="storm.rate" type="number" min="1" :max="storm.v2 ? V2_STORM_MAX : 1000" @change="applyStorm" :disabled="!can('storm') || busy.storm" class="input input-sm num" /></div>
           <!-- 2.0.0.x: a limit per traffic type (SwitchPilot sets the same one on every port) -->
           <div v-if="storm.v2" class="space-y-1.5" role="group" :aria-label="t('sys.stormTypes')">
             <p class="label">{{ t('sys.stormTypes') }}</p>
@@ -288,6 +288,9 @@ const sntpResolved = ref('')
 const stp = reactive({ enabled: false, mode: 'stp' })
 // 2.0.0.x (v2): rate in Mbps per traffic type; uniform is false when the ports differ (set on the switch)
 const STORM_TYPES = ['broadcast', 'multicast', 'unknown_unicast', 'unknown_multicast']
+// 2.0.0.x keeps a storm limit in 16 bits of kbit/s: above 65 Mbps it reads back wrapped (issue #3)
+const V2_STORM_MAX = 65
+const V2_STORM_DEFAULT = 50
 const storm = reactive({ enabled: false, rate: 100, v2: false, types: ['broadcast'], uniform: true })
 // 2.0.0.x (v2): report flooding instead of a global querier
 const igmp = reactive({ enabled: false, fast_leave: true, querier: false, v2: false, report_flood: false })
@@ -374,7 +377,7 @@ async function loadStorm() {
   const d = await api(`${base}/storm`)
   storm.v2 = d.model === 'per_port'
   if (storm.v2) {
-    storm.enabled = d.enabled; storm.rate = d.rate || 100; storm.uniform = d.uniform
+    storm.enabled = d.enabled; storm.rate = d.rate || V2_STORM_DEFAULT; storm.uniform = d.uniform
     storm.types = d.types?.length ? [...d.types] : ['broadcast']
   } else {
     storm.enabled = d.sctrl_state === '1'; storm.rate = parseInt(d.sctrl_rate) || 100
@@ -462,7 +465,7 @@ async function applyStp() {
 async function applyStorm() {
   busy.storm = true
   try {
-    const body = { enabled: storm.enabled, rate: storm.rate || 100, ...(storm.v2 ? { types: storm.types } : {}) }
+    const body = { enabled: storm.enabled, rate: storm.rate || (storm.v2 ? V2_STORM_DEFAULT : 100), ...(storm.v2 ? { types: storm.types } : {}) }
     const res = await api(`${base}/storm`, { method: 'POST', body: JSON.stringify(body) })
     ok(t('sys.stormUpdated')); warn(res)
     if (storm.v2) storm.uniform = true

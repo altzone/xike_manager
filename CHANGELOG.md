@@ -3,9 +3,17 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
-## [2.3.3] - 2026-10-15
+## [2.3.3] - 2026-10-16
 
 ### Changed
+- **Storm control can be changed again on 2.0.0.x switches, from 1 to 65 Mbps.** 2.3.1 made it
+  read-only because a limit sent by SwitchPilot read back different from what was sent. Measured
+  with the switch's own page on a 2.0.0.3 unit (issue #3): the switch keeps the limit in 16 bits,
+  in kbit/s. Up to 65 Mbps a limit reads back exactly as set; above that it wraps around (500 Mbps
+  reads back as 41, 1000 as 16), and whether the switch then enforces the limit asked or the
+  wrapped one is not known. SwitchPilot therefore takes 1 to 65 Mbps there, and checks each
+  limit against what the switch reads back, as before. A limit set above 65 Mbps on the switch's
+  own page shows in SwitchPilot as the switch reports it (wrapped): set it again from SwitchPilot.
 - **SwitchPilot asks much less of your switches.** A page showing live readings used to ask the
   switch for its status, port counters and port settings every 3 seconds, separately for each
   open tab, and went on in tabs left in the background: about one request per second per tab,
@@ -27,11 +35,6 @@ All notable changes to SwitchPilot are listed here. Upgrading an existing instal
   JSON", issue #3): that firmware answers without JSON for an empty list. It now shows an empty
   list, and deleting the last static entry no longer reports an error (the entry was deleted on
   the switch but not saved).
-
-Storm control on 2.0.0.x stays read-only. The limits 2.3.1 reported as not applied are taken by
-the switch, but a 2.0.0.3 unit keeps them in 16 bits (in kbit/s): up to 65 Mbps a limit reads
-back as it was set, above that it wraps around (500 Mbps reads back as 41, 1000 as 16). Whether
-the switch then enforces the wrapped value is not known yet.
 
 ## [2.3.2] - 2026-10-08
 

@@ -62,9 +62,10 @@ switch.
 After each change SwitchPilot reads the setting back from the switch and saves it only if it matches
 (port settings, the management address and clearing the MAC table excepted). A change the switch
 does not apply is reported and put back. Please open an issue if something does not behave as
-expected on your 2.0.0.x switch. Read-only on 2.0.0.x for now: link aggregation (LAG) and storm
-control, until they are confirmed on a real switch (see the change log for 2.3.1), and EEE and
-time/SNTP, which the vendor removed from that firmware's own web interface.
+expected on your 2.0.0.x switch. Storm control is set from 1 to 65 Mbps on 2.0.0.x: the switch
+keeps higher limits wrong. Read-only on 2.0.0.x for now: link aggregation (LAG), until it is
+confirmed on a real switch (see the change log for 2.3.1), and EEE and time/SNTP, which the vendor
+removed from that firmware's own web interface.
 
 The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
 unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check
@@ -249,7 +250,8 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Port 9/10 mapping | Swapped on 1.0.0.x firmware, not on 2.0.0.x | Set automatically from the firmware; per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | EEE, clock and SNTP on 2.0.0.x firmware | Not offered by that firmware's web interface | Shown read-only |
-| LAG and storm control on 2.0.0.x firmware | Not yet confirmed on a real switch | Shown read-only |
+| LAG on 2.0.0.x firmware | Not yet confirmed on a real switch | Shown read-only |
+| Storm control on 2.0.0.x firmware | Limits above 65 Mbps are kept wrong by the switch (16 bits of kbit/s) | 1-65 Mbps |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |
 

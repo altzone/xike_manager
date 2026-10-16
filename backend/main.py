@@ -392,11 +392,11 @@ WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "i
 # is read back where the switch answers OK whatever it did, and is saved with save_all_configs.json
 # (ports, VLANs, STP and IGMP were also seen working on a 2.0.0.3 unit, issue #3). Left out:
 # - EEE and time/SNTP: the 2.0.0.x web interface no longer offers them (format unconfirmed);
-# - LAG and storm control (2.3.1): on that 2.0.0.3 unit a LAG change (the request its own page
-#   sends) was followed by a management outage until a power cycle; storm limits are kept in 16
-#   bits of kbit/s, exact up to 65 Mbps and wrapped above (its own page set 500 Mbps and read 41).
-#   Their code stays (tests), unused until confirmed on a real switch.
-V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "igmp",
+# - LAG (2.3.1): on that 2.0.0.3 unit a LAG change (the request its own page sends) was followed
+#   by a management outage until a power cycle. Its code stays (tests), unused until confirmed.
+# Storm control (read-only in 2.3.1 and 2.3.2) is back from 2.3.3 for 1-65 Mbps: that unit keeps a
+# limit in 16 bits of kbit/s, exact up to 65 Mbps and wrapped above (its own page set 500, read 41).
+V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "storm", "igmp",
                          "mirror", "static_mac", "mac_table"})
 
 
@@ -1399,7 +1399,8 @@ async def set_storm(switch_id: int, cfg: StormConfig, user=Depends(require_admin
         return {"ok": True}
     # 2.0.0.x: a limit in Mbps per port and traffic type; SwitchPilot sets the same one on every port
     if cfg.enabled and cfg.rate > V2_STORM_MAX:
-        raise HTTPException(400, f"The rate is in Mbps on this firmware: 1-{V2_STORM_MAX}")
+        raise HTTPException(400, f"On this firmware the rate is in Mbps, 1-{V2_STORM_MAX}: the switch keeps "
+                                 "a higher limit wrong")
     types = list(dict.fromkeys(cfg.types if cfg.types is not None else ["broadcast"]))
     if cfg.enabled and not types:
         raise HTTPException(400, "Choose at least one kind of traffic to limit")

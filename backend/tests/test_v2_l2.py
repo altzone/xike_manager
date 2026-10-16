@@ -18,22 +18,20 @@ def v2(api):
 
 @pytest.fixture
 def unconfirmed_writes(monkeypatch):
-    """LAG and storm control are read-only on 2.0.0.x until confirmed on a real switch (2.3.1); their
-    write code is kept and tested with them switched on."""
+    """LAG is read-only on 2.0.0.x until confirmed on a real switch (2.3.1); its write code is kept and
+    tested with it switched on."""
     import main
-    monkeypatch.setattr(main, "V2_WRITABLE", main.V2_WRITABLE | {"lag", "storm"})
+    monkeypatch.setattr(main, "V2_WRITABLE", main.V2_WRITABLE | {"lag"})
 
 
-def test_lag_and_storm_changes_are_not_sent_to_a_2_0_0_x_switch(api, v2):
+def test_lag_changes_are_not_sent_to_a_2_0_0_x_switch(api, v2):
     m = api.mock
     r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": [{"port": 3, "type": 2, "group": 1},
                                                                           {"port": 4, "type": 2, "group": 1}]})
     assert r.status_code == 501 and "nothing was sent" in r.json()["detail"], r.text
-    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 100, "types": ["broadcast"]})
-    assert r.status_code == 501, r.text
-    assert m.posted("port_trunk_cfg.json") == [] and m.posted("storm_ctrl_cfg.json") == []
+    assert m.posted("port_trunk_cfg.json") == []
     assert "save_all_configs.json" not in [ep for ep, _ in m.posts]
-    assert api.get(url(v2, "lag")).status_code == 200 and api.get(url(v2, "storm")).status_code == 200  # still shown
+    assert api.get(url(v2, "lag")).status_code == 200  # still shown
 
 
 def url(sid, path):
@@ -192,23 +190,22 @@ def test_loop_settings_out_of_range_are_refused(api, v2):
 
 
 # ── Storm control ──
-@pytest.mark.usefixtures("unconfirmed_writes")
 def test_storm_control_sets_the_same_limit_on_every_port_one_request_each(api, v2):
     m = api.mock
-    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 100, "types": ["broadcast", "unknown_unicast"]})
+    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 65, "types": ["broadcast", "unknown_unicast"]})
     assert r.status_code == 200, r.text
     bodies = m.posted("storm_ctrl_cfg.json")
     assert len(bodies) == 20 and r.json()["requests"] == 20
-    assert {"port": 1, "rate": 100, "state": 1, "storm_type": "broadcast"} in bodies
-    assert all(m.l2.storm[p]["sctrl_bcast"] == 100 and m.l2.storm[p]["sctrl_unucast"] == 100
+    assert {"port": 1, "rate": 65, "state": 1, "storm_type": "broadcast"} in bodies
+    assert all(m.l2.storm[p]["sctrl_bcast"] == 65 and m.l2.storm[p]["sctrl_unucast"] == 65
                and m.l2.storm[p]["sctrl_mcast"] == 0 for p in range(1, 11))
     assert saves(m) == 1
     d = api.get(url(v2, "storm")).json()
     assert (d["model"], d["enabled"], d["rate"], d["types"], d["uniform"]) == (
-        "per_port", True, 100, ["broadcast", "unknown_unicast"], True)
+        "per_port", True, 65, ["broadcast", "unknown_unicast"], True)
     # only what changes is sent again
     m.posts.clear()
-    assert api.post(url(v2, "storm"), json={"enabled": True, "rate": 100, "types": ["broadcast"]}).status_code == 200
+    assert api.post(url(v2, "storm"), json={"enabled": True, "rate": 65, "types": ["broadcast"]}).status_code == 200
     assert len(m.posted("storm_ctrl_cfg.json")) == 10
     assert all(b == {"port": b["port"], "rate": 0, "state": 0, "storm_type": "unknown_unicast"}
                for b in m.posted("storm_ctrl_cfg.json"))
@@ -222,18 +219,29 @@ def test_storm_settings_made_on_the_switch_read_as_mixed(api, v2):
     assert d["enabled"] and d["rate"] == 50 and d["types"] == ["multicast"] and d["uniform"] is False
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
-def test_storm_rate_is_in_mbps_up_to_1000_on_2_0_0_x(api, v2):
-    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 5000})
-    assert r.status_code == 400 and "Mbps" in r.json()["detail"]
+def test_storm_rate_is_in_mbps_up_to_65_on_2_0_0_x(api, v2):
+    """A 2.0.0.3 unit keeps the limit in 16 bits of kbit/s (issue #3): above 65 Mbps it would read
+    back wrapped (100 -> 34), so it is refused before anything is sent."""
+    for rate in (66, 100, 1000):
+        r = api.post(url(v2, "storm"), json={"enabled": True, "rate": rate})
+        assert r.status_code == 400 and "1-65" in r.json()["detail"], rate
     assert api.post(url(v2, "storm"), json={"enabled": True, "rate": 10, "types": []}).status_code == 400
     assert api.mock.posts == []
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
+def test_a_storm_limit_set_above_65_on_the_switch_reads_back_wrapped(api, v2):
+    """What a 2.0.0.3 unit answers after its own page set 500 and 1000 Mbps (issue #3)."""
+    m = api.mock
+    for rate, kind in ((500, "broadcast"), (1000, "multicast")):
+        m.l2.storm_json(__import__("httpx").Request("POST", "http://10.0.0.2/storm_ctrl_cfg.json",
+                                                   json={"port": 2, "rate": rate, "state": 1, "storm_type": kind}))
+    port2 = api.get(url(v2, "storm")).json()["ports"][1]
+    assert (port2["broadcast"], port2["multicast"]) == (41, 16)
+
+
 def test_storm_limits_the_switch_ignores_are_reported(api, v2):
     api.mock.l2.ignore.add("storm_ctrl_cfg.json")
-    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 100})
+    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 50})
     assert r.status_code == 502 and saves(api.mock) == 0
 
 
@@ -442,12 +450,11 @@ def test_loop_detection_that_does_not_start_leaves_stp_running(api, v2):
     assert m.posted("stp.json") == [] and m.l2.stp["enable"] == 1 and saves(m) == 0
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
 def test_storm_limits_half_applied_are_put_back(api, v2):
     m = api.mock
     m.l2.storm[2]["sctrl_bcast"] = 30  # set on the switch
     m.l2.storm_refuse.add("multicast")
-    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 100, "types": ["broadcast", "multicast"]})
+    r = api.post(url(v2, "storm"), json={"enabled": True, "rate": 50, "types": ["broadcast", "multicast"]})
     assert r.status_code == 502 and "put back" in r.json()["detail"], r.text
     assert m.l2.storm[2]["sctrl_bcast"] == 30 and all(m.l2.storm[p]["sctrl_bcast"] == 0 for p in range(3, 11))
     assert saves(m) == 0

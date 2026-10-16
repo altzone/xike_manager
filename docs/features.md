@@ -76,7 +76,9 @@ Prevents network loops with redundant links.
 
 ### Storm Control
 Limits broadcast/multicast flood traffic.
-- Rate: 1-1000 packets per second
+- 1.0.0.x: one rate, 1-1000 packets per second
+- 2.0.0.x: a rate in Mbps (1-65) for the kinds of traffic you choose (broadcast, multicast,
+  unknown unicast, unknown multicast), the same on every port
 
 ### IGMP Snooping
 Optimizes multicast delivery (IPTV, video streaming).
