@@ -3,6 +3,25 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.3.4] - 2026-10-17
+
+### Changed
+- **Link aggregation can be changed again on 2.0.0.x switches.** 2.3.1 made it read-only after a
+  LAG change sent by SwitchPilot 2.2.0 to a 2.0.0.3 unit was followed by a management outage: the
+  switch kept forwarding, but its web interface answered again only after a power cycle
+  (issue #3). The same kind of change made on the switch's own page worked. That page sends only the
+  settings each port's type uses (258 and 392 bytes there), where SwitchPilot sent all four
+  settings for all ten ports (891 bytes). SwitchPilot now sends exactly what the page sends. If the
+  switch's web interface stops answering after a LAG change, please report it in an issue.
+- Storm control set from SwitchPilot (2.3.3) is confirmed on that 2.0.0.3 unit: its own page reads
+  the limits back as SwitchPilot set them.
+
+### Fixed
+- **2.0.0.x: a LAG in group 0 was missing from the LAG page.** On 2.0.0.x the groups go from 0 to
+  15, and SwitchPilot ignored group 0 and offered 1 to 15. Group 0 now shows and can be chosen,
+  and a static group and an LACP group with the same number show as two groups, as the switch
+  keeps them apart.
+
 ## [2.3.3] - 2026-10-16
 
 ### Changed

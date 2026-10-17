@@ -105,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Agrégation de liens',
-  'lag.tip': 'Agrégez plusieurs ports physiques en un seul lien logique. Augmente la bande passante (ex. 2x 2.5G = 5G) et offre de la redondance. Les deux extrémités doivent être configurées. Jusqu\'à 15 groupes supportés.',
+  'lag.tip': 'Agrégez plusieurs ports physiques en un seul lien logique. Augmente la bande passante (ex. 2x 2.5G = 5G) et offre de la redondance. Les deux extrémités doivent être configurées. Jusqu\'à 15 groupes supportés (16 avec le firmware 2.0.0.x, de 0 à 15).',
   'lag.create': 'Créer un groupe LAG',
   'lag.noGroups': 'Aucun groupe LAG configuré',
   'lag.createDesc': 'Créez un groupe pour agréger des ports ensemble',

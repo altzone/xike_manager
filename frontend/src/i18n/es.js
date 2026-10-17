@@ -105,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Agregación de enlaces',
-  'lag.tip': 'Agrupe múltiples puertos físicos en un solo enlace lógico. Aumenta el ancho de banda (ej. 2x 2.5G = 5G) y proporciona redundancia. Ambos extremos deben configurarse. Se admiten hasta 15 grupos.',
+  'lag.tip': 'Agrupe múltiples puertos físicos en un solo enlace lógico. Aumenta el ancho de banda (ej. 2x 2.5G = 5G) y proporciona redundancia. Ambos extremos deben configurarse. Se admiten hasta 15 grupos (16 con el firmware 2.0.0.x, de 0 a 15).',
   'lag.create': 'Crear grupo LAG',
   'lag.noGroups': 'No hay grupos LAG configurados',
   'lag.createDesc': 'Cree un grupo para agrupar puertos',

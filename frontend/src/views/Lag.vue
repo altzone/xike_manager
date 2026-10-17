@@ -7,7 +7,7 @@
     </div>
 
     <div v-if="groups.length" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div v-for="g in groups" :key="g.id" class="card">
+      <div v-for="g in groups" :key="g.key" class="card">
         <div class="card-head items-center">
           <div class="flex items-center gap-3 min-w-0">
             <span class="w-11 h-11 rounded-lg flex items-center justify-center font-semibold shrink-0" :class="g.allUp ? 'bg-ok-soft text-ok-ink' : 'bg-warn-soft text-warn-ink'">G{{ g.id }}</span>
@@ -22,7 +22,7 @@
               <p class="hint">{{ g.ports.length === 1 ? t('lag.memberOne') : t('lag.members', { n: g.ports.length }) }} · {{ g.ports.reduce((s, p) => s + (p.port >= 9 ? 10 : 2.5), 0) }}G</p>
             </div>
           </div>
-          <Btn v-if="can('lag')" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g.id)" />
+          <Btn v-if="can('lag')" variant="ghost" size="sm" icon="trash" icon-only :aria-label="t('common.remove')" class="hover:text-danger" @click="removeGroup(g)" />
         </div>
         <div class="px-4 py-3 flex gap-2 flex-wrap">
           <div v-for="p in g.ports" :key="p.port" class="flex-1 min-w-[72px] rounded-lg border p-2.5 text-center" :class="p.state === 1 ? 'border-ok/50 bg-ok-soft' : 'border-line bg-surface-2'">
@@ -128,18 +128,26 @@ const applying = ref(false)
 const loadError = ref('')
 const draft = reactive({ id: 1, name: '', mode: 2, timeout: 0, ports: [] })
 
+// A port is in a group as soon as its type is static LAG (1) or LACP (2). On 2.0.0.x the groups
+// are 0-15, group 0 included (issue #3), and a static group and an LACP group of the same number
+// are two groups (the switch keeps them apart).
+const firstGroup = computed(() => sw.current?.firmware_line === 2 ? 0 : 1)
 const groups = computed(() => {
   const map = {}
-  allPorts.value.filter(p => p.group > 0 && p.type > 0).forEach(p => {
-    if (!map[p.group]) map[p.group] = { id: p.group, mode: p.type, ports: [], allUp: true }
-    map[p.group].ports.push(p)
-    if (p.state !== 1) map[p.group].allUp = false
+  allPorts.value.filter(p => p.type > 0 && p.group >= firstGroup.value).forEach(p => {
+    const key = `${p.type}-${p.group}`
+    if (!map[key]) map[key] = { key, id: p.group, mode: p.type, ports: [], allUp: true }
+    map[key].ports.push(p)
+    if (p.state !== 1) map[key].allUp = false
   })
-  return Object.values(map).sort((a, b) => a.id - b.id)
+  return Object.values(map).sort((a, b) => a.id - b.id || b.mode - a.mode)
 })
-const usedPorts = computed(() => new Set(allPorts.value.filter(p => p.group > 0 && p.type > 0).map(p => p.port)))
+const usedPorts = computed(() => new Set(groups.value.flatMap(g => g.ports.map(p => p.port))))
 const availablePorts = computed(() => allPorts.value.filter(p => !usedPorts.value.has(p.port)))
-const availableGroupIds = computed(() => { const used = new Set(groups.value.map(g => g.id)); return Array.from({ length: 15 }, (_, i) => i + 1).filter(i => !used.has(i)) })
+const availableGroupIds = computed(() => {
+  const used = new Set(groups.value.map(g => g.id))
+  return Array.from({ length: 16 - firstGroup.value }, (_, i) => i + firstGroup.value).filter(i => !used.has(i))
+})
 const mixedMedia = computed(() => draft.ports.some(p => p >= 9) && draft.ports.some(p => p < 9))
 
 function togglePort(port) { const i = draft.ports.indexOf(port); i >= 0 ? draft.ports.splice(i, 1) : draft.ports.push(port) }
@@ -157,7 +165,7 @@ async function load() {
 }
 
 function openCreate() {
-  Object.assign(draft, { id: availableGroupIds.value[0] || 1, name: '', mode: 2, timeout: 0, ports: [] })
+  Object.assign(draft, { id: availableGroupIds.value[0] ?? firstGroup.value, name: '', mode: 2, timeout: 0, ports: [] })
   modal.value = true
 }
 
@@ -179,10 +187,11 @@ async function createGroup() {
   finally { applying.value = false }
 }
 
-async function removeGroup(id) {
-  if (!await confirm({ title: t('common.remove'), message: t('lag.removeConfirm', { id }), danger: true, confirmText: t('common.remove') })) return
+async function removeGroup(g) {
+  if (!await confirm({ title: t('common.remove'), message: t('lag.removeConfirm', { id: g.id }), danger: true, confirmText: t('common.remove') })) return
   try {
-    const ports = rowsPayload(p => p.group === id ? { type: 0, group: 0, timeout: 0 } : null)
+    const members = new Set(g.ports.map(p => p.port))
+    const ports = rowsPayload(p => members.has(p.port) ? { type: 0, group: 0, timeout: 0 } : null)
     const res = await api(`/api/switches/${props.switchId}/lag`, { method: 'POST', body: JSON.stringify({ system_priority: systemPriority.value, ports }) })
     toast.success(t('lag.removed'))
     for (const w of res.warnings || []) toast.error(w)

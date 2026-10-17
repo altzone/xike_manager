@@ -105,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Link-Aggregation',
-  'lag.tip': 'Bündeln Sie mehrere physische Ports zu einem logischen Link. Erhöht die Bandbreite (z.B. 2x 2,5G = 5G) und bietet Redundanz. Beide Seiten müssen konfiguriert sein. Bis zu 15 Gruppen werden unterstützt.',
+  'lag.tip': 'Bündeln Sie mehrere physische Ports zu einem logischen Link. Erhöht die Bandbreite (z.B. 2x 2,5G = 5G) und bietet Redundanz. Beide Seiten müssen konfiguriert sein. Bis zu 15 Gruppen werden unterstützt (16 auf Firmware 2.0.0.x, 0 bis 15).',
   'lag.create': 'LAG-Gruppe erstellen',
   'lag.noGroups': 'Keine LAG-Gruppen konfiguriert',
   'lag.createDesc': 'Erstellen Sie eine Gruppe, um Ports zu bündeln',

@@ -110,7 +110,7 @@ export default {
 
   // LAG
   'lag.title': 'Link Aggregation',
-  'lag.tip': 'Bond multiple physical ports into a single logical link. Increases bandwidth (e.g. 2x 2.5G = 5G) and provides redundancy. Both ends must be configured. Up to 15 groups supported.',
+  'lag.tip': 'Bond multiple physical ports into a single logical link. Increases bandwidth (e.g. 2x 2.5G = 5G) and provides redundancy. Both ends must be configured. Up to 15 groups supported (16 on 2.0.0.x firmware, 0 to 15).',
   'lag.create': 'Create LAG Group',
   'lag.noGroups': 'No LAG groups configured',
   'lag.createDesc': 'Create a group to bond ports together',

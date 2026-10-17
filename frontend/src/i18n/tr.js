@@ -105,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Bağlantı Birleştirme',
-  'lag.tip': 'Birden fazla fiziksel portu tek bir mantıksal bağlantıda birleştirir. Bant genişliğini artırır (örn. 2x 2.5G = 5G) ve yedeklilik sağlar. Her iki ucun da yapılandırılması gerekir. En fazla 15 grup desteklenir.',
+  'lag.tip': 'Birden fazla fiziksel portu tek bir mantıksal bağlantıda birleştirir. Bant genişliğini artırır (örn. 2x 2.5G = 5G) ve yedeklilik sağlar. Her iki ucun da yapılandırılması gerekir. En fazla 15 grup desteklenir (2.0.0.x firmware\'de 0 ile 15 arası 16 grup).',
   'lag.create': 'LAG Grubu Oluştur',
   'lag.noGroups': 'Yapılandırılmış LAG grubu yok',
   'lag.createDesc': 'Portları birleştirmek için bir grup oluşturun',

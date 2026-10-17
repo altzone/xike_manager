@@ -16,24 +16,6 @@ def v2(api):
     return r.json()["id"]
 
 
-@pytest.fixture
-def unconfirmed_writes(monkeypatch):
-    """LAG is read-only on 2.0.0.x until confirmed on a real switch (2.3.1); its write code is kept and
-    tested with it switched on."""
-    import main
-    monkeypatch.setattr(main, "V2_WRITABLE", main.V2_WRITABLE | {"lag"})
-
-
-def test_lag_changes_are_not_sent_to_a_2_0_0_x_switch(api, v2):
-    m = api.mock
-    r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": [{"port": 3, "type": 2, "group": 1},
-                                                                          {"port": 4, "type": 2, "group": 1}]})
-    assert r.status_code == 501 and "nothing was sent" in r.json()["detail"], r.text
-    assert m.posted("port_trunk_cfg.json") == []
-    assert "save_all_configs.json" not in [ep for ep, _ in m.posts]
-    assert api.get(url(v2, "lag")).status_code == 200  # still shown
-
-
 def url(sid, path):
     return f"{BASE.format(sid)}/{path}"
 
@@ -43,7 +25,31 @@ def saves(m):
 
 
 # ── LAG ──
-@pytest.mark.usefixtures("unconfirmed_writes")
+# What tavalin's 2.0.0.3 page sent (issue #3, HAR of 2026-10-16): ports 3-4 in a static LAG (group 0),
+# 5-6 in an LACP group 1. The management kept working; 2.2.0's request for a similar change, every
+# setting for every port (891 bytes), was followed by a management outage.
+NATIVE_LAG_REQUEST = ('{"portTypeId_1":"0","portTypeId_2":"0","portTypeId_3":"1","Port_3_grpInd":"0","portTypeId_4":"1",'
+                      '"Port_4_grpInd":"0","portTypeId_5":"2","portPriorityId_5":"128","lacpTimeoutId_5":"0",'
+                      '"Port_5_grpInd":"1","portTypeId_6":"2","portPriorityId_6":"128","lacpTimeoutId_6":"0",'
+                      '"Port_6_grpInd":"1","portTypeId_7":"0","portTypeId_8":"0","portTypeId_9":"0",'
+                      '"portTypeId_10":"0","system_priority":"32768"}')
+
+
+def test_a_lag_change_sends_exactly_what_the_switch_page_sends(api, v2):
+    import json
+    m = api.mock
+    lag = api.get(url(v2, "lag")).json()
+    ports = [{**p, "type": 1, "group": 0} if p["port"] in (3, 4) else
+             {**p, "type": 2, "group": 1, "timeout": 0} if p["port"] in (5, 6) else {**p, "type": 0} for p in lag["ports"]]
+    r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": ports})
+    assert r.status_code == 200, r.text
+    sent = m.posted("port_trunk_cfg.json")
+    assert len(sent) == 1 and json.dumps(sent[0], separators=(",", ":")) == NATIVE_LAG_REQUEST
+    assert saves(m) == 1
+    groups = {(p["port"], p["type"], p["group"]) for p in api.get(url(v2, "lag")).json()["ports"] if p["type"]}
+    assert groups == {(3, 1, 0), (4, 1, 0), (5, 2, 1), (6, 2, 1)}  # group 0 is a group like any other
+
+
 def test_lacp_group_is_written_read_back_and_saved(api, v2):
     m = api.mock
     ports = [{"port": p, "type": 2 if p in (2, 3) else 0, "group": 1 if p in (2, 3) else 0, "timeout": 1, "priority": 100}
@@ -59,7 +65,6 @@ def test_lacp_group_is_written_read_back_and_saved(api, v2):
     assert [p["port"] for p in lag["ports"] if p["group"] == 1] == [2, 3] and lag["system_priority"] == 4096
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
 def test_a_system_priority_of_0_set_on_the_switch_can_be_sent_back(api, v2):
     api.mock.l2.system_priority = 0  # allowed by the switch's own page (0-65535)
     lag = api.get(url(v2, "lag")).json()
@@ -67,7 +72,6 @@ def test_a_system_priority_of_0_set_on_the_switch_can_be_sent_back(api, v2):
     assert r.status_code == 200, r.text
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
 def test_a_lag_change_the_switch_ignores_is_reported_and_not_saved(api, v2):
     m = api.mock
     m.l2.ignore.add("port_trunk_cfg.json")
@@ -470,7 +474,6 @@ def test_mirroring_the_switch_ignores_is_put_back(api, v2):
     assert m.l2.mirror["dest"] == 7 and m.l2.mirror["flags"][3] == [True, False] and saves(m) == 0
 
 
-@pytest.mark.usefixtures("unconfirmed_writes")
 def test_lag_groups_up_to_31_are_accepted(api, v2):
     r = api.post(url(v2, "lag"), json={"system_priority": 32768, "ports": [{"port": 4, "type": 1, "group": 20}]})
     assert r.status_code == 200, r.text

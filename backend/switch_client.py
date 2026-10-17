@@ -828,6 +828,8 @@ class SwitchClient:
 
     async def set_lag(self, system_priority: int, ports: list[dict]):
         """ports: [{"port": 9, "type": 1, "timeout": 0, "priority": 128, "group": 1}, ...] (user-facing ports)"""
+        if await self.is_v2():
+            return await self._post("port_trunk_cfg.json", self._lag_body_v2(system_priority, ports))
         post = {"system_priority": str(system_priority)}
         for p in ports:
             internal = self.to_internal(p["port"])
@@ -836,6 +838,25 @@ class SwitchClient:
             post[f"lacpTimeoutId_{internal}"] = str(p["timeout"])
             post[f"Port_{internal}_grpInd"] = str(p["group"])
         return await self._post("port_trunk_cfg.json", post)
+
+    def _lag_body_v2(self, system_priority: int, ports: list[dict]) -> dict:
+        """2.0.0.x: what its own page sends. Each port's type, then only the settings that type uses
+        (static LAG: its group; LACP: priority, timeout, group), in port order, the system priority
+        last. A port left out keeps its setting; a setting left out takes the firmware's default
+        (priority 128, short timeout, group 0). On a 2.0.0.3 unit the page's requests (258 and 392
+        bytes) worked, while 2.2.0's, with every setting for every port (891 bytes), was followed by
+        a management outage (issue #3)."""
+        body = {}
+        for p in sorted(ports, key=lambda p: self.to_internal(p["port"])):
+            i, kind = self.to_internal(p["port"]), int(p["type"])
+            body[f"portTypeId_{i}"] = str(kind)
+            if kind == 2:
+                body[f"portPriorityId_{i}"] = str(p.get("priority", 128))
+                body[f"lacpTimeoutId_{i}"] = str(p.get("timeout", 0))
+            if kind in (1, 2):
+                body[f"Port_{i}_grpInd"] = str(p.get("group", 0))
+        body["system_priority"] = str(system_priority)
+        return body
 
     # ── STP ──
     @_parsed("stp.json")

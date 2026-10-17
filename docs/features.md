@@ -51,7 +51,7 @@ Bond multiple ports into a single logical link:
 | **Static Trunk** | Manual bonding. Both ends must be configured identically. |
 | **LACP (802.3ad)** | Dynamic negotiation. Recommended. Detects link failures automatically. |
 
-- Up to **16 LAG groups**
+- Up to **16 LAG groups** on 2.0.0.x firmware (0-15), 15 on 1.0.0.x (1-15)
 - Name your groups for easy identification
 - Visual per-port status (Active/Down) in each group
 

@@ -6,7 +6,7 @@ Developed by [ALTZONE](https://altzone.net) — infrastructure, network, VoIP an
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.3.3-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.3.4-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 - **New to SwitchPilot?** [Install it](#install-new-users) in three commands.
 - **Already running it?** [Update it](#update-existing-users): your data and settings are kept.
@@ -63,9 +63,8 @@ After each change SwitchPilot reads the setting back from the switch and saves i
 (port settings, the management address and clearing the MAC table excepted). A change the switch
 does not apply is reported and put back. Please open an issue if something does not behave as
 expected on your 2.0.0.x switch. Storm control is set from 1 to 65 Mbps on 2.0.0.x: the switch
-keeps higher limits wrong. Read-only on 2.0.0.x for now: link aggregation (LAG), until it is
-confirmed on a real switch (see the change log for 2.3.1), and EEE and time/SNTP, which the vendor
-removed from that firmware's own web interface.
+keeps higher limits wrong. Read-only on 2.0.0.x: EEE and time/SNTP, which the vendor removed from
+that firmware's own web interface.
 
 The two lines are not interchangeable: Xikestor forbids flashing a 2.0.0.x image onto a 1.0.0.x
 unit and the reverse (a V1 switch stays on V1), and the -P model has its own images. Check
@@ -250,7 +249,6 @@ These are limitations of the Xikestor hardware, clearly shown in the SwitchPilot
 | Port 9/10 mapping | Swapped on 1.0.0.x firmware, not on 2.0.0.x | Set automatically from the firmware; per-switch setting (System → SFP+ Port Numbering) |
 | SNTP hostname | IP only (auto-resolved) | DNS resolution in backend |
 | EEE, clock and SNTP on 2.0.0.x firmware | Not offered by that firmware's web interface | Shown read-only |
-| LAG on 2.0.0.x firmware | Not yet confirmed on a real switch | Shown read-only |
 | Storm control on 2.0.0.x firmware | Limits above 65 Mbps are kept wrong by the switch (16 bits of kbit/s) | 1-65 Mbps |
 | Port descriptions | Not on hardware | Stored locally in SwitchPilot |
 | System logs | Not available | — |

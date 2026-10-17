@@ -49,7 +49,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
     saved").
   - Otherwise the change is saved on the switch (`save_all_configs.json`), and the answer's
     `warnings` lists a save that did not complete.
-- **Read-only:** settings in `read_only` (`lag`, `eee` and `time` on 2.0.0.x) answer `501` and nothing is
+- **Read-only:** settings in `read_only` (`eee` and `time` on 2.0.0.x) answer `501` and nothing is
   sent to the switch.
 - **One request at a time:** SwitchPilot sends one request at a time to the switch.
 - **VLAN layout check (2.0.0.3):** that firmware reads its VLAN table back with 10 port entries
@@ -67,7 +67,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | PUT | `/api/switches/{id}` | Edit switch `{"name"?,"ip"?,"username"?,"password"?}` (connection re-tested when address/credentials change) |
 | DELETE | `/api/switches/{id}` | Remove switch and its local data (descriptions, LAG names, VLAN names, snapshots) |
 | PUT | `/api/switches/{id}/port-mapping` | `{"swap_sfp_9_10": bool, "move_descriptions"?: true}` — whether this unit's SFP+ cages 9/10 are numbered the other way round from the firmware's indexes. Changes labels only; nothing is written to the switch |
-| GET | `/api/switches/{id}/info` | Switch name, IP, model, firmware, `swap_sfp_9_10`, `firmware_line` (1 = 1.0.0.x, 2 = 2.0.0.x, null = unknown) and `read_only` (settings SwitchPilot does not change on this firmware: `["lag", "eee", "time"]` on 2.0.0.x; writing one of them answers `501` and nothing is sent to the switch) |
+| GET | `/api/switches/{id}/info` | Switch name, IP, model, firmware, `swap_sfp_9_10`, `firmware_line` (1 = 1.0.0.x, 2 = 2.0.0.x, null = unknown) and `read_only` (settings SwitchPilot does not change on this firmware: `["eee", "time"]` on 2.0.0.x; writing one of them answers `501` and nothing is sent to the switch) |
 | GET | `/api/switches/{id}/ping` | Quick online check: `{"online", "temperature"}`, answered from the switch's last answer when it is under 10 s old (an open live view keeps it fresh), else by asking the switch |
 | GET | `/api/switches/{id}/status` | Full system status, plus `swap_sfp_suggested` (what the firmware line usually needs: `true` 1.0.0.x, `false` 2.0.0.x, `null` unknown) |
 | GET | `/api/switches/{id}/sse?token=xxx` | SSE stream (live stats); `token` from `POST /api/auth/stream-token` (5 min). One reading per switch, shared by every open stream: port counters every 3 s; `temperature` and `port_settings` every 30 s, after a change sent by SwitchPilot and when a link goes up or down. `switch_error` events while the switch does not answer (retried every 15 s) |
@@ -100,7 +100,7 @@ switch runs; where an endpoint answers differently on 2.0.0.x, its row says so. 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/switches/{id}/lag` | LAG config + group names |
-| POST | `/api/switches/{id}/lag` | Apply LAG `{"system_priority","ports":[{"port","type","timeout","priority","group"}],"group_names"}` → `{"ok","warnings"}`. `group` 0-31; `system_priority` 1-65535 on 1.0.0.x, 0-65535 on 2.0.0.x |
+| POST | `/api/switches/{id}/lag` | Apply LAG `{"system_priority","ports":[{"port","type","timeout","priority","group"}],"group_names"}` → `{"ok","warnings"}`. `group` 0-31 (the switch's page offers 0-15; on 2.0.0.x group 0 is a group like the others); `system_priority` 1-65535 on 1.0.0.x, 0-65535 on 2.0.0.x. On 2.0.0.x the request sent to the switch is the one its own page sends: each port's type, then only the settings that type uses |
 
 ## System
 

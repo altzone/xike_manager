@@ -390,13 +390,16 @@ WRITE_FEATURES = ("network", "ports", "vlans", "lag", "stp", "loop", "storm", "i
                   "eee", "time", "static_mac", "mac_table", "reboot")
 # Each entry follows the request the 2.0.0.x native UI sends (code carved from the vendor image),
 # is read back where the switch answers OK whatever it did, and is saved with save_all_configs.json
-# (ports, VLANs, STP and IGMP were also seen working on a 2.0.0.3 unit, issue #3). Left out:
-# - EEE and time/SNTP: the 2.0.0.x web interface no longer offers them (format unconfirmed);
-# - LAG (2.3.1): on that 2.0.0.3 unit a LAG change (the request its own page sends) was followed
-#   by a management outage until a power cycle. Its code stays (tests), unused until confirmed.
-# Storm control (read-only in 2.3.1 and 2.3.2) is back from 2.3.3 for 1-65 Mbps: that unit keeps a
-# limit in 16 bits of kbit/s, exact up to 65 Mbps and wrapped above (its own page set 500, read 41).
-V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "stp", "loop", "storm", "igmp",
+# (ports, VLANs, STP, IGMP and storm control were also seen working on a 2.0.0.3 unit, issue #3).
+# Left out: EEE and time/SNTP, which the 2.0.0.x web interface no longer offers (format unconfirmed).
+# Read-only in 2.3.1 after that 2.0.0.3 unit, then back:
+# - storm control (2.3.3), for 1-65 Mbps: that unit keeps a limit in 16 bits of kbit/s, exact up
+#   to 65 Mbps and wrapped above (its own page set 500, read 41); set from SwitchPilot, it read back
+#   as set on its own page;
+# - LAG (2.3.4): 2.2.0's request, every setting for every port (891 bytes), was followed by a
+#   management outage until a power cycle; the same changes from its own page, which sends only
+#   what each port's type uses (258 and 392 bytes), worked. SwitchPilot now sends the page's request.
+V2_WRITABLE = frozenset({"ports", "network", "reboot", "vlans", "lag", "stp", "loop", "storm", "igmp",
                          "mirror", "static_mac", "mac_table"})
 
 

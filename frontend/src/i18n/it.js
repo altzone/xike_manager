@@ -105,7 +105,7 @@ export default {
 
   // LAG
   'lag.title': 'Aggregazione di link',
-  'lag.tip': 'Unisci più porte fisiche in un unico collegamento logico. Aumenta la larghezza di banda (es. 2x 2,5G = 5G) e fornisce ridondanza. Entrambi i lati devono essere configurati. Fino a 15 gruppi supportati.',
+  'lag.tip': 'Unisci più porte fisiche in un unico collegamento logico. Aumenta la larghezza di banda (es. 2x 2,5G = 5G) e fornisce ridondanza. Entrambi i lati devono essere configurati. Fino a 15 gruppi supportati (16 con il firmware 2.0.0.x, da 0 a 15).',
   'lag.create': 'Crea gruppo LAG',
   'lag.noGroups': 'Nessun gruppo LAG configurato',
   'lag.createDesc': 'Crea un gruppo per unire le porte',

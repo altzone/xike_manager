@@ -93,8 +93,9 @@ Every row that matches the version you ran applies to you; an older version matc
 
 | You ran | Once after the update | Details |
 |---|---|---|
+| 2.3.3 or older, with a 2.0.0.x switch | Link aggregation can be changed again; SwitchPilot now sends the same request as the switch's own page. A LAG in group 0 now shows on the LAG page. | [CHANGELOG 2.3.4](../CHANGELOG.md) |
 | 2.3.2 or older, with a 2.0.0.x switch | Storm control can be changed again, from 1 to 65 Mbps. A limit set above 65 Mbps on the switch's own page reads back wrong: set it again from SwitchPilot. | [CHANGELOG 2.3.3](../CHANGELOG.md) |
-| 2.3.0 or older, with a 2.0.0.x switch | LAG is now read-only on it (storm control too, until 2.3.3). If you changed a LAG on it with SwitchPilot, check it on the switch's own Link Aggregation page. | [CHANGELOG 2.3.1](../CHANGELOG.md) |
+| 2.3.0 or older, with a 2.0.0.x switch | LAG and storm control are read-only on it in 2.3.1 and 2.3.2. If you changed a LAG on it with SwitchPilot, check it on the switch's own Link Aggregation page. | [CHANGELOG 2.3.1](../CHANGELOG.md) |
 | 2.2.1 or older | Nothing to do. From now on the database is copied to `data/backups/` before an update changes it, and a stop lets a change being sent to a switch finish. | [2.3.0](#230-safer-updates) |
 | 2.2.0 or older | Refresh the page once without the cache (Ctrl+Shift+R). | [After the update](#after-the-update) |
 | 2.1.x or older, with a 2.0.0.x switch | Its settings can now be changed from SwitchPilot. If you changed IGMP, loop detection or STP on it with an earlier version, check them once. | [2.2.0](#220-200x-switches-settings-can-be-changed) |
@@ -134,9 +135,8 @@ table. If the switch does not apply a change, SwitchPilot puts the previous sett
 it, and reports an error; nothing is saved.
 
 EEE and the clock (time/SNTP) stay read-only, because that firmware's own web interface no longer
-offers them. From 2.3.1, link aggregation is read-only on 2.0.0.x too, until it is confirmed on a
-real switch (see the change log). Storm control was read-only in 2.3.1 and 2.3.2, and can be set
-again from 2.3.3, from 1 to 65 Mbps.
+offers them. Link aggregation and storm control were read-only on 2.0.0.x in 2.3.1 and 2.3.2:
+storm control can be set again from 2.3.3 (1 to 65 Mbps), link aggregation from 2.3.4.
 
 Things that work differently on 2.0.0.x, as on the switch's own pages:
 - VLANs live in one table of up to 100 VLANs, with their names stored on the switch (16
