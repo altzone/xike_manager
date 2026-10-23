@@ -3,6 +3,27 @@
 All notable changes to SwitchPilot are listed here. Upgrading an existing install is described in
 [docs/upgrade.md](docs/upgrade.md).
 
+## [2.4.0] - 2026-10-22
+
+### Security
+- **The server's libraries are up to date.** `pip-audit` reported advisories in the versions
+  2.3.4 uses: seven in Starlette (the library under FastAPI), four in python-jose and one in
+  ecdsa, which python-jose brought in. As far as we can tell, none of them could be reached in
+  SwitchPilot: they concern form uploads, `request.url`, static files on Windows, class-based
+  endpoints, encrypted or public-key tokens and ECDSA signatures, none of which SwitchPilot uses.
+  Now: FastAPI 0.143.5, Starlette 1.8.0, uvicorn 0.54.0, pydantic 2.14.1, httpx 0.28.1,
+  sse-starlette 3.5.0, aiosqlite 0.22.1, bcrypt 5.0.0. `pip-audit` reports nothing for them.
+- **Login tokens are made with PyJWT 2.15.1 instead of python-jose**: its latest version (3.5.0)
+  still has one of these advisories. ecdsa and passlib (which SwitchPilot no longer used) are gone.
+
+### Changed
+- Nothing to do after the update: you stay logged in (tokens are the same standard JWT) and every
+  password keeps working. bcrypt 5 refuses a password longer than 72 bytes, where bcrypt 4 used
+  its first 72 bytes and ignored the rest; SwitchPilot keeps doing the latter, so such a password
+  logs in as before.
+- If you run the server outside Docker, install `backend/requirements.txt` again; python-jose,
+  passlib and ecdsa can then be uninstalled.
+
 ## [2.3.4] - 2026-10-17
 
 ### Changed

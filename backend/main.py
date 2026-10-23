@@ -97,17 +97,16 @@ def end_streams_on_exit():
     """Live streams end as soon as SIGTERM/SIGINT arrives, so they never hold the stop open (uvicorn
     waits for open connections, then cancels whatever runs). They end cleanly at their next pause
     (sse.stop_streams); one still waiting on its switch is cut after STREAMS_CUT_AFTER seconds through
-    sse-starlette's own exit signal. sse-starlette sets that signal from a hook on uvicorn's
-    Server.handle_exit, but uvicorn installs its signal handlers before it imports this app, so that
-    hook never runs: this handler is chained in front of uvicorn's instead."""
+    sse-starlette's own exit signal (AppStatus.should_exit, which it polls every 0.5 s). This handler
+    is chained in front of uvicorn's. sse-starlette's automatic drain is turned off: it would raise
+    that signal on the SIGTERM itself and cut every stream mid-response (the response never completes)
+    before they end cleanly."""
     if threading.current_thread() is not threading.main_thread():
         return  # signal handlers can only be set from the main thread (not the case under tests)
     loop = asyncio.get_running_loop()
 
     def cut_streams():
         AppStatus.should_exit = True
-        if AppStatus.should_exit_event is not None:
-            AppStatus.should_exit_event.set()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         previous = signal.getsignal(sig)
@@ -119,6 +118,7 @@ def end_streams_on_exit():
             loop.call_soon_threadsafe(loop.call_later, STREAMS_CUT_AFTER, cut_streams)
             previous(signum, frame)
         signal.signal(sig, handler)
+        AppStatus.disable_automatic_graceful_drain()  # cut_streams sets the signal instead
 
 
 @asynccontextmanager

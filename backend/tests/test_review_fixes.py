@@ -4,7 +4,7 @@ import sqlite3
 
 import httpx
 import pytest
-from jose import jwt
+import jwt
 
 import auth
 import db as dbmod

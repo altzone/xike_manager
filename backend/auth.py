@@ -10,9 +10,9 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 import bcrypt as _bcrypt
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
 
 import db as dbmod
 
@@ -64,12 +64,21 @@ SECRET_KEY = load_secret_key()
 
 
 # ── Passwords (bcrypt is CPU-bound: keep it off the event loop) ──
+BCRYPT_MAX_BYTES = 72
+
+
+def _password_bytes(password: str) -> bytes:
+    """bcrypt reads at most 72 bytes. bcrypt 4 dropped the rest silently, which is what every stored
+    hash was made with; bcrypt 5 refuses a longer password instead, so it is cut here the same way."""
+    return password.encode()[:BCRYPT_MAX_BYTES]
+
+
 def hash_password(password: str) -> str:
-    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+    return _bcrypt.hashpw(_password_bytes(password), _bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _bcrypt.checkpw(plain.encode(), hashed.encode())
+    return _bcrypt.checkpw(_password_bytes(plain), hashed.encode())
 
 
 # Compared against when the username is unknown, so a failed login costs the same either way
@@ -118,7 +127,7 @@ def create_stream_token(user: dict) -> str:
 def decode_token(token: str, scope: str = "api") -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     if payload.get("scope", "api") != scope:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not valid for this use")

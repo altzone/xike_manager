@@ -18,6 +18,7 @@ import httpx
 import pytest
 from sse_starlette.sse import AppStatus
 
+import auth
 import db as dbmod
 import main
 import sse
@@ -270,9 +271,9 @@ def test_the_shutdown_does_not_wait_forever_for_a_switch_change(caplog):
     assert "unfinished" in caplog.text
 
 
-def test_live_streams_are_told_to_end_on_sigterm():
-    """uvicorn installs its handler before importing the app, so sse-starlette's own hook never
-    runs: the app chains one in front of uvicorn's."""
+def test_live_streams_are_told_to_end_on_sigterm(monkeypatch):
+    """The app chains a handler in front of uvicorn's, and turns off sse-starlette's own drain,
+    which would cut every stream mid-response on the signal itself."""
     called = []
     previous = signal.signal(signal.SIGTERM, lambda signum, frame: called.append(signum))
     previous_int = signal.getsignal(signal.SIGINT)
@@ -281,6 +282,9 @@ def test_live_streams_are_told_to_end_on_sigterm():
         main.end_streams_on_exit()
         signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
         assert sse.stopping and called == [signal.SIGTERM]  # streams end at their next pause
+        assert not AppStatus.enable_automatic_graceful_drain
+        monkeypatch.setattr(AppStatus, "original_handler", None)
+        AppStatus.handle_exit(None, signal.SIGTERM, None)  # what uvicorn's handler calls under sse-starlette
         assert not AppStatus.should_exit
         await asyncio.sleep(monkeypatch_cut + 0.2)
         assert AppStatus.should_exit  # what still waits on a switch is cut
@@ -295,7 +299,7 @@ def test_live_streams_are_told_to_end_on_sigterm():
         signal.signal(signal.SIGTERM, previous)
         signal.signal(signal.SIGINT, previous_int)
         AppStatus.should_exit = False
-        AppStatus.should_exit_event = None
+        AppStatus.enable_automatic_graceful_drain_mode()
         sse.stopping = False
 
 
@@ -414,3 +418,38 @@ def test_a_live_stream_does_not_hold_the_server_on_sigterm(tmp_path):
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+
+
+# Made by 2.3.x (python-jose 3.3.0, bcrypt 4.0.1): what an install has when it updates to 2.4.0
+JOSE_TOKEN = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsInNjb3BlIjoi"
+              "YXBpIiwicHYiOiJhYmMiLCJleHAiOjQwNzA5MDg4MDB9.asXL-xzF0l91mbUYbmy3vxoG5pNdugNumekw2R4So3g")  # key "k" * 40
+BCRYPT4_HASH = "$2b$12$9X61Eugm420BQsfcupb5nO3Dp07a8THdZ/A4aQVijbVRVw9vrl6vm"  # "secret123"
+BCRYPT4_LONG_HASH = "$2b$12$kvjZlEJ0zyygYGSOuzyK.uDEYXx49qyRGEkAMs7KqvBEQehVwOzJS"  # "é" * 40 (80 bytes)
+
+
+def test_a_session_opened_before_the_update_stays_open(monkeypatch):
+    monkeypatch.setattr(auth, "SECRET_KEY", "k" * 40)
+    claims = auth.decode_token(JOSE_TOKEN)
+    assert claims["sub"] == "1" and claims["role"] == "admin" and claims["pv"] == "abc"
+
+
+def test_passwords_set_before_the_update_still_log_in():
+    assert auth.verify_password("secret123", BCRYPT4_HASH)
+    assert not auth.verify_password("secret12", BCRYPT4_HASH)
+    # bcrypt 4 read the first 72 bytes and dropped the rest; bcrypt 5 would refuse the password
+    assert auth.verify_password("é" * 40, BCRYPT4_LONG_HASH)
+    assert auth.verify_password("é" * 36 + "anything", BCRYPT4_LONG_HASH)
+    assert not auth.verify_password("é" * 35, BCRYPT4_LONG_HASH)
+
+
+def test_a_password_longer_than_72_bytes_can_be_set():
+    hashed = auth.hash_password("x" * 100)
+    assert auth.verify_password("x" * 100, hashed) and auth.verify_password("x" * 72, hashed)
+
+
+@pytest.mark.filterwarnings("ignore::jwt.warnings.InsecureKeyLengthWarning")
+def test_a_short_secret_key_still_works(monkeypatch):
+    """PyJWT only warns under 32 bytes (the startup log says it too): such an install keeps working."""
+    monkeypatch.setattr(auth, "SECRET_KEY", "short")
+    token = auth.create_token(1, "admin", "admin", pv="abc")
+    assert auth.decode_token(token)["username"] == "admin"

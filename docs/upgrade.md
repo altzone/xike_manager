@@ -93,6 +93,7 @@ Every row that matches the version you ran applies to you; an older version matc
 
 | You ran | Once after the update | Details |
 |---|---|---|
+| 2.3.4 or older, running the server outside Docker | Install `backend/requirements.txt` again (new libraries, PyJWT instead of python-jose). In Docker there is nothing to do: you stay logged in. | [CHANGELOG 2.4.0](../CHANGELOG.md) |
 | 2.3.3 or older, with a 2.0.0.x switch | Link aggregation can be changed again; SwitchPilot now sends the same request as the switch's own page. A LAG in group 0 now shows on the LAG page. | [CHANGELOG 2.3.4](../CHANGELOG.md) |
 | 2.3.2 or older, with a 2.0.0.x switch | Storm control can be changed again, from 1 to 65 Mbps. A limit set above 65 Mbps on the switch's own page reads back wrong: set it again from SwitchPilot. | [CHANGELOG 2.3.3](../CHANGELOG.md) |
 | 2.3.0 or older, with a 2.0.0.x switch | LAG and storm control are read-only on it in 2.3.1 and 2.3.2. If you changed a LAG on it with SwitchPilot, check it on the switch's own Link Aggregation page. | [CHANGELOG 2.3.1](../CHANGELOG.md) |

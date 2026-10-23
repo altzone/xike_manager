@@ -6,7 +6,7 @@ Developed by [ALTZONE](https://altzone.net) — infrastructure, network, VoIP an
 
 SwitchPilot replaces the chaotic, poorly translated, and unintuitive factory firmware UI shipped with Xikestor switches. It provides a clean, responsive interface inspired by enterprise-grade tools like Aruba InstantON — but open-source and self-hosted.
 
-![Version](https://img.shields.io/badge/version-2.3.4-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
+![Version](https://img.shields.io/badge/version-2.4.0-blue) ![License](https://img.shields.io/badge/license-MIT-blue) ![Docker](https://img.shields.io/badge/docker-ready-brightgreen) ![Languages](https://img.shields.io/badge/i18n-12_languages-orange)
 
 - **New to SwitchPilot?** [Install it](#install-new-users) in three commands.
 - **Already running it?** [Update it](#update-existing-users): your data and settings are kept.
@@ -231,7 +231,7 @@ dashboard's iframe.
 | Frontend | Vue 3, Vite, Tailwind CSS 4, Pinia |
 | Backend | Python 3.12, FastAPI, httpx, uvicorn |
 | Database | SQLite (aiosqlite) |
-| Auth | JWT (python-jose), bcrypt |
+| Auth | JWT (PyJWT), bcrypt |
 | Realtime | Server-Sent Events (sse-starlette) |
 | Container | Docker (nginx + supervisor) |
 | OUI Database | IEEE MA-L (39,000+ vendors) |
